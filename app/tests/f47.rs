@@ -25,7 +25,13 @@ use support::day::DAY;
 use support::wished::{SAID, World};
 use support::worked::{finished, tree};
 
-pub const WORK: &str = "Work waits for this wish.";
+pub const WORK: &str = "Your folder is not changed yet.";
+/// What the note of work that waits says first, under its title, before the wish's words: where the change is,
+/// and what `Keep it` and `Toss it` do to the folder.
+pub const READY: &str = "It is in a copy: Keep it puts it in; Toss it throws it away.";
+pub const KEPT: &str = "The change was kept.";
+/// What a keep that landed the work says.
+pub const IN_FOLDER: &str = "The change is in your folder alpha now.";
 pub const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
 
 /// One of the notes of an opened wish: its id, title, body and options.
@@ -61,11 +67,14 @@ pub fn waits(w: &World, repo: &Path) -> Option<serde_json::Value> {
     listed["waits"].as_array().unwrap().first().cloned()
 }
 
-/// What the note of work that waits says under its title, in core's words.
-pub fn lines(w: &World, repo: &Path) -> Vec<String> {
+/// What the note of work that waits says under its title, in core's words, with `counted` the count of its files.
+/// No run's id is among them.
+pub fn lines(w: &World, repo: &Path, counted: &str) -> Vec<String> {
     let waits = waits(w, repo).expect("the work waits");
     let names: Vec<&str> = waits["names"].as_array().unwrap().iter().map(|name| name.as_str().unwrap()).collect();
-    vec![quoted(SAID), format!("{}.", waits["why"].as_str().unwrap()), names.join(", ")]
+    let lines = vec![READY.to_string(), quoted(SAID), counted.to_string(), names.join(", ")];
+    assert!(lines.iter().all(|line| !line.contains(waits["run"].as_str().unwrap())), "{lines:?}");
+    lines
 }
 
 fn of<'a>(placed: &'a [Piece], kind: &str, id: &str) -> Vec<&'a Piece> {
@@ -80,14 +89,15 @@ fn layout_prints_one_note_for_work_that_waits_with_the_wish_s_words_its_files_an
     let [note] = of(&placed, "note", "work-m1")[..] else { panic!("one note of the work: {placed:?}") };
     let said = note.said();
     let run = w.kept()["run"].as_str().unwrap().to_string();
-    for part in [
-        WORK.to_string(),
-        quoted(SAID),
-        format!("the work of run {run} waits: files made 1, changed 1, removed 1."),
-        "a.txt, b.txt, n.txt".to_string(),
-    ] {
-        assert!(said.contains(&part), "{part:?} is not in {said:?}");
+    // What is true first: the folder is not changed yet, and what each choice does to it. Then how much, as a
+    // person counts it, and the files' names. The run's id is not on the note.
+    let parts = [WORK, READY, &quoted(SAID), "1 new file, 1 changed, 1 removed.", "a.txt, b.txt, n.txt"];
+    for part in parts {
+        assert!(said.contains(part), "{part:?} is not in {said:?}");
     }
+    let at = |part: &str| said.find(part).unwrap();
+    assert!(at(WORK) < at(READY) && at(READY) < at(&quoted(SAID)), "the plain sentence comes first: {said:?}");
+    assert!(!said.contains(&run), "{said:?}");
     let options: Vec<String> = of(&placed, "option", "work-m1").iter().map(|option| option.said()).collect();
     assert_eq!(options, CHOICES);
     assert_eq!(w.everything(&repo), before, "a layout wrote something");
@@ -122,7 +132,7 @@ fn show_me_draws_one_file_of_the_work_as_text_and_the_next_tap_the_next_file_and
     let showed = w.taps("logs", &acts).showed();
     let [opened, reading, one, _, two, closed] = &showed[..] else { panic!("six acts") };
 
-    let work = lines(&w, &repo);
+    let work = lines(&w, &repo, "3 new files, 1 changed, 1 removed.");
     let work: Vec<&str> = work.iter().map(String::as_str).collect();
     let note = ("work-m1", WORK, work, CHOICES.to_vec());
     assert_eq!(texts(opened.as_ref().unwrap()), std::slice::from_ref(&note));

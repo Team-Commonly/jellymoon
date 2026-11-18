@@ -181,7 +181,7 @@ pub fn notes_of(wish: &str, done: WorkDone) -> Vec<Note> {
             waiting_notes(&waits).into_iter().chain([file]).collect()
         }
         WorkDone::Asks(waits) => vec![waiting(&waits, true)],
-        WorkDone::Said(title, body) => vec![text(format!("{SAID}{wish}"), title, vec![body], Vec::new())],
+        WorkDone::Said(title, body) => vec![text(format!("{SAID}{wish}"), title, body, Vec::new())],
     }
 }
 

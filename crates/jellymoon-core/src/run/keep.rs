@@ -18,7 +18,7 @@ use super::obeyed::{modules, named};
 use super::show::{Asked, NAME_MAX, found, not_cores, unread_words};
 use super::{RunOptions, WorkState, finished, follow, place, record, refused};
 use crate::Error;
-use crate::copy::{self, Keep, LISTED, Named, Note, Touched, Unkept};
+use crate::copy::{self, How, Keep, LISTED, Named, Note, Touched, Unkept};
 use crate::still::statement;
 
 /// Why a keep, a toss or the start of a follow-up's run (`follow.rs`) did not have the lock all three hold
@@ -69,6 +69,10 @@ pub struct Kept {
     /// With `--ask` only: whether a keep would be done.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fits: Option<bool>,
+    /// How this keep landed the work, for the words a page says of it (`waits/plain.rs`): never printed. None
+    /// when asked, of work kept before and of work that would not be kept.
+    #[serde(skip)]
+    pub(crate) how: Option<How>,
 }
 
 impl fmt::Display for Kept {
@@ -136,7 +140,8 @@ fn keep(home: &Path, options: &RunOptions, ask: bool, yes: Yes) -> Result<Kept, 
         }
         let why = format!("the work of run {run} was kept before: nothing was changed");
         let (kept, onto, fits) = (Some(commit.to_string()), short(onto), ask.then_some(false));
-        return Ok(Kept { run, wish, kept, onto, why, settings: Vec::new(), stayed: Vec::new(), fits });
+        let (settings, stayed, how) = (Vec::new(), Vec::new(), None);
+        return Ok(Kept { run, wish, kept, onto, why, settings, stayed, fits, how });
     }
     // Only a record that says kept names no branch: a keep writes the branch it means before it lands anything.
     if was.is_some_and(|was| was.1 == copy::LOOSE) {
@@ -178,8 +183,8 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, yes: Yes) -> Resu
             stayed.truncate(LISTED);
             let why =
                 done(&run, landed.how, of.ask, own) + if stayed.is_empty() { "" } else { STAYED } + more + pointed;
-            let (onto, fits) = (short(&landed.onto), of.ask.then_some(true));
-            Ok(Kept { run, wish, kept: landed.commit, onto, why, settings, stayed, fits })
+            let (onto, fits, how) = (short(&landed.onto), of.ask.then_some(true), (!of.ask).then_some(landed.how));
+            Ok(Kept { run, wish, kept: landed.commit, onto, why, settings, stayed, fits, how })
         }
         Err(unkept) if of.ask => Ok(unfit(run, wish, unkept, settings)),
         Err(Unkept::Settings) if matches!(yes, Yes::To(_)) => Err(refused(format!(
@@ -193,7 +198,7 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, yes: Yes) -> Resu
 /// What `--ask` prints of work that would not be kept.
 fn unfit(run: String, wish: String, unkept: Unkept, settings: Vec<String>) -> Kept {
     let (why, stayed) = (words(&run, unkept), Vec::new());
-    Kept { why, run, wish, kept: None, onto: None, settings, stayed, fits: Some(false) }
+    Kept { why, run, wish, kept: None, onto: None, settings, stayed, fits: Some(false), how: None }
 }
 
 /// What `why` ends with when a `.gitattributes` the work removes is still at its path after the step, whatever

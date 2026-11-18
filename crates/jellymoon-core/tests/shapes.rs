@@ -250,9 +250,10 @@ fn what_run_waiting_prints_round_trips_byte_for_byte() {
     assert_eq!(format!("{waiting}\n"), example);
     let [read, unread] = &waiting.waits[..] else { panic!("two wishes wait") };
     assert_eq!((read.read, read.made, read.changed, read.removed, read.more), (true, 1, 1, 1, 0));
-    assert_eq!((read.lines().len(), read.choices(false).len(), read.choices(true).len()), (3, 3, 3));
+    assert_eq!((read.lines().len(), read.choices(false).len(), read.choices(true).len()), (4, 3, 3));
+    assert!(read.lines().iter().all(|line| !line.contains(&read.run)), "a page's note names no run");
     // Work that was not read names no file and has no choice: a tap on its note has nothing to change.
-    assert_eq!((unread.read, unread.lines().len(), unread.choices(false).len()), (false, 2, 0));
+    assert_eq!((unread.read, unread.lines().len(), unread.choices(false).len()), (false, 3, 0));
     assert!(serde_json::from_str::<Waiting>(&example.replace("\"day\"", "\"date\"")).is_err());
     // The wishes a follow-up may be made of are named, and a line without them is not this shape.
     assert_eq!(waiting.follows, ["m1", "m2"]);
@@ -281,7 +282,7 @@ fn the_note_that_asks_names_each_file_in_a_text_of_its_own_and_past_six_a_page_h
         );
         assert!(body.iter().all(|text| !text.contains(" more")), "a count stands for a name: {body:?}");
         assert_eq!(waits.choices(true), ["Show me", "Keep it, with those files", "Toss it"]);
-        assert_eq!((waits.choices(false), waits.lines().len()), (vec!["Show me", "Keep it", "Toss it"], 3));
+        assert_eq!((waits.choices(false), waits.lines().len()), (vec!["Show me", "Keep it", "Toss it"], 4));
     }
     // Past six, and of any number when one name is not printed as git keeps it: the yes would be to other words.
     for (obeyed, plain) in [(7, true), (8, true), (300, true), (1, false), (6, false)] {

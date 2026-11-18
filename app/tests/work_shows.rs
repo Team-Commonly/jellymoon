@@ -15,8 +15,8 @@ use support::day::DAY;
 use support::wished::{SAID, World, quiet, wait_until};
 
 const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
-const TOSSED: &str = "That work was tossed.";
-const KEPT: &str = "That work was kept.";
+const TOSSED: &str = "The change was thrown away.";
+const KEPT: &str = "The change was kept.";
 /// The looks that show no work after a tap on an option or core's answer to it (`showing.rs`).
 const HOLD: usize = 3;
 
@@ -161,7 +161,7 @@ fn a_look_that_finds_a_run_ended_shows_its_work_as_a_tap_does_and_once() {
     assert_eq!(drawn(&shown, "m1"), Some((State::Idle, 1)), "the star, as a look drew it before");
     assert_eq!(ids(&shown), ["work-m1"], "the work's note, and no other of a wish");
     assert_eq!(options(&shown, "work-m1"), CHOICES);
-    assert_eq!(title(&shown, "work-m1"), "Work waits for this wish.");
+    assert_eq!(title(&shown, "work-m1"), "Your folder is not changed yet.");
     // Shown once: the next looks have nothing new, and ask nothing.
     assert_eq!((again.as_str(), third.as_str()), ("null", "null"));
     // No character moved because the run ended and its work was shown.

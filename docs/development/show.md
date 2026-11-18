@@ -415,7 +415,11 @@ and writes nothing:
 - **A repo that is not found** (or any other refusal of `run show`) still lists the wish, with `read: false`, no
   counts, no name, and `why` holding that refusal. A page then offers no choice.
 - **The choices and their words** are core's too: `Waits::title`, `lines`, `choices` and `asks`, `ShownFile::title`
-  and `lines`, `WorkTap::doing`, and `stands` for a wish with no work waiting. A shell words nothing.
+  and `lines`, `WorkTap::doing`, and `stands` for a wish with no work waiting. A shell words nothing. What a
+  page's notes say first, for a person who has never seen Jellymoon, is `run/waits/plain.rs`: the change is in a
+  copy and the folder not changed yet, the files as a person counts them, and after a keep or a toss where the
+  change is now, true of every way each ends (a keep that found the work there says nothing was changed). Those
+  words are a page's alone and name no run: `why` and the lines `run waiting`, `keep` and `toss` print are as above.
 - **A tap on a choice** is `work_tapped`. It does nothing unless the work waits now and was read from its repo
   now, so a toss never begins where the repo is not found: `run toss` there would remove the copy and leave the
   branch. `Show me` gives the next file after the one on show that is text `run show --file` prints, from the

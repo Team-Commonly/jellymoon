@@ -384,7 +384,7 @@ made-up home. It opens no window and starts no program; core starts what the app
 
 ```
 cargo run -p jellymoon-app --example walk --features sticker-kit/headless -- <folder> 1440x900 \
-  type:garden enter "type:<a wish>" enter "until:Work waits for this wish.:30" picture:waits \
+  type:garden enter "type:<a wish>" enter "until:Your folder is not changed yet.:30" picture:waits \
   "tap:work-m1:Keep it" picture:kept
 ```
 
@@ -436,8 +436,12 @@ from a line of its own, options), whose body is drawn as text and as nothing els
 that fit and counts the rest in a last line, `+N more`.
 
 - **A tap on a little one** whose run is not going opens its wish (`OnShow::poked`, off the window's thread). Work
-  that waits: one note, `work-<wish>`, with the wish's own words, core's count of files made, changed and removed,
-  their names, and the choices `Show me`, `Keep it`, `Toss it`. Any other wish: one note, `wish-<wish>`, with how
+  that waits: one note, `work-<wish>`, "Your folder is not changed yet.", which says first, in one line, that the change is
+  in a copy and what `Keep it` and `Toss it` do (only `Toss it` where a page has no keep), so a result's note over
+  it keeps its room (F86); then the wish's own words, the files as a person counts them ("1 file
+  changed", "2 new files, 1 changed"), their names, and the choices `Show me`, `Keep it`, `Toss it`. No run's id is
+  on it. Work that could not be read: "This change could not be read.", what the person can do next, the wish's
+  words and core's reason, and no choice. Any other wish: one note, `wish-<wish>`, with how
   it stands and its own words, and no choice. Either note can have a field under it ("A question answered, and
   more like this", below). One wish is open at a time. A tap on no wish, or on a wish whose
   note is on show, shows nothing. Nothing is written by any of it.
@@ -516,8 +520,12 @@ that fit and counts the rest in a last line, `+N more`.
 - **`Show me`** adds `file-<n>-<wish>` under the work's note: one file's text, as `run show --file` prints it.
   The next tap shows the next file. The app starts no program and hands nothing to the system's opener
   (`the_shell_starts_no_program_and_hands_nothing_to_the_system_s_opener` reads `app/src` for it).
-- **`Keep it` and `Toss it`** end in one note, `said-<wish>`, with core's sentence: the work was kept and the wish
-  stays done with its star, or tossed and the wish is drawn let go, or core's reason why not, with nothing changed.
+- **`Keep it` and `Toss it`** end in one note, `said-<wish>`, in core's plain words (`run/waits/plain.rs`): "The
+  change was kept." and that it is in the folder now, or that the folder had it already and nothing was changed,
+  and the wish stays done with its star; or "The change was thrown away." and that the folder is as it was, and
+  the wish is drawn let go. A refused tap ("The change was not kept.") says first what the person can do next,
+  then core's reason. The command line's `why` is not said, but where the keep's folder was switched while it
+  was at work or a `.gitattributes` stayed, after the plain sentence.
 - **Files the person's tools obey**: a page keeps one only when its name was drawn, whole, on the note the yes
   was given under. A count is not a name: the agent picks the files, so it picks which would fall behind a count.
   - The first `Keep it` changes nothing and shows `sure-<wish>`. It names every such file of the whole work,

@@ -112,8 +112,8 @@ fn whole_loop(shows: &[&str]) {
     assert!(lines[0].starts_with("open | ") && lines[1].starts_with("type (6 characters) | "), "{lines:#?}");
     assert!(lines[2].contains("\"Your new project is ready.\""), "{}", lines[2]);
     let working = first(&lines, "wishes: m1 working");
-    let waits = first(&lines, "\"Work waits for this wish.\"");
-    let kept = first(&lines, "\"That work was kept.\"");
+    let waits = first(&lines, "\"Your folder is not changed yet.\"");
+    let kept = first(&lines, "\"The change was kept.\"");
     assert!(working < waits && waits < kept, "{lines:#?}");
     assert!(lines[waits].contains("\"What it says it did\""), "the result's note is on the page: {}", lines[waits]);
     let all = lines.join("\n");
@@ -129,7 +129,7 @@ fn whole_loop(shows: &[&str]) {
 /// No step taps the wish's character: the look that finds its run ended shows its work, with what the run says.
 #[test]
 fn a_whole_loop_walks_from_a_new_project_to_kept_work_with_no_tap_on_the_wish() {
-    whole_loop(&["until:Work waits for this wish.:30"]);
+    whole_loop(&["until:Your folder is not changed yet.:30"]);
 }
 
 /// A tap on the character after the run's end, as a person may still make it: the loop is the same.

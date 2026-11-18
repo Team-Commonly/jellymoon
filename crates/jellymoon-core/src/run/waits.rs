@@ -19,6 +19,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+mod plain;
+
 use super::keep::keep_named;
 use super::show::{self, FileChange, FileKind, Shown, ShownFile, show_file};
 use super::told::Told;
@@ -42,6 +44,14 @@ const SHOW: &str = "Show me";
 const KEEP: &str = "Keep it";
 const KEEP_TOO: &str = "Keep it, with those files";
 const TOSS: &str = "Toss it";
+/// The titles of the notes of work that waits, read or not, and of what a tap on a choice came to.
+const WAITS: &str = "Your folder is not changed yet.";
+const UNREAD: &str = "This change could not be read.";
+const KEPT: &str = "The change was kept.";
+const TOSSED: &str = "The change was thrown away.";
+const UNKEPT: &str = "The change was not kept.";
+const UNTOSSED: &str = "The change was not thrown away.";
+const UNSHOWN: &str = "No file of the change was shown.";
 /// What a page says of work it has no yes for: [`Waits::over`].
 const OVER: &str = "A note cannot name every file of this work that your tools obey, each whole and as it is, so a \
                     page does not keep it. It is kept from the command line, with `jellymoon run keep`.";
@@ -76,6 +86,9 @@ pub struct Waits {
     /// What the run says of its work, as `run show` prints it, checked at this look. Left out when there is none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<Told>,
+    /// The folder the wish is for, by the name it is kept with: a page says it, `run waiting` never prints it.
+    #[serde(skip)]
+    pub project: String,
 }
 
 /// What `jellymoon run waiting` prints.
@@ -119,8 +132,8 @@ pub enum WorkDone {
     Shown(Waits, ShownFile),
     /// The work touches files the person's tools obey: nothing was changed, and a keep is asked once more.
     Asks(Waits),
-    /// It was done, or it was refused with nothing changed: a title, and core's sentence.
-    Said(&'static str, String),
+    /// It was done, or it was refused: a title, and the note's texts, a person's plain sentence first.
+    Said(&'static str, Vec<String>),
 }
 
 impl WorkTap {
@@ -141,7 +154,7 @@ impl WorkTap {
     pub fn failed(&self) -> WorkDone {
         let unknown = "Jellymoon failed before it had an answer, so what was changed is not known here. Open the \
                        wish again to see how its work stands.";
-        WorkDone::Said("That did not finish.", unknown.to_string())
+        WorkDone::Said("That did not finish.", vec![unknown.to_string()])
     }
 
     /// What a page says while the tap is at work.
@@ -153,12 +166,14 @@ impl WorkTap {
         }
     }
 
-    fn undone(&self) -> &'static str {
-        match self {
-            WorkTap::Show { .. } => "No file of that work was shown.",
-            WorkTap::Keep { .. } => "That work was not kept.",
-            WorkTap::Toss => "That work was not tossed.",
-        }
+    /// The title of a tap core refused, and the sentence before core's reason: what the person can do next.
+    fn undone(&self) -> (&'static str, String) {
+        let (title, not) = match self {
+            WorkTap::Show { .. } => (UNSHOWN, "no file was shown"),
+            WorkTap::Keep { .. } => (UNKEPT, "it was not kept"),
+            WorkTap::Toss => (UNTOSSED, "it was not thrown away"),
+        };
+        (title, format!("Open the wish again to see where the change stands. Here is why {not}:"))
     }
 }
 
@@ -181,7 +196,7 @@ fn named(names: &[String], beside: usize) -> String {
 impl Waits {
     /// The title of the note of this work.
     pub fn title(&self) -> &'static str {
-        if self.read { "Work waits for this wish." } else { "Work waits for this wish, and it was not read." }
+        if self.read { WAITS } else { UNREAD }
     }
 
     /// Whether the work touches more files the person's tools obey than a note names, or one whose name is not
@@ -190,10 +205,19 @@ impl Waits {
         self.obeyed.len() > NAMED || !self.plain
     }
 
-    /// What the note says: the wish's own words, what waits or why it was not read, the files' names, and of
-    /// work a page does not keep that it does not.
+    /// What the note says: where the change is and what the choices do, or what to do when it was not read; the
+    /// wish's own words; how many files, or why it was not read; the files' names; and of work a page does not
+    /// keep that it does not. No run's id: `why` is said only of work that was not read.
     pub fn lines(&self) -> Vec<String> {
-        let mut lines = vec![format!("“{}”", self.said), format!("{}.", self.why)];
+        let (said, project) = (format!("“{}”", self.said), &self.project);
+        let mut lines = if self.read {
+            let listed = self.made + self.changed + self.removed;
+            let of = (self.names.len() + self.more > listed).then_some(listed);
+            let counted = plain::counted(self.made, self.changed, self.removed, of);
+            vec![plain::waits(!self.over()).to_string(), said, counted]
+        } else {
+            vec![plain::unread(project), said, format!("{}.", self.why)]
+        };
         lines.extend((!self.names.is_empty()).then(|| named(&self.names, self.more)));
         lines.extend(self.over().then(|| OVER.to_string()));
         lines
@@ -250,27 +274,25 @@ pub fn stands(wish: &Wish) -> (&'static str, Vec<String>) {
 /// The work of the wish's run when it waits, and the list `run show` gives of it when the repo could be read.
 fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
     let found = show::waiting(home, options)?;
-    let (wish, run, said) = (options.wish.clone(), found.run, found.made.said);
-    let (shown, obeyed, plain) = match show::whole(home, options) {
-        Ok(whole) => whole,
-        Err(unread) => {
-            let (names, obeyed, plain, why) = (Vec::new(), Vec::new(), true, unread.to_string());
-            let (read, made, changed, removed, more) = (false, 0, 0, 0, 0);
-            let result = None;
-            let waits =
-                Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why, result };
-            return Some((waits, None));
-        }
+    let (wish, run, said, project) = (options.wish.clone(), found.run, found.made.said, found.made.project);
+    // Of work that was not read nothing is counted or named, and `why` is the refusal.
+    let (shown, obeyed, plain, unread) = match show::whole(home, options) {
+        Ok((shown, obeyed, plain)) => (Some(shown), obeyed, plain, None),
+        Err(unread) => (None, Vec::new(), true, Some(unread.to_string())),
     };
-    let count = |change: FileChange| shown.files.iter().filter(|file| file.change == change).count();
+    let (files, past) = shown.as_ref().map_or((&[][..], 0), |shown| (&shown.files[..], shown.more));
+    let count = |change: FileChange| files.iter().filter(|file| file.change == change).count();
     let (made, changed, removed) = (count(FileChange::Made), count(FileChange::Changed), count(FileChange::Removed));
-    let names: Vec<String> = shown.files.iter().take(NAMED).map(|file| file.name.clone()).collect();
-    let more = shown.files.len() - names.len() + shown.more;
-    let first = if shown.more > 0 { format!(" of its first {}", shown.files.len()) } else { String::new() };
-    let why = format!("the work of run {run} waits: files made {made}, changed {changed}, removed {removed}{first}");
-    let (read, result) = (true, shown.result.clone());
-    let waits = Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why, result };
-    Some((waits, Some(shown)))
+    let names: Vec<String> = files.iter().take(NAMED).map(|file| file.name.clone()).collect();
+    let more = files.len() - names.len() + past;
+    let first = if past > 0 { format!(" of its first {}", files.len()) } else { String::new() };
+    let counted =
+        || format!("the work of run {run} waits: files made {made}, changed {changed}, removed {removed}{first}");
+    let (read, why) = (unread.is_none(), unread.unwrap_or_else(counted));
+    let result = shown.as_ref().and_then(|shown| shown.result.clone());
+    let waits =
+        Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why, result, project };
+    Some((waits, shown))
 }
 
 /// The work of the wish's run, when it waits for the person: the run finished with its one commit, and its record
@@ -316,8 +338,8 @@ fn next(home: &Path, options: &RunOptions, shown: &Shown, after: usize) -> Resul
 /// (`keep_named`). So a yes to other names is refused there, and a keep that was never asked once more lands
 /// none. Where the person's branch holds the run's commit already nothing is landed and the keep compares no name.
 pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone {
-    let undone = tap.undone();
-    let no = |why: String| WorkDone::Said(undone, format!("{why}."));
+    let (undone, then) = tap.undone();
+    let no = |why: String| WorkDone::Said(undone, vec![then.clone(), format!("{why}.")]);
     let Some((waits, shown)) = read(home, options) else {
         return no("no work of that wish waits any more, so nothing was changed".to_string());
     };
@@ -335,12 +357,12 @@ pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone 
             let drawn = yes_to.unwrap_or_default();
             let named = drawn.split_last().map_or(&[][..], |(_, named)| named);
             match keep_named(home, options, named) {
-                Ok(kept) => WorkDone::Said("That work was kept.", format!("{}.", kept.why)),
+                Ok(kept) => WorkDone::Said(KEPT, plain::kept(&kept, &waits.project)),
                 Err(unkept) => no(unkept.to_string()),
             }
         }
         WorkTap::Toss => match toss_run(home, options) {
-            Ok(tossed) => WorkDone::Said("That work was tossed.", format!("{}.", tossed.why)),
+            Ok(tossed) => WorkDone::Said(TOSSED, vec![plain::tossed(&tossed, &waits.project)]),
             Err(untossed) => no(untossed.to_string()),
         },
     }

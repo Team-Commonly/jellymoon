@@ -161,6 +161,7 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
 - **Free-form text or markdown from the model**: no part of it can be checked, and it could read as Jellymoon's.
 - **HTML or a web view**, and **the app running or rendering the work**: an agent's code run in the app, which ADR 0017, decision 3, forbids.
 - **A second call for every run**: it spends the person's subscription with no tap (ruling 3).
+- **A2UI's message as the result's shape** (the open format for a UI an agent composes, v1.0, `https://a2ui.org/specification/v1.0-a2ui/`): the one such format a native window can draw with no web view, and it was read for this. Its basic catalogue is layout and form controls, with nothing for quoted lines before and after; a piece would be a box of text whose kind the check cannot see; and its bindings, functions, callbacks and media by URL would each be refused. The result stays a short ordered list of typed pieces, each a claim core can test. No kind takes a second meaning for one of A2UI's words, so a result can be written out as one `createSurface` if another host ever matters.
 
 ## Where the rulings meet the code
 

@@ -19,7 +19,24 @@ Before it downloads anything it refuses, with one line, a Mac older than macOS 1
    `~/.local/bin`. The command is renamed over the old one. The app takes three steps, since a folder cannot be
    renamed over a folder: the old bundle is moved aside as `.Jellymoon.app.old` in the same folder, the new one is
    moved in, and the old one is deleted. Running it again is how to update.
-5. It says in one line if `~/.local/bin` is not on `PATH`, and prints what to run next.
+5. It says in one line if `~/.local/bin` is not on `PATH`.
+6. It opens the installed `Jellymoon.app` with macOS `open`, by the path it was installed at, and says so first in one
+   line that keeps what opening does: the app shows today's page, read with one call through the person's own
+   Claude Code. Then it prints the lines that are left to run: the app's program started from a terminal, if the
+   opened app says Claude Code was not found, and `jellymoon uninstall`.
+
+**Opening.** Only after everything is in place and the checksum has passed: a refused install, a failed download
+and a mismatch never reach it. It is skipped when `JELLYMOON_NO_OPEN` is set to anything that is not empty, and the
+closing lines then say the `open` command to run, as they did before the installer opened anything. If `open` is
+not there or fails, the install still succeeded and the exit code is 0; the line "Could not open it from here; the
+install itself is done." comes before the same `open` command to run by hand.
+
+**An update.** The app may be running when `install.sh` runs again, and nothing in the script stops it: the new
+bundle is moved in under the running program, which goes on with the code it had loaded. `open` on an app that is
+running does not start a second copy: LaunchServices brings the running one to the front. So an update opens the
+app the same way, and says one more line: "If it was already open, it stays the version you had until you quit it
+and open it again." The script does not look for a running app, quit it or restart it. Quitting it is the person's
+to do, and the next open after that is the new version.
 
 A folder the script has to make (`~/Applications`, `~/.local`, `~/.local/bin`) is made for you alone to write, mode
 0755, whatever the umask: the app turns delivery on only for a command nobody else could replace
@@ -37,6 +54,24 @@ next run puts it back before doing anything else. For the moment between the two
 | `JELLYMOON_APP_DIR` | the folder `Jellymoon.app` goes in | `$HOME/Applications` |
 | `JELLYMOON_BIN_DIR` | the folder `jellymoon` goes in | `$HOME/.local/bin` |
 | `JELLYMOON_RELEASE_URL` | the folder the release is read from, `https://` or `file://` | the latest GitHub release |
+| `JELLYMOON_NO_OPEN` | when set to anything not empty, install and do not open the app | unset: the app is opened |
+
+**A release candidate.** The plain command reads `releases/latest`, which is the newest full release and never a
+candidate. To install a candidate, name its tag's folder, and set the variable for `sh`, not for `curl`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Team-Commonly/jellymoon/main/install.sh | \
+  JELLYMOON_RELEASE_URL=https://github.com/Team-Commonly/jellymoon/releases/download/<tag> sh
+```
+
+(`<tag>` is for instance `v0.2.0-rc1`.) Set before `curl`, the variable only reaches `curl`, which ignores it, and
+the latest full release is installed.
+
+**How the tests keep the real `open` away.** No test starts the real `open`. Every world that runs the installer
+either sets `JELLYMOON_NO_OPEN` (what the test support's `Mac::command` does for every world that names a
+release) or has a made-up `open` first on its `PATH` (`Mac::install_opening`, which records its arguments). The door
+refuses a world that runs the installer, by `JELLYMOON_RELEASE_URL` or by an argument named `install.sh`, with
+neither (`unguarded_installer` in `crates/jellymoon/tests/support/door/world.rs`).
 
 **What the checksum proves.** That the archive is the one the release's `SHA256SUMS` describes: a cut-off or damaged
 download is refused. It does not prove who made the release, since both files come from the same place. That rests on
@@ -91,6 +126,8 @@ All of this is from the maintainers' own runs, on one Mac.
 Not proved yet:
 
 - **A Mac that has never seen the app.** That it opens with no Gatekeeper prompt there, only a person can see.
+- **The installer's own `open` on a real Mac.** The tests use a made-up `open`; the real one is not started by any
+  test, and has not been run by the maintainers since the installer began to call it.
 - **A person's own double click.** `open` takes the same road, and nobody has yet clicked.
 - **The Intel archive on an Intel Mac.** It was built and published, and never run.
 - **An older macOS.** `LSMinimumSystemVersion` is 11.0, a guess: the app ran on one, current, macOS only.

@@ -19,6 +19,11 @@ pub const REFUSED: &str = "a test starts nothing in a world outside the temporar
 pub const NO_ROOT: &str = "a test starts nothing: a temporary folder is a file system's root, or it is or holds the \
                            home of the person running the tests";
 
+/// What the door says of a world that runs the installer and could open the real app. It names no path.
+pub const UNGUARDED: &str = "a test runs the installer only with JELLYMOON_NO_OPEN set to something, or with a \
+                             made-up `open` in the first folder of PATH, under a temporary folder: the real app is \
+                             never opened";
+
 /// The variables that name a folder of the person's: the home on each system, Jellymoon's folder, the two an
 /// install goes to and `jellymoon uninstall` removes under, and the harness's.
 const FOLDERS: [&str; 6] =
@@ -55,6 +60,7 @@ pub fn command<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
     if let Some(what) = refusal(roots, vars.as_slice(), args) {
         panic!("{REFUSED}; this one named {what}");
     }
+    assert!(!unguarded_installer(roots, vars.as_slice(), args), "{UNGUARDED}");
     let mut command = Command::new(program);
     command.args(args).env_clear().env(SHELL, "").env(SYSTEM_BIN, "").envs(vars);
     if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
@@ -117,6 +123,29 @@ pub fn refusal_as<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
         }
     }
     None
+}
+
+/// Whether a world runs the installer (it names `JELLYMOON_RELEASE_URL`, or an argument is `install.sh`) and is
+/// guarded against opening the real app by neither of the two ways: `JELLYMOON_NO_OPEN` set to something, or a
+/// made-up `open` in the first folder of `PATH`, which is under a temporary folder.
+pub fn unguarded_installer<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
+    roots: &[PathBuf],
+    vars: &[(K, V)],
+    args: &[A],
+) -> bool {
+    let value = |known: &str| vars.iter().find(|(name, _)| name.as_ref() == known).map(|(_, value)| value.as_ref());
+    let script = args.iter().any(|arg| Path::new(arg.as_ref()).file_name() == Some(OsStr::new("install.sh")));
+    if !script && value("JELLYMOON_RELEASE_URL").is_none() {
+        return false;
+    }
+    if value("JELLYMOON_NO_OPEN").is_some_and(|set| !set.is_empty()) {
+        return false;
+    }
+    let first = value("PATH").and_then(|path| env::split_paths(path).next()).filter(|first| first.is_absolute());
+    let roots: Vec<PathBuf> = roots.iter().filter_map(|root| resolved(root, LINKS)).collect();
+    let under = |first: PathBuf| roots.iter().any(|root| first.starts_with(root));
+    let made_up = first.is_some_and(|first| first.join("open").is_file() && resolved(&first, LINKS).is_some_and(under));
+    !made_up
 }
 
 /// Whether a value that is no full path leaves the folder it is read from: it climbs with `..`, or it is rooted

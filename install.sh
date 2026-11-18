@@ -6,12 +6,14 @@
 # It downloads the latest release for this Mac's chip and its SHA256SUMS, refuses the download unless the checksum
 # matches, and then puts Jellymoon.app in ~/Applications and `jellymoon` in ~/.local/bin. Running it again updates
 # both in place. `jellymoon uninstall` removes them. Nothing else on the machine is touched, and no shell profile is
-# edited. docs/development/install.md says what the checksum does and does not prove.
+# edited. When it is done it opens the app, unless JELLYMOON_NO_OPEN is set. docs/development/install.md says what
+# the checksum does and does not prove.
 #
 # Settings, all optional:
 #   JELLYMOON_APP_DIR      where Jellymoon.app goes          (default: $HOME/Applications)
 #   JELLYMOON_BIN_DIR      where `jellymoon` goes            (default: $HOME/.local/bin)
 #   JELLYMOON_RELEASE_URL  the folder the release is read from, https:// or file://
+#   JELLYMOON_NO_OPEN      set to anything (not empty): install, and do not open the app
 set -eu
 
 RELEASE_URL=https://github.com/Team-Commonly/jellymoon/releases/latest/download
@@ -164,8 +166,23 @@ main() {
       "delivery on: run  jellymoon hook install  from a terminal, or  chmod go-w \"$bin_dir\"  first."
   fi
   say ""
+  opened=no
+  if [ -z "${JELLYMOON_NO_OPEN:-}" ]; then
+    say "Opening Jellymoon now: it shows today's page, read with one call through your own Claude Code."
+    [ "$did" = installed ] ||
+      say "If it was already open, it stays the version you had until you quit it and open it again."
+    # An `open` that fails, or is not there, leaves the install done: the next lines say how to open it by hand.
+    if open "$app_dir/Jellymoon.app" </dev/null >/dev/null 2>&1; then
+      opened=yes
+    else
+      say "Could not open it from here; the install itself is done."
+    fi
+    say ""
+  fi
   say "Next:"
-  say "  open \"$app_dir/Jellymoon.app\"    shows today's page, read with one call through your own Claude Code"
+  if [ "$opened" = no ]; then
+    say "  open \"$app_dir/Jellymoon.app\"    shows today's page, read with one call through your own Claude Code"
+  fi
   say "  \"$app_dir/Jellymoon.app/Contents/MacOS/jellymoon-app\"    the same from this terminal, if the opened app"
   say "                                     says Claude Code was not found"
   say "  jellymoon uninstall                takes Jellymoon off this Mac again"

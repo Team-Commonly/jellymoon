@@ -99,6 +99,9 @@ fn the_install_script_refuses_a_system_that_is_not_a_mac() {
 #[path = "f33/modes.rs"]
 mod modes;
 
+#[path = "f33/opens.rs"]
+mod opens;
+
 #[cfg(target_os = "macos")]
 mod mac {
     use std::fs;
@@ -117,15 +120,15 @@ mod mac {
     }
 
     /// The archive names end in the Mac's own names for its chips, not Rust's.
-    fn chips() -> (&'static str, &'static str) {
+    pub fn chips() -> (&'static str, &'static str) {
         if cfg!(target_arch = "aarch64") { ("arm64", "x86_64") } else { ("x86_64", "arm64") }
     }
 
-    fn run(command: &mut Command) -> Output {
+    pub fn run(command: &mut Command) -> Output {
         command.stdin(Stdio::null()).output().unwrap()
     }
 
-    fn ok(command: &mut Command) -> String {
+    pub fn ok(command: &mut Command) -> String {
         let ran = run(command);
         assert!(ran.status.success(), "{command:?} failed: {}", String::from_utf8_lossy(&ran.stderr));
         String::from_utf8(ran.stdout).unwrap()
@@ -169,7 +172,7 @@ mod mac {
         pub fn home(&self) -> PathBuf {
             self.root.path().join("home")
         }
-        fn app(&self) -> PathBuf {
+        pub fn app(&self) -> PathBuf {
             self.home().join("Applications/Jellymoon.app")
         }
         pub fn binary(&self) -> PathBuf {
@@ -178,10 +181,16 @@ mod mac {
         /// Every variable is set here: the real home, the real `PATH` and the real release address are never seen.
         /// The door is given every argument too, and the address of the release where there is one.
         pub fn command(&self, program: &Path, path: &str, args: &[&str], release: Option<&Path>) -> Command {
+            self.world(program, path, args, release, true)
+        }
+        /// [`Mac::command`], where an installer is told not to open the app or not (`off`: the test then has a
+        /// made-up `open` first on `PATH`, which the door asks for).
+        pub fn world(&self, program: &Path, path: &str, args: &[&str], release: Option<&Path>, off: bool) -> Command {
             let (home, tmp) = (self.home(), self.root.path().join("tmp"));
             let from = release.map(|release| ("JELLYMOON_RELEASE_URL", format!("file://{}", release.display()).into()));
+            let off = release.filter(|_| off).map(|_| ("JELLYMOON_NO_OPEN", "1".into()));
             let vars = [("HOME", home.into_os_string()), ("TMPDIR", tmp.into()), ("PATH", path.into())];
-            door::command(program, vars.into_iter().chain(from), args)
+            door::command(program, vars.into_iter().chain(from).chain(off), args)
         }
         fn install(&self, release: &Path) -> Output {
             self.install_on(release, "/usr/bin:/bin:/usr/sbin")

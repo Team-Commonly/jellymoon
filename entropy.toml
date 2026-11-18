@@ -810,7 +810,10 @@ max_file_lines = 400
 # The jellyfish notes 2 raised the app by 134: `tests/f57/looks.rs` holds each of the sixteen pairs of what the
 # page's day and a later day hold, the later day's question beside its run at work, the count of two days, a day
 # before the page's, and waiting work read from a run's record; `shell.rs` says why only a run at work is taken.
-"app" = 11549
+# The third notes on F54 raised the app by 42, of which 27 are tests: the order of the refusal and the
+# asking note, and a closed wish that is not opened again (`tests/f54/answered.rs`). The rest: which note has
+# a field to answer in (`answering.rs`), and the place under the notes of wishes (`wishing.rs`).
+"app" = 11591
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

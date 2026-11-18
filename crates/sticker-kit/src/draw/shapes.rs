@@ -118,6 +118,8 @@ impl Brush<'_> {
             PieceKind::Entry => self.pill(rect, p.entry, p.entry_edge),
             PieceKind::Chip if self.chosen == Some(piece.index) => self.pill(rect, p.chip_chosen, p.chosen_edge()),
             PieceKind::Chip | PieceKind::Offer => self.pill(rect, p.chip, p.chip),
+            // An action is a chip with an edge: it does something, and is never the chosen one.
+            PieceKind::Action => self.pill(rect, p.chip, p.entry_edge),
             // A note's field is drawn as the entry's is, and someone else's words on a ground no other text has.
             PieceKind::Field if self.keyed == Some(piece.id.as_str()) => self.pill(rect, p.entry, p.entry_ring),
             PieceKind::Field => self.pill(rect, p.entry, p.entry_edge),
@@ -203,7 +205,13 @@ mod tests {
     /// The fill and the edge of each of the entry's shapes, and the colour of its text, for an entry with three
     /// chips of which the second is chosen.
     fn painted(theme: &Theme, lit: bool) -> Vec<(Color, Color, Color)> {
-        let entry = Entry { id: "wish".into(), hint: "wish".into(), options: vec!["a".into(); 3], most: 0 };
+        let entry = Entry {
+            id: "wish".into(),
+            hint: "wish".into(),
+            options: vec!["a".into(); 3],
+            most: 0,
+            action: String::new(),
+        };
         let placed = layout_entry(&entry, theme, Viewport { w: 1440.0, h: 900.0 }, &FixedAdvance(0.5));
         let brush = Brush { theme, scene: &Scene::default(), k: 1.0, chosen: Some(1), lit, keyed: None };
         let colours = |piece: &Placed| {

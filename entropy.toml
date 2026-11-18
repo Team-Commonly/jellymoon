@@ -757,7 +757,9 @@ max_file_lines = 400
 # The app notes raised the kit by 2: a comment that names the layout's `LEAST` where a test writes its number
 # (`tests/entry_layout.rs`).
 # The second notes on F54 raised the kit by 1: a line of `draw/field.rs`'s own doc.
-"crates/sticker-kit" = 10035
+# The first run (F64, F66) raised the kit by 111: an entry's action, placed after its chips and tapped as
+# `Tap::Action`, a drop told to `on_paths`, `choose_option`, and the tests' entries naming no action.
+"crates/sticker-kit" = 10146
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -880,7 +882,10 @@ max_file_lines = 400
 # answer in (`answering.rs`, 2).
 # The door notes raised it by 16, all tests and their support: `tests/f75.rs` 12 (the held variables turned
 # round) and 4 in the header of `tests/support/door.rs`, which lists what the rule holds.
-"app" = 12007
+# The first run (F64, F66) raised the app by 707: `starting.rs` (a folder or a name given to core, one note,
+# the page and the entry asked again), the window's drop, picker and naming, the new entry and its hints in
+# `wishing.rs`, and tests (`tests/f64.rs`, `tests/f66.rs`, their window tests and `support/windowed.rs`).
+"app" = 12714
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

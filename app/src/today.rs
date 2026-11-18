@@ -311,8 +311,9 @@ fn words(error: &Error) -> String {
              it, or open Jellymoon from a terminal where `claude` runs. It was looked for in {looked}."
         ),
         Error::NoLogs(looked) => format!(
-            "No Claude Code session logs were found on this computer, so there is nothing to read yet. Use Claude \
-             Code once and open Jellymoon again. They were looked for in {looked}."
+            "No Claude Code session logs were found on this computer, so there is nothing to read yet. You can \
+             start here: name a new project in the field, or drop a folder on this window. They were looked for in \
+             {looked}."
         ),
         Error::Logs(_) => format!("Your Claude Code session logs could not be read ({error})."),
         Error::Skip(why) => format!(

@@ -28,8 +28,9 @@ fn main() -> ExitCode {
         }
     };
     let typed = more.get(2).map(|words| (words.clone(), more.get(3).and_then(|at| at.parse().ok()).unwrap_or(0)));
-    // A picture reads no logs: every project of the page has a chip, the first six.
-    let entry = wishing::entry_of(page.data.read.projects.iter().take(6).cloned().collect());
+    // A picture reads no logs: every project of the page has a chip, the first six. A page with none has the
+    // entry a day with no project on offer has.
+    let entry = Some(wishing::entry_of(page.data.read.projects.iter().take(6).cloned().collect()));
     let mut themes = vec![Theme::sticker(), Theme::plain()];
     // A theme file, to look at what its own colours make of the page: its picture is named after the theme.
     if let Some(file) = more.get(4) {

@@ -16,9 +16,13 @@ mod shapes;
 mod sprites;
 mod stage;
 
+use std::path::PathBuf;
 use std::time::Instant;
 
-use gpui::{AnyElement, App, Context, MouseButton, Window, canvas, div, img, prelude::*, px};
+use gpui::{
+    AnyElement, App, Context, DispatchPhase, DragMoveEvent, ExternalPaths, MouseButton, MouseUpEvent, Window, canvas,
+    div, img, prelude::*, px,
+};
 
 use crate::geom::Viewport;
 use crate::layout::{PieceKind, Placed, TextRun, layout, layout_entry, page_scale};
@@ -40,11 +44,21 @@ use stage::{Pose, Stage, is_art};
 /// What was tapped.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Tap {
-    Character { id: String },
-    Option { note_id: String, index: usize },
+    Character {
+        id: String,
+    },
+    Option {
+        note_id: String,
+        index: usize,
+    },
+    /// The action of the entry `id` ([`crate::Entry::action`]).
+    Action {
+        id: String,
+    },
 }
 
 type TapHandler = Box<dyn Fn(&Tap, &mut Window, &mut App)>;
+type PathsHandler = Box<dyn Fn(&[PathBuf], &mut Window, &mut App)>;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Stale {
@@ -67,6 +81,9 @@ pub struct Page {
     theme: Theme,
     reduce_motion: bool,
     on_tap: Option<TapHandler>,
+    on_paths: Option<PathsHandler>,
+    /// What is being dragged over the page from outside the app.
+    dragged: Vec<PathBuf>,
     entry: EntryView,
     /// The field of each note of the scene that has one, in the notes' order.
     fields: Vec<EntryView>,
@@ -93,6 +110,8 @@ impl Page {
             theme,
             reduce_motion: false,
             on_tap: None,
+            on_paths: None,
+            dragged: Vec::new(),
             entry: EntryView::default(),
             fields,
             apart,
@@ -119,6 +138,23 @@ impl Page {
     pub fn on_tap(mut self, handler: impl Fn(&Tap, &mut Window, &mut App) + 'static) -> Self {
         self.on_tap = Some(Box::new(handler));
         self
+    }
+
+    /// Called with the paths of files or folders dropped on the page from outside the app. Like `on_tap`, it is
+    /// called while the page is in use.
+    pub fn on_paths(mut self, handler: impl Fn(&[PathBuf], &mut Window, &mut App) + 'static) -> Self {
+        self.on_paths = Some(Box::new(handler));
+        self
+    }
+
+    /// A mouse button let go anywhere on the page: a drop from outside the app when something is dragged. GPUI's
+    /// own drop asks whether the page is hovered, which it never is after a key until the mouse moves, and a drag
+    /// from another app moves no mouse over this window: a folder dropped after typing would be lost.
+    fn dropped(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let paths = std::mem::take(&mut self.dragged);
+        if let (true, false, Some(handler)) = (cx.has_active_drag(), paths.is_empty(), &self.on_paths) {
+            handler(&paths, window, cx);
+        }
     }
 
     pub fn set_scene(&mut self, scene: Scene, cx: &mut Context<Self>) {
@@ -192,6 +228,7 @@ impl Page {
         };
         let tap = match piece.piece {
             PieceKind::Option => Tap::Option { note_id: piece.id.clone(), index: piece.index },
+            PieceKind::Action => Tap::Action { id: piece.id.clone() },
             _ => Tap::Character { id: piece.id.clone() },
         };
         if let Some(handler) = &self.on_tap {
@@ -258,7 +295,7 @@ impl Page {
             for (n, run) in piece.text.iter().enumerate().filter(|(_, r)| !r.text.is_empty() && !hidden) {
                 text.push(text_element(&brush, piece, n, run, pose));
             }
-            if matches!(piece.piece, PieceKind::Hero | PieceKind::Character | PieceKind::Option) {
+            if matches!(piece.piece, PieceKind::Hero | PieceKind::Character | PieceKind::Option | PieceKind::Action) {
                 taps.push(self.tap_target(i, piece, pose, cx));
             }
         }
@@ -307,12 +344,16 @@ impl Render for Page {
 
         let entry = self.entry_layer(window, cx);
         let (flat, layers) = self.layers(t, still, viewport, cx);
+        let dropped_on = cx.weak_entity();
         div()
             .size_full()
             .relative()
             .overflow_hidden()
             .bg(hsla(self.theme.palette.desk))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::entry_left))
+            .on_drag_move(cx.listener(|page, moved: &DragMoveEvent<ExternalPaths>, _, cx| {
+                page.dragged = moved.drag(cx).paths().to_vec();
+            }))
             .on_mouse_up(
                 MouseButton::Left,
                 cx.listener(|page, _, _, cx| {
@@ -322,9 +363,19 @@ impl Render for Page {
                 }),
             )
             .child(
-                canvas(|_, _, _| (), move |bounds, _, window, _| paint::paint(&flat, bounds.origin, window))
-                    .absolute()
-                    .size_full(),
+                canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, _| {
+                        paint::paint(&flat, bounds.origin, window);
+                        window.on_mouse_event(move |_: &MouseUpEvent, phase, window, cx| {
+                            if phase == DispatchPhase::Bubble {
+                                let _ = dropped_on.update(cx, |page, cx| page.dropped(window, cx));
+                            }
+                        });
+                    },
+                )
+                .absolute()
+                .size_full(),
             )
             .children(layers)
             .children(entry)

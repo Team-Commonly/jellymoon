@@ -12,6 +12,7 @@ fn entry(options: usize, most: usize) -> Entry {
         hint: "wish for something".into(),
         options: (0..options).map(|i| format!("project-{i}")).collect(),
         most,
+        action: String::new(),
     }
 }
 
@@ -214,7 +215,7 @@ fn an_option_is_words_and_nothing_else() {
 
 fn named(names: &[&str]) -> Entry {
     let options = names.iter().map(|name| name.to_string()).collect();
-    Entry { id: "wish".into(), hint: String::new(), options, most: 80 }
+    Entry { id: "wish".into(), hint: String::new(), options, most: 80, action: String::new() }
 }
 
 /// The chips, row by row, and the field they stand under.

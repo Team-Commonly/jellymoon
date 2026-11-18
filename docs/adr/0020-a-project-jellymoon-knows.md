@@ -304,3 +304,23 @@ What the build settled for decision 3, and where it is not this note's words. Th
 - **Not built here:** the app's "Start something new" (F66); a remote; a `.gitignore` or any first file; a
   way to make a project anywhere else. `project new` runs in CI on Linux and Windows; nobody has run it by
   hand there.
+
+## Found while building F64 and F66
+
+What the build settled for decisions 3 and 4, and where it is not this note's words. The detail is
+[app.md](../development/app.md), "A project given in the window".
+
+- **"In core's words" has no words in core.** F66's row says the choice is in core's words; core has none for
+  it. The app keeps this note's, "Start something new". Core's words are its refusals and the name it gives back.
+- **The choice is the entry's one chip**, and the field under it takes the name. The entry a new project is named
+  in stands on any day with no project on offer, page or none, so a first run with no session logs has it.
+- **A folder can also be chosen.** Nobody guesses a drop: every entry of a day offers "Choose a folder" after its
+  chips, the system's picker for one folder, which hands the folder to what a drop does.
+- **Core's refusals name `--repo` and `project new`**, words of the command line. The app says them of "that
+  folder" and "a new project", and changes nothing else of them.
+- **A day with no page gets one at once.** After a project is listed on a day whose reading gave no page, the
+  first step of a reading is taken again: with no logs it gives core's page of a day with no logs (F63) and makes
+  no call. A step that would call the model is not taken, and the entry then waits for a page, as before.
+- **Not built here:** a drop of several folders gives the first only; a name core takes is not entered in the
+  window on GPUI's test platform (core would start git with the test's own variables), so that path is proved by
+  the made-up window; risk 3 (what an agent builds in an empty repo) is still a person's to try.

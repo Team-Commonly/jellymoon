@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use sticker_kit::{Scene, Theme};
 
+use crate::starting::{Given, Listed, Listing, Shown};
 use crate::stopping::{Chosen, Stopped, Stopping};
 use crate::taps::OnShow;
 use crate::today::{Later, Next};
@@ -15,9 +16,10 @@ use crate::wishing::{Answer, Asking, Look, Offering, Reading, Said, Seen, Wishin
 use crate::working::{Worked, Working};
 
 /// The day's page on show, shared by the window's handlers, which all run on its thread. A page-data file has no
-/// day: every act on it is nothing.
+/// day: every act on it is nothing. With it, the project core listed while no entry offered it (F64): a folder
+/// dropped or a name entered while the day is still being read.
 #[derive(Clone, Default)]
-pub struct Showing(Rc<RefCell<Option<OnShow>>>);
+pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>);
 
 /// What the window does once core has answered an Enter.
 pub struct Entered {
@@ -54,7 +56,17 @@ impl After {
 
 impl Showing {
     pub fn of(day: Option<OnShow>) -> Self {
-        Showing(Rc::new(RefCell::new(day)))
+        Showing(Rc::new(RefCell::new(day)), Rc::default())
+    }
+
+    /// The project whose chip is chosen as soon as an entry offers it, or none.
+    pub fn wait_for(&self, name: Option<String>) {
+        *self.1.borrow_mut() = name;
+    }
+
+    /// The project waiting for an entry that offers its chip.
+    pub fn waiting(&self) -> Option<String> {
+        self.1.borrow().clone()
     }
 
     fn with<T>(&self, act: impl FnOnce(&mut OnShow) -> T) -> Option<T> {
@@ -110,6 +122,16 @@ impl Showing {
         let kept = answer.as_ref().is_some_and(Answer::kept);
         let (scene, asking) = answer.and_then(|answer| self.with(|on| on.answered(answer))).unzip();
         Entered { kept, scene, asking: asking.flatten() }
+    }
+
+    /// A folder dropped or chosen, or a new project's name entered, as work for another thread.
+    pub fn listing(&self, given: Given) -> Option<Listing> {
+        self.with(|on| on.listing(given))
+    }
+
+    /// What a [`Listing`] gave: the scene, the entry, and the project's name when core listed it.
+    pub fn listed(&self, listed: Listed) -> Option<Shown> {
+        self.with(|on| on.listed(listed))
     }
 
     /// What the asking for a wish's run had to say: the scene to show, when it said something.

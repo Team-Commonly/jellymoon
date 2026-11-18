@@ -34,6 +34,7 @@ The list (`Shown`, example `crates/jellymoon-core/tests/fixtures/shown.json`):
 | `files` | the first `most` files of the work, in git's own order of paths |
 | `more` | how many files there are after those |
 | `most` | 200 |
+| `result` | what the run said of its work, checked ("What the run says of its work"); left out when there is none |
 
 Each file: `n` (its number, from 1), `name` (the path, cleaned, on one line, at most 200 characters), `change`
 (`made`, `changed`, `removed`), `size` in bytes, `kind` and `obeyed`.
@@ -128,6 +129,86 @@ the run's branch still names that end.
 **A record from before F48** names none of the three, and is shown by the shape of its branch alone, as F44 built
 it: the tip must be a run's commit (below), and the work is its change from its one parent.
 
+## What the run says of its work
+
+A run may end its last word with a `result` beside `done` ([run.md](run.md), "A run that asks"). It is a model's
+text. It is kept as it was read, and nothing of it is printed until it has been checked against the work, at
+every look (F85; ADR 0023; `crates/jellymoon-core/src/run/told.rs`; tests `crates/jellymoon/tests/f85.rs`).
+The list of work that waits prints what passed (example `crates/jellymoon-core/tests/fixtures/shown-told.json`):
+
+```json
+"result":{"pieces":[{"type":"did","text":"Shipping is now free from 50, not 100. The test tries 49 and 50."},{"type":"change","n":1,"name":"src/shipping.rs","made":false,"before":["if total >= 100 { 0 } else { 8 }"],"after":["if total >= 50 { 0 } else { 8 }"]},{"type":"decided","text":"An order of exactly 50 ships free."},{"type":"unsure","text":"I could not run the test."}],"dropped":1}
+```
+
+**Where it is read from.** `runs/<id>/result.json` in the home, as a plain file of at most 8,192 bytes
+(`tap::plain`, so a link, a pipe or a folder at the name, and on Unix a file its group or others can write, is
+no result). Its shape is
+`{"pieces":[...]}`, each piece one of
+
+```json
+{"type":"did","text":"..."}
+{"type":"change","file":"<path>","before":["..."],"after":["..."]}
+{"type":"decided","text":"..."}
+{"type":"unsure","text":"..."}
+```
+
+with `before` and `after` each optional. A file that is longer, that is not this shape, that names another type
+or one part more, is no result, and the list prints as it did before F85. Only the first twelve pieces are read.
+A file written by hand is checked exactly as one a run left: the file is not believed, the work is.
+
+**When there is a `result`.** Only in the list (`run show` without `--file`, and `run waiting`), only of work
+that waits, and only when a piece passed or one was dropped. Work that was kept or tossed, and `--file <n>`,
+print what they printed before.
+
+**The order and the counts.** Pieces are printed in the catalogue's order, whatever order the run wrote them
+in: the first `did`, the first two `change`, the first three `decided`, the first three `unsure`. A piece past
+its count is left out and is not counted as dropped.
+
+**A text** (`did`, `decided`, `unsure`). It passes the door a question passes (`still.rs`) as the run wrote it,
+its line breaks with it: it is made one line, each line break and run of spaces one space, a credential's shape
+is printed as `[redacted]`, one that a line break splits in two as well, and a `"` as a `'`. The piece is
+dropped, never cut, when the text
+
+- is over its length, counted in characters after the door: 280 for `did`, 160 for `decided` and `unsure`;
+- holds a character that draws as nothing or as a blank (the list under `plain`, below, in "Work that waits");
+- is empty, or is only marks once it is cleaned;
+- reads like a note's count, a digit and `more` (`3 more`, `+5 more`).
+
+**A `change`.** It is printed as `n` and `name`, the number and the name the list itself gives the file, with
+`made` (whether the work made the file) and the quoted lines. Nothing the run wrote names the file in what is
+printed. The piece is dropped unless all of this holds:
+
+- `file` is, byte for byte, the path of one of the listed files, and that file is `text`;
+- the file's printed name is the path as git keeps it (`plain`): a name cleaning changed is not quoted under;
+- the file is at most 64 KiB after the work, and for a changed file at most 64 KiB before it too;
+- it quotes one line at least, and at most three `before` and three `after`;
+- every quoted line, with the spaces and tabs at its two ends taken off, is not empty, is at most 100
+  characters, holds no tab, no line break and no character that draws as nothing, does not read like a note's
+  count, and is a line the cleaning of a file's text leaves exactly as it is (`still_text`): a line with a
+  credential's shape in it is never printed, with the mark or without;
+- every quoted line is also a whole line of its side of the file cleaned whole, as `--file <n>` cleans the
+  file: a shape that spans lines, a private key block from its first line to its last, is the mark there, so no
+  line of it is quoted, however short the line and whether the work made the file, changed it or removed it;
+- every `before` line is a whole line of the file, ends taken off, that the file has more often before the
+  work than after it; every `after` line is one it has more often after. A line that is there as often as it
+  was is neither, and a part of a line is not a line. So a made file passes no `before` line and a removed
+  file no `after` line.
+
+One line that fails drops the whole piece. A quoted line is printed with its ends taken off, as the line is in
+the file otherwise.
+
+**`dropped`** is how many pieces of those read failed their check. Nothing says which, or why.
+
+**At every look.** The check is made against the work as git gives it at that look, not when the result was
+kept. A run's branch that names another commit than the record does is refused before anything is read, as
+before; a result is checked against the files of the commits the record names.
+
+**What holds a model's text.** These are the only places a run's own words reach what is printed, and each is
+held as said above: the `text` of a `did`, `decided` or `unsure` (the door, the length, the checks), and the
+`before` and `after` lines of a `change` (a whole line of the work's own file, unchanged by the cleaning).
+`n`, `name`, `made`, `type` and `dropped` are Jellymoon's. Nothing of a result is in `run`'s own line, in a
+record, in a wish, in a refusal or in `app.log`.
+
 ## What is asked of git
 
 All through `copy/git.rs`, so with every program of the repo's config switched off, nothing fetched, and git never
@@ -143,6 +224,10 @@ commits are compared as trees, with no history walked.
 | `cat-file --batch-check`, ids on its input | each listed file's size, and that it is a blob | 128 bytes a file |
 | `cat-file --batch`, ids on its input | for the list, every listed file of at most 64 KiB; for `--file <n>`, file `n` when it is that short | their sizes |
 | `cat-file blob <id>` | the start of a longer file: of each, for the list; of file `n` alone, for `--file <n>` | 64 KiB |
+| `cat-file blob <id of the file as it was>` | for the list of work that waits, when a result is kept: a changed file as it was before the work, for the first two files the result's changes name that are listed and were files before | 64 KiB and one byte: a file that long is not quoted from |
+
+The last is asked with the id `diff-tree` printed for the file's old side. A path or a line a result holds is
+compared with what git printed and is never an argument to git (`f85.rs` plays a git that would be caught by one).
 
 The list says of every file whether it is text, so it reads the start of every file. `--file <n>` reads the
 sizes of all and the bytes of file `n` only: a file git cannot be made to give keeps the list from being shown,
@@ -296,6 +381,9 @@ and writes nothing:
   home alone, whatever `--repo` and `--logs` say, and the app offers `More like this` under these wishes and
   no other ([app.md](app.md#a-question-answered-and-more-like-this-appsrcansweringrs)). The day's eight are
   not counted here: a ninth wish is refused when it is made.
+- **`result`.** What the run said of its work, checked at this look as `run show` checks it and printed in the
+  same shape ("What the run says of its work"). It is left out of a wish whose run said nothing that could be
+  read, and of one whose list could not be read.
 - **Which wishes.** A made wish of the day whose run finished with its one commit, whose record names that
   commit, and whose work is neither kept nor tossed. That is asked of the home alone. A wish with no run, a run
   that changed nothing, failed, was cancelled or asks, and a record from before F48 are not listed.
@@ -377,6 +465,11 @@ the smoke chain's `show` step asks it.
   letter): it is refused, never guessed.
 - **It does not show a commit no record names.** A run killed after its commit and before its end was written
   leaves that commit on its branch (`run.md`, "What a kill leaves in the record"). It is not shown.
+- **It does not say a result is true.** A `did`, a `decided` and an `unsure` are the run's own sentences: they
+  are cleaned and bounded, and nothing compares them with the work. A `change` is held to the lines, not to
+  their meaning or their place: a quoted line is one the file gained or lost, wherever in the file it is.
+- **It does not quote from a file past the list.** A change that names a file after the first 200, or a third
+  changed file, is dropped or left out.
 - **It does not look past 200 files or 64 KiB of one.** There is no way to ask for the rest.
 - **It does not tell two files apart by name.** Two files can print one name ("What a printed name can hold");
   `n` is the file.

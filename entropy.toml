@@ -378,7 +378,19 @@ max_file_lines = 400
 # The third app notes raised core by 112: `call/wait.rs`, the wait on a started command, is 94 (39 of them its test
 # of a wait that fails, played with a stand-in for the command) and took 14 lines out of `call.rs`, which gained 11
 # (the folder and the program said apart); `error.rs` 21 (three answers of their own, with their sentences).
-"crates/jellymoon-core" = 16520
+# F85 raised core by 515: `run/told.rs` 251 (what a run says of its work: the shape it is read and kept in, the
+# door of a text and of a quoted line, the check of a change against both sides of its file), its unit tests
+# `run/told/tests.rs` 135, `run/asks.rs` 42 (`done` with a `result` beside it, and its test), `copy/work.rs` 22 (a
+# changed file as it was, by the id git printed), `tests/shapes.rs` 29 (the new part round trips), and the rest
+# where the result is carried: `show.rs` 11, `waits.rs` 7, `obeyed.rs` 7, `stream.rs` 5, `end.rs` 4, `run.rs` 2.
+# The gate of F85 raised core by 18: `run/told.rs` 8 (a text goes to the door as it was written, and a quoted line
+# is held to its side of the file cleaned whole), `run/told/tests.rs` 10 (a credential a line break splits).
+# F78 raised core by 556: the login shell asked for its `PATH` (`find/shell.rs` 105, `find/shell/ask.rs` 194 and
+# the record of the user in `find/shell/ask/record.rs` 75, tests among them), the line of `jellymoon harness`
+# (`find/said.rs`, 113), the look in those folders and its one more check in `find.rs` (62), and 7 in `call.rs`,
+# `lib.rs` and `hear/day.rs`.
+# The gate of F78 raised core by 12: an answer with no harness in it is forgotten (`forget` in `find/shell/ask.rs`).
+"crates/jellymoon-core" = 17621
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -582,11 +594,21 @@ max_file_lines = 400
 # whether the system says a time of making, asked of the system), `tests/f65/half.rs` 4 (an empty `projects`
 # left where it does not); `tests/f65/mark.rs` lost 2.
 # The third app notes raised the binary by 3: the line for a `JELLYMOON_CLAUDE` that names no program (`tests/f27.rs`).
+# F85 raised it by 743, all tests: `tests/f85.rs` 292 (the ADR's two worked examples as `run show` prints them,
+# the check at every look, where a result is kept, what git is asked), `tests/f85/checks.rs` 249 (each rule of a
+# check from both sides), `tests/f85/kept.rs` 172 (what is kept of a last word and what is no result), and the
+# made-up agent's script that ends a run with a typed result (`tests/support/fake_agent/asks.rs`, 30).
+# The gate of F85 raised it by 81, all tests: `tests/f85/held.rs` 69 (no line of a private key block is quoted; a
+# side that is a link or holds a zero byte is not quoted from), `tests/f85.rs` 7, `tests/f85/checks.rs` 5.
+# F78 raised the binary by 597: its tests (`tests/f78.rs` and `tests/f78/`, 513), the made-up login shell they
+# start (`tests/support/fake_shell.rs`, 78), and the `harness` command in `main.rs` and `parse.rs` (6).
+# The gate of F78 raised the binary by 48, all in `tests/f78.rs` and `tests/f78/`: a mode is set on a copy, and
+# two looks of one command with a harness in the answer and with none.
 # The door notes raised it by 216, all tests and their support: `tests/f74/notes.rs` is 135 (a `PATH` that holds a
 # harness, a drive with no root), the rule grew by 49 (`tests/support/door/world.rs`), `tests/f74.rs` by 24,
 # `tests/support/mod.rs` by 13 (`git_alone`, which `tests/f39/world.rs` lost, 16) and `tests/support/door.rs` by 9
 # (the asker's start); F38's worlds cost 3 and F41's asker lost 1.
-"crates/jellymoon" = 27925
+"crates/jellymoon" = 29394
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -632,9 +654,13 @@ max_file_lines = 400
 # F75 and the door's review raised it by 104: the rule holds the app's tests too and its two wrong shapes are set
 # right (`rules/door.rs` lost 57, its tests moved out), and its tests are `rules/door_tests.rs` (161).
 # The third app notes raised it by 3: the comment on why a home's name is asked for once in its test (`smoke/build.rs`).
+# F78 raised xtask by 31: the smoke chain's `harness` step (`smoke/off_path.rs`, `smoke/steps.rs`).
+# The gate of F78 raised xtask by 15: the door's rule knows `search()` and `harness_found(None` (`rules/door.rs`
+# and its tests).
 # The door notes raised it by 63: 22 in `rules/door.rs` (the asker, four more ways a folder or the look is named,
 # the word `tempdir` in a longer name or a string let be) and 41 in its tests, `rules/door_tests.rs`.
-"crates/xtask" = 2833
+# Joined, F78's and the door notes' additions to the door's rule share 6 lines.
+"crates/xtask" = 2873
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

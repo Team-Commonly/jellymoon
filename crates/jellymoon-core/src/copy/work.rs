@@ -16,6 +16,8 @@ use super::{Places, branch};
 pub(crate) const LISTED: usize = 200;
 /// The most bytes of one file that are read.
 pub(crate) const TEXT_MAX: usize = 64 * 1024;
+/// The most files of a run's work that are read as they were before it, for what the run says of them (F85).
+pub(crate) const BEFORE: usize = 2;
 /// The most bytes of git's list of changed files that are read: over a hundred thousand files of everyday names.
 pub(super) const LIST_MAX: usize = 16 * 1024 * 1024;
 /// The most bytes of the run's commit that are read: its message is one line. A commit of that many or more is
@@ -74,6 +76,11 @@ pub(crate) struct WorkFile {
     /// Another repo's entry, before the change or after it.
     pub(super) other: bool,
     id: String,
+    /// The id git printed for a file the work changed, as it was before: only of what was a file then.
+    was: Option<String>,
+    /// That file as it was, when it was asked for ([`before`]): its first [`TEXT_MAX`] bytes and one more, so
+    /// that many or fewer are the whole of it.
+    pub before: Option<Vec<u8>>,
 }
 
 /// What a run's record names of its work (`run/record.rs`): the git folder the repo's checkouts share, the commit
@@ -89,7 +96,8 @@ pub(crate) struct Named<'a> {
 /// The first [`LISTED`] files of a run's work, in git's own order, and the paths of the files after them, of
 /// which nothing else is read. No word of git's
 /// is kept of any failure here. With `only`, a file's number from 1, that file alone is read past its size: one
-/// file is printed without a read of any other file's bytes.
+/// file is printed without a read of any other file's bytes. The files whose paths are `asked` are read as
+/// they were before the work as well ([`before`]).
 ///
 /// With what the record `named`, the work is the change from that start to that end in that repo, and is read
 /// only when the repo found at `folder` is that repo, the run's branch names that end, and the end's one parent
@@ -101,6 +109,7 @@ pub(crate) fn work_of(
     run: &str,
     named: Option<&Named>,
     only: Option<usize>,
+    asked: &[&[u8]],
 ) -> Result<(Vec<WorkFile>, Vec<Vec<u8>>), Unread> {
     let git = Git::find(&Places::of(home).runs, true).map_err(|_| Unread::Home)?;
     let found = git.discover(folder).map_err(|_| Unread::Repo)?;
@@ -124,7 +133,18 @@ pub(crate) fn work_of(
     let mut files = changed(&repo, &parent, &tip)?;
     let past = files.split_off(LISTED.min(files.len())).into_iter().map(|file| file.path).collect();
     read(&repo, &mut files, only).ok_or(Unread::Repo)?;
+    before(&repo, &mut files, asked);
     Ok((files, past))
+}
+
+/// Reads the listed files whose paths are `asked` as they were before the work, [`BEFORE`] of them at most: what
+/// a run says it changed is held to both sides of the change (`run/told.rs`). A path asked for is a model's
+/// word. It is compared with the paths git printed and is never given to git, which is told the id it printed
+/// for the file as it was. A file git does not give is one with no text before, and nothing else fails for it.
+fn before(repo: &Repo, files: &mut [WorkFile], asked: &[&[u8]]) {
+    for file in files.iter_mut().filter(|file| asked.contains(&&file.path[..])).take(BEFORE) {
+        file.before = file.was.as_ref().and_then(|was| repo.bytes(&["cat-file", "blob", was], &[], TEXT_MAX + 1));
+    }
 }
 
 /// Every file that differs between two commits or trees, in git's own order, with no size and no bytes read: the
@@ -207,6 +227,7 @@ pub(super) fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
             _ => return None,
         };
         let other = was_mode == "160000" || mode == "160000";
+        let was = (done == Done::Changed && was_mode.starts_with("100") && is_id(was_id)).then(|| was_id.to_string());
         let (mode, id) = if done == Done::Removed { (was_mode, was_id) } else { (mode, id) };
         let entry = match mode {
             "120000" => Entry::Link,
@@ -214,7 +235,8 @@ pub(super) fn listed(list: &[u8]) -> Option<Vec<WorkFile>> {
             _ => Entry::File,
         };
         let path = parts.next().filter(|path| !path.is_empty() && is_id(id))?.to_vec();
-        files.push(WorkFile { path, done, entry, size: 0, head: Vec::new(), other, id: id.to_string() });
+        let (size, head, id) = (0, Vec::new(), id.to_string());
+        files.push(WorkFile { path, done, entry, size, head, other, id, was, before: None });
     }
     Some(files)
 }

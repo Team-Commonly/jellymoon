@@ -14,7 +14,7 @@ use super::child::{End, Ended};
 use super::record::Record;
 use super::{
     Ran, RunOutcome, STAR, asking, asks, cancelled, cut, cut_late, dead, failed, finished, follow, left, never, record,
-    refused, words,
+    refused, told, words,
 };
 use crate::busy::{self, or_test};
 use crate::copy::{self, Outcome, RunCopy};
@@ -263,6 +263,10 @@ pub(super) fn settle(
         Ok(Some(_)) => Err(""),
         Err(kind) => Err(kind.as_str()),
     };
+    // What a run that finished said of its work is kept before its record says that it ended (`told.rs`).
+    if let (Ok(_), Some(said)) = (&committed, &read.said) {
+        told::keep(home, run, said);
+    }
     let question = word.as_ref().ok().cloned().flatten();
     let (outcome, why, end) = match committed {
         Ok((_, changed, end)) => (RunOutcome::Completed, follow::ended_as(home, run, start, changed), end),

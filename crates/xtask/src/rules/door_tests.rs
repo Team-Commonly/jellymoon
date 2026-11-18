@@ -133,6 +133,9 @@ fn a_test_in_core_or_the_app_that_has_the_harness_looked_for_with_its_own_enviro
         "let found = find::harness();",
         "None => harness(),",
         "named_or_found(None).unwrap();",
+        "let missed = search().unwrap();",
+        "match find::search() {",
+        "let said = harness_found(None).unwrap();",
         "Options { harness: None, day }",
         // The review of F75, finding 8: the look's other name, and the other call that names no harness.
         "let found = find::search();",
@@ -167,8 +170,13 @@ fn a_test_in_core_or_the_app_that_has_the_harness_looked_for_with_its_own_enviro
 #[test]
 fn only_the_look_s_own_name_is_the_look_and_only_what_mod_tests_holds_is_a_file_s_tests() {
     // A method, a longer name and a function of the name are not the look.
-    let other =
-        ["let hit = index.search();", "let hit = deep_search();", "fn search() -> Hit {", "missed(Some(named))"];
+    let other = [
+        "let hit = index.search();",
+        "let hit = deep_search();",
+        "fn search() -> Hit {",
+        "missed(Some(named))",
+        "let said = harness_found(Some(made_up));",
+    ];
     for rightful in
         ["let h = w.harness();", "let h = made_up_harness();", "fn harness() -> PathBuf {"].into_iter().chain(other)
     {

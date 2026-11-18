@@ -17,6 +17,7 @@ pub const STEPS: &[Step] = &[
     Step { name: "day", only: Only::Any, run: day },
     Step { name: "page", only: Only::Any, run: page },
     Step { name: "found-off-path", only: Only::Synthetic, run: super::off_path::found_off_path },
+    Step { name: "harness", only: Only::Synthetic, run: super::off_path::harness },
     Step { name: "layout-sticker", only: Only::Any, run: |world| layout(world, "sticker") },
     Step { name: "layout-plain", only: Only::Any, run: |world| layout(world, "plain") },
     // Not with --real: these keep a page of the day, and a second reading call would spend the person's plan.

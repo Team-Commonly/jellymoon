@@ -43,7 +43,8 @@ const HOME: [&str; 7] =
     ["tempdir(", "tempdir_in(", "tempdir as ", "TempDir::new", "TempDir::with_prefix", "temp_dir(", "temp_dir as "];
 /// The look's two names in core, and what reaches it from outside: a call that names no harness, by its function
 /// or in its options.
-const LOOK: [&str; 5] = ["harness()", "search()", "named_or_found(None", "missed(None", "harness: None"];
+const LOOK: [&str; 6] =
+    ["harness()", "search()", "named_or_found(None", "harness_found(None", "missed(None", "harness: None"];
 
 /// Whether the name before this place in a line goes on to the left: what stands here is then the end of a longer
 /// name, or a method when `dot` counts too.

@@ -934,7 +934,7 @@
         "on macOS, Linux and Windows; a line or a name of the work is never an argument to git"
       ],
       "test": "cargo test -p jellymoon --test f85",
-      "passes": false,
+      "passes": true,
       "blockedBy": []
     },
     {

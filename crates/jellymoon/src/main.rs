@@ -43,6 +43,7 @@ const USAGE: &str = "usage:
   jellymoon project new <name> [--date <YYYY-MM-DD>]   (makes a new project: a folder of that name in projects in Jellymoon's folder, a git repo with one empty first commit, listed like any other)
   jellymoon project list   (the projects Jellymoon knows: each name and the day it was last used, never a folder)
   jellymoon project forget <name>   (takes that project off the list, and touches nothing else)
+  jellymoon harness   (whether Claude Code is found and how: named, on PATH, in a fixed place or by the login shell; starts no harness and names no folder)
   jellymoon uninstall   (removes Jellymoon.app, this command and the delivery hook; your journal's own files stay, and the projects made with `project new` are among them)
 ";
 
@@ -194,6 +195,9 @@ fn run() -> Result<String, Failure> {
         Command::Day(options) => Ok(format!("{}\n", day(&options)?)),
         Command::Page(options, model) => page(&options, model),
         Command::Uninstall => uninstall(),
+        Command::Harness => {
+            Ok(format!("{}\n", jellymoon_core::harness_found(named("JELLYMOON_CLAUDE").as_deref()).map_err(failed)?))
+        }
         Command::Rule { stands, over } => {
             Ok(format!("{}\n", jellymoon_core::rule(&home()?, &stands, &over).map_err(failed)?))
         }

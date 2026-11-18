@@ -2,6 +2,7 @@
 //! runs the installer either sets `JELLYMOON_NO_OPEN` (what `Mac::command` does) or has a made-up `open` first on its
 //! `PATH` (`Mac::install_opening`), and the door refuses a world that has neither (`door::unguarded_installer`).
 
+use std::env;
 use std::fs;
 use std::panic::catch_unwind;
 use std::path::Path;
@@ -20,8 +21,10 @@ fn the_door_refuses_a_world_that_runs_the_installer_with_no_way_to_keep_the_real
     fs::create_dir_all(&made_up).unwrap();
     fs::create_dir_all(&bare).unwrap();
     fs::write(made_up.join("open"), "#!/bin/sh\n").unwrap();
-    let (made_up, bare) = (made_up.display().to_string(), bare.display().to_string());
-    let after = format!("{bare}:{made_up}");
+    // Lists of folders are written as this system writes `PATH`.
+    let list = |folders: [&Path; 2]| env::join_paths(folders).unwrap().into_string().unwrap();
+    let (after, first) = (list([&bare, &made_up]), list([&made_up, Path::new("/usr/bin")]));
+    let bare = bare.display().to_string();
 
     // A world that does not run the installer is not asked.
     assert!(guarded(&[("PATH", "/usr/bin")], &["--help"]));
@@ -34,7 +37,7 @@ fn the_door_refuses_a_world_that_runs_the_installer_with_no_way_to_keep_the_real
     assert!(!guarded(&[url, ("PATH", &after)], &[]), "only the first folder of PATH is the made-up one");
     assert!(!guarded(&[url, ("PATH", "/usr/bin:/bin")], &[]), "the system's folder is no made-up one");
     assert!(guarded(&[url, ("JELLYMOON_NO_OPEN", "1"), ("PATH", "/usr/bin")], &[]));
-    assert!(guarded(&[url, ("PATH", &format!("{made_up}:/usr/bin"))], &[]));
+    assert!(guarded(&[url, ("PATH", &first)], &[]));
 
     // At the door itself it is a panic with one fixed sentence, and nothing is started.
     let home = dir.path().to_str().unwrap();

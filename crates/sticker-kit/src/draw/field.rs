@@ -39,6 +39,8 @@ pub(super) fn fit(scene: &Scene, mut was: Vec<EntryView>) -> (Vec<EntryView>, Ve
             options: Vec::new(),
             most: field.most,
             action: String::new(),
+            go: String::new(),
+            loud: false,
         };
         let at = was.iter().position(|view| same(view, id, field));
         let mut view = at.map(|at| was.remove(at)).unwrap_or_default();

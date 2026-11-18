@@ -34,7 +34,7 @@ use sticker_kit::{Scene, Theme, Viewport};
 use crate::jellyfish::Room;
 use crate::shell::{Asked, Opened, wire};
 use crate::showing::{Entered, Showing, entry_line, other_theme, switches_theme, tap_line};
-use crate::starting::{Given, Listing, NEW, Shown};
+use crate::starting::{Given, Listing, Shown, named};
 use crate::today::Later;
 
 actions!(jellymoon, [Quit]);
@@ -127,8 +127,8 @@ pub(crate) async fn looks(shown: Showing, page: WeakEntity<Page>, cx: &mut gpui:
 /// thread too, and what it has to say is shown when it ends.
 fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     say(&entry_line(&made.id, &made.text));
-    if made.id == NEW {
-        return listing(shown.listing(Given::Name(made.text.clone())), true, shown.clone(), page, cx);
+    if let Some(name) = named(&made.id, &made.text) {
+        return listing(shown.listing(name), true, shown.clone(), page, cx);
     }
     // What is typed under a made wish (F54) is carried as a wish is, and answers the field it was typed in.
     let field = (made.id != crate::wishing::ENTRY).then(|| made.id.clone());
@@ -284,6 +284,16 @@ pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> 
                 Tap::Action { id } => {
                     say(&tap_line(id, None));
                     return choosing(&on_show, page.clone(), cx);
+                }
+                // `Start` with nothing typed: the note says what to type first. The view is in use: it takes the
+                // scene once that is done.
+                Tap::Go { id } => {
+                    let (scene, now) = (on_show.unready(id), page.clone());
+                    return cx.defer(move |cx| {
+                        if let Some(scene) = scene {
+                            let _ = now.update(cx, |page, cx| page.set_scene(scene, cx));
+                        }
+                    });
                 }
             };
             say(&tap_line(id, option));

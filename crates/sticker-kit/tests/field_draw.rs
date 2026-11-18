@@ -62,6 +62,8 @@ fn open(cx: &mut TestAppContext) -> (Entity<Page>, &mut VisualTestContext, Seen<
         options: vec!["garden".into()],
         most: 12,
         action: String::new(),
+        go: String::new(),
+        loud: false,
     };
     let (page, cx) = cx.add_window_view(move |_, _| {
         Page::new(scene(both()), Theme::sticker())

@@ -103,7 +103,7 @@ fn a_kept_page_that_says_no_logs_were_found_is_not_drawn_first_while_the_day_is_
     assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), EMPTY);
     let on = w.on_show();
     assert_eq!((first_title(&on.scene), on.page.is_some()), (super::NOTHING, true));
-    assert_eq!(on.scene.footer, super::READ_NOTHING);
+    assert_eq!(on.scene.footer, "", "nothing read and no wish: no footer");
 }
 
 #[test]

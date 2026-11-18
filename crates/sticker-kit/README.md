@@ -25,9 +25,12 @@ from outside the app reach `on_paths`, with their paths, called while the page i
 
 A page may hold one `Entry` (`src/scene.rs`) beside its scene: an id, a hint, a
 few options of which one is always chosen, and a cap on its characters. It has
-a spot of its own: in the left column, under the title, from the content's
-left edge to 24 design pixels short of the big character's place, the chips
-under the field: in one row when that holds them, else in two. A chip is as
+a spot of its own, under the title. The field's row is the page's widest thing
+there: from the content's left edge to the left column's right edge, 44 design
+pixels high, over the big character's place, and the big character stands 24
+design pixels under it, however high a theme puts it. The chips stand under the
+field, from its left edge to 24 design pixels short of the big character's
+place: in one row when that holds them, else in two. A chip is as
 wide as its name, and at least one and a half times its height, while its row
 has the room. In a row too narrow for its names the short ones keep their
 width and the long ones share what is left; those are cut in the middle with
@@ -46,8 +49,14 @@ is left out only where that row could not hold its chips at their least width
 beside it. An entry's `action`, when it is not empty, is one thing to do that is no option
 (`PieceKind::Action`): whole, after the chips and the count, in the last row, whose chips share what it leaves. A
 tap on it reaches `on_tap` as `Tap::Action` with the entry's id; it is never chosen, and Enter never gives it.
-`page.choose_option(name, cx)` chooses the option of that name when it is offered, and says whether it was. It places nothing for a theme whose big character leaves the field under 160 design
-pixels.
+An entry's `go`, when it is not empty, is the choice that does what Enter does (`PieceKind::Go`): whole, at
+the right end of the field's row and as high as the field, which has what it leaves. A tap on it gives the field
+the keys and enters its words, as Enter does; while the field holds no words it is drawn as not ready (a plain
+chip, its words in the hint's grey), and a tap enters nothing and reaches `on_tap` as `Tap::Go` with the entry's
+id, so whoever made the entry can say what to type first. With `loud`, the action is the entry's loud choice:
+filled as a chosen chip is, while no chip is drawn chosen. The hint, and `go`, are written at the size typed words
+are. `page.choose_option(name, cx)` chooses the option of that name when it is offered, and says whether it was.
+It places nothing for a theme whose big character leaves the chips under 160 design pixels.
 
 Three things about an entry are told apart by more than a shade, and each is
 a key of the theme's `[palette]`: the hint is a grey (`entry_hint`, also the
@@ -57,14 +66,15 @@ line darker than that fill (`entry_ring`; `entry_edge` without the keys).
 
 Every text of the entry is held to a least contrast on its ground (WCAG 2's
 ratio of relative luminance, `Color::contrast`). Each floor is what WCAG 2 asks
-of text (4.5) or of a line (3), but the hint's, which is meant to be pale:
+of text (4.5) or of a line (3), but the hint's, which a theme file may make pale; the built-in themes' hints
+are dark enough to read as text:
 
 | Text | On | Floor | sticker | plain |
 |---|---|---|---|---|
 | the chosen chip's name | `chip_chosen` | 4.5 (`CHOSEN_INK_FLOOR`) | 9.99 | 4.57 |
 | a chip's name, the palette's `soft` | `chip` | 4.5 (`CHIP_INK_FLOOR`) | 5.66 | 5.45 |
 | what is typed, the palette's `ink` | `entry` | 4.5 (`TYPED_FLOOR`) | 14.39 | 15.80 |
-| the hint, and words that wait | `entry` | 2.5 (`HINT_FLOOR`) | 2.80 | 3.06 |
+| the hint, and words that wait | `entry` | 2.5 (`HINT_FLOOR`) | 5.36 | 5.37 |
 | the caret | `entry` | 3.0 (`CARET_FLOOR`) | 3.67 | 4.57 |
 | the ring | `paper` | 3.0 (`RING_FLOOR`) | 5.35 | 15.80 |
 | `quoted`, someone else's words | `bubble` | 4.5 (`QUOTED_FLOOR`) | 6.14 | 6.66 |
@@ -114,7 +124,7 @@ theme files to all of this.
 
 ```rust
 Page::new(scene, theme)
-    .with_entry(Entry { id: "wish".into(), hint: "wish for something".into(), options, most: 200, action: String::new() })
+    .with_entry(Entry { id: "wish".into(), hint: "wish for something".into(), options, most: 200, go: "Start".into(), ..Entry::default() })
     .on_entry(|made, window, cx| { /* made.id, made.text, made.option */ })
 ```
 

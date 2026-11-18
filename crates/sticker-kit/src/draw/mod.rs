@@ -55,6 +55,10 @@ pub enum Tap {
     Action {
         id: String,
     },
+    /// The `go` of the entry `id` while it held no words: nothing was entered ([`crate::Entry::go`]).
+    Go {
+        id: String,
+    },
 }
 
 type TapHandler = Box<dyn Fn(&Tap, &mut Window, &mut App)>;
@@ -270,8 +274,10 @@ impl Page {
         let rim = self.theme.metrics.rim * k;
         let typed = self.entry.state.holds();
         let keyed = self.fields.iter().find(|view| view.lit).and_then(|view| view.what.as_ref());
-        let (chosen, keyed) = (self.entry.state.chosen(), keyed.map(|field| field.id.as_str()));
-        let brush = Brush { theme: &self.theme, scene: &self.scene, k, chosen, lit: self.entry.lit, keyed };
+        let loud = self.entry.what.as_ref().is_some_and(|entry| entry.loud);
+        let (chosen, keyed) = (self.entry.state.chosen().filter(|_| !loud), keyed.map(|field| field.id.as_str()));
+        let (lit, ready) = (self.entry.lit, typed && !self.entry.state.waiting());
+        let brush = Brush { theme: &self.theme, scene: &self.scene, k, chosen, lit, keyed, loud, ready };
         let mut order: Vec<usize> = (0..self.placed.len()).collect();
         order.sort_by_key(|&i| self.placed[i].z);
         let mut flat = Vec::new();

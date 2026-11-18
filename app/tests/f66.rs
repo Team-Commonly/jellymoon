@@ -62,8 +62,9 @@ fn with_no_project_on_offer_the_entry_holds_one_choice_a_field_for_a_name_and_th
         // The page says what to do here, in the window, and never sends the person away.
         let said = notes(&placed).join(" ");
         assert!(!said.contains("Ask one of your agents") && !said.contains("open Jellymoon again"), "{said}");
-        let here = if logs { "type what you want done, or name a new project" } else { "drop a folder on this window" };
-        assert!(said.contains(here), "logs {logs}: {said}");
+        // With no project the field takes a name: the page says to choose a folder first (the entry-first slice).
+        let (folder, name) = (said.find("hoose the folder you want to work in"), said.find("a name for a new project"));
+        assert!(folder.is_some() && folder < name, "logs {logs}: {said}");
         assert!(!called(&w.day), "logs {logs}: a reading call was made");
     }
     // The hint is whole at the smallest page, in both themes.

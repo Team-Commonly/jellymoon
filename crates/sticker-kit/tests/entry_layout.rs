@@ -1,4 +1,5 @@
-//! Where the entry is placed: the field under the title, the chips under the field, and what each is cut to.
+//! Where the entry is placed: the field under the title, its `go` at the end of its row, the chips under the
+//! field, and what each is cut to.
 
 use sticker_kit::entry::MAX_ENTRY_OPTIONS;
 use sticker_kit::{Entry, FixedAdvance, PieceKind, Placed, Rect, Scene, Theme, Viewport, layout, layout_entry};
@@ -13,6 +14,8 @@ fn entry(options: usize, most: usize) -> Entry {
         options: (0..options).map(|i| format!("project-{i}")).collect(),
         most,
         action: String::new(),
+        go: String::new(),
+        loud: false,
     }
 }
 
@@ -22,6 +25,13 @@ fn of(placed: &[Placed], kind: PieceKind) -> Vec<&Placed> {
 
 fn outline(piece: &Placed) -> Rect {
     piece.rect.turned_bounds(piece.tilt_degrees)
+}
+
+/// Where the chips' rows end: 24 design pixels short of the big character's place.
+fn end(theme: &Theme, viewport: Viewport) -> f32 {
+    let page = layout(&Scene::sample(), theme, viewport, &MEASURE);
+    let k = of(&page, PieceKind::Paper)[0].rect.w / 1344.0;
+    of(&page, PieceKind::Hero)[0].rect.x - 24.0 * k
 }
 
 fn scenes() -> Vec<Scene> {
@@ -87,7 +97,7 @@ fn the_hint_and_the_options_are_cut_to_their_room_and_the_options_counted() {
         entry.hint = "what do you wish for ".repeat(60);
         entry.options[1] = "a-project-with-a-very-long-name-indeed".repeat(20);
         let placed = layout_entry(&entry, &Theme::sticker(), viewport, &MEASURE);
-        let field = of(&placed, PieceKind::Entry)[0];
+        let (field, end) = (of(&placed, PieceKind::Entry)[0], end(&Theme::sticker(), viewport));
         let chips = of(&placed, PieceKind::Chip);
         assert_eq!(chips.len(), MAX_ENTRY_OPTIONS, "the first six options are drawn, each on a chip");
         assert_eq!(field.text.len(), 1);
@@ -95,14 +105,14 @@ fn the_hint_and_the_options_are_cut_to_their_room_and_the_options_counted() {
         assert!(chips[1].text[0].text.contains('…'), "{:?}", chips[1]);
         for (i, chip) in chips.iter().enumerate() {
             assert!(chip.text[0].rect.inside(&chip.rect.grown(0.5)), "{chip:?}");
-            assert!(chip.rect.right() <= field.rect.right() + 0.5, "{chip:?} ends where the field ends");
+            assert!(chip.rect.right() <= end + 0.5, "{chip:?} ends where the chips' row ends");
             let row = if i < 3 { 0 } else { 3 };
             assert_eq!(chip.rect.y, chips[row].rect.y, "names too long for one row stand in two rows of three");
             assert!(chips[i + 1..row + 3].iter().all(|next| chip.rect.right() <= next.rect.x), "{chip:?}");
         }
         assert!(chips[2].rect.bottom() <= chips[3].rect.y && chips[3].rect.x == field.rect.x);
-        // The count of the options past the sixth stands in the second row: the first keeps the field's width.
-        assert!(chips[2].rect.right() >= field.rect.right() - 0.5, "{:?} ends short of {field:?}", chips[2]);
+        // The count of the options past the sixth stands in the second row: the first keeps the whole row.
+        assert!(chips[2].rect.right() >= end - 0.5, "{:?} ends short of {end}", chips[2]);
         // Short names stand in one row, each as wide as its name asks.
         let short = layout_entry(&self::entry(3, 80), &Theme::sticker(), viewport, &MEASURE);
         let chips = of(&short, PieceKind::Chip);
@@ -128,16 +138,17 @@ fn a_chip_is_never_wider_than_its_share_of_a_narrow_row() {
     assert_eq!(narrow.check(), Ok(()));
     for viewport in SIZES {
         let placed = layout_entry(&entry(6, 80), &narrow, viewport, &MEASURE);
-        let field = of(&placed, PieceKind::Entry)[0].rect;
+        let (field, end) = (of(&placed, PieceKind::Entry)[0].rect, end(&narrow, viewport));
         let chips = of(&placed, PieceKind::Chip);
         assert_eq!(chips.len(), 6, "{viewport:?}");
-        assert!(chips[5].rect.right() <= field.right() + 0.5, "{viewport:?}: {:?} ends past {field:?}", chips[5]);
-        assert!(chips[2].rect.right() <= field.right() + 0.5, "{viewport:?}: {:?} ends past {field:?}", chips[2]);
-        assert!(chips.iter().all(|chip| chip.rect.w <= field.w / 3.0), "each has a third of its row: {chips:?}");
+        assert!(chips[5].rect.right() <= end + 0.5, "{viewport:?}: {:?} ends past {end}", chips[5]);
+        assert!(chips[2].rect.right() <= end + 0.5, "{viewport:?}: {:?} ends past {end}", chips[2]);
+        let third = (end - field.x) / 3.0;
+        assert!(chips.iter().all(|chip| chip.rect.w <= third), "each has a third of its row: {chips:?}");
         assert!(chips[3].rect.y > chips[2].rect.y, "the row was to be narrow: {chips:?}");
         let page = layout(&Scene::sample(), &narrow, viewport, &MEASURE);
         let hero = of(&page, PieceKind::Hero)[0].rect;
-        assert!(field.right() < hero.x, "{viewport:?}: {field:?} ends short of {hero:?}");
+        assert!(chips[5].rect.right() < hero.x && field.bottom() < hero.y, "{viewport:?}: {hero:?} is covered");
     }
     narrow.metrics.hero_x -= 20.0;
     assert_eq!((narrow.check(), layout_entry(&entry(6, 80), &narrow, SIZES[0], &MEASURE)), (Ok(()), Vec::new()));
@@ -158,6 +169,7 @@ fn the_options_past_the_sixth_are_counted_in_words_after_the_last_chip() {
             assert_eq!(placed.last().map(|last| last.piece), Some(PieceKind::More), "it is placed after the chips");
             assert!(more.text[0].rect.inside(&more.rect.grown(0.5)), "{more:?}");
             assert!(more.rect.right() <= field.right() + 0.5, "{more:?} ends where the field ends");
+            assert!(more.rect.right() <= end(&Theme::sticker(), viewport) + 0.5, "{more:?} ends where its row ends");
             assert!(more.rect.y == chips[5].rect.y && chips[5].rect.right() <= more.rect.x, "{more:?}");
             assert_eq!(chips.len(), MAX_ENTRY_OPTIONS);
             assert!(chips[4].text[0].text.contains('…') && chips[3].rect.y > chips[2].rect.y, "{chips:?}");
@@ -181,13 +193,14 @@ fn the_options_past_the_sixth_are_counted_in_words_after_the_last_chip() {
     for viewport in SIZES {
         let placed = layout_entry(&entry(9, 80), &between, viewport, &MEASURE);
         let (field, chips) = (of(&placed, PieceKind::Entry)[0].rect, of(&placed, PieceKind::Chip));
+        let (row, end) = (end(&between, viewport) - field.x, end(&between, viewport));
         let [more] = of(&placed, PieceKind::More)[..] else { panic!("{viewport:?}: one count: {placed:?}") };
         assert_eq!((chips.len(), more.text[0].text.as_str()), (6, "+3 more"), "{viewport:?}");
         // 1.5 is the layout's private `LEAST` (`src/layout/entry.rs`), a chip's least width in chip heights: a
         // change to that constant changes this number with it.
         let (least, aside) = (chips[0].rect.h * 1.5, more.rect.w);
-        assert!(6.0 * least + aside > field.w, "{viewport:?}: the field was to be too narrow for six: {field:?}");
-        assert!(more.rect.right() <= field.right() + 0.5 && chips[5].rect.right() <= more.rect.x, "{more:?}");
+        assert!(6.0 * least + aside > row, "{viewport:?}: the row was to be too narrow for six: {row}");
+        assert!(more.rect.right() <= end + 0.5 && chips[5].rect.right() <= more.rect.x, "{more:?}");
         assert!(chips.iter().all(|chip| chip.rect.w >= least - 0.01), "{viewport:?}: {chips:?}");
     }
     // Where the last row could not hold its chips at their least width beside the count, there is no count:
@@ -215,7 +228,15 @@ fn an_option_is_words_and_nothing_else() {
 
 fn named(names: &[&str]) -> Entry {
     let options = names.iter().map(|name| name.to_string()).collect();
-    Entry { id: "wish".into(), hint: String::new(), options, most: 80, action: String::new() }
+    Entry {
+        id: "wish".into(),
+        hint: String::new(),
+        options,
+        most: 80,
+        action: String::new(),
+        go: String::new(),
+        loud: false,
+    }
 }
 
 /// The chips, row by row, and the field they stand under.
@@ -250,10 +271,10 @@ fn no_name_is_cut_while_its_row_has_room() {
         assert_eq!((said(&placed), rows(&placed).0.len()), (six.to_vec(), 2), "{at}: whole, in two rows");
 
         let placed = layout_entry(&named(&long), theme, viewport, &MEASURE);
-        let (rows, field) = rows(&placed);
+        let (rows, end) = (rows(&placed).0, end(theme, viewport));
         assert_eq!(rows.iter().map(Vec::len).collect::<Vec<_>>(), [3, 3], "{at}");
         for row in &rows {
-            let spare = field.right() - row[2].rect.right();
+            let spare = end - row[2].rect.right();
             let cut: Vec<_> = row.iter().filter(|chip| chip.text[0].text.contains('…')).collect();
             assert!(spare >= -0.5 && (cut.is_empty() || spare < 0.5), "{at}: {cut:?} cut with {spare} to spare");
             // The short names of a row are whole, and what is cut is cut to one width.
@@ -283,9 +304,10 @@ fn two_names_with_a_long_shared_start_read_differently_when_cut() {
     }
 }
 
-// Two numbers of the entry, stated: the least a chip is wide, and what the field keeps from the big character.
+// Two numbers of the entry, stated: the least a chip is wide, and what the field keeps from the big character,
+// which stands under the field's row.
 #[test]
-fn a_chip_is_never_narrower_than_one_and_a_half_times_its_height_and_the_field_ends_24_short_of_the_big_character() {
+fn a_chip_is_never_narrower_than_one_and_a_half_times_its_height_and_the_big_character_stands_24_under_the_field() {
     for (theme, viewport) in [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
     {
         let at = format!("{} at {viewport:?}", theme.name);
@@ -298,6 +320,29 @@ fn a_chip_is_never_narrower_than_one_and_a_half_times_its_height_and_the_field_e
         assert!((long.rect.w - (long.text[0].rect.w + 20.0 * k)).abs() < 0.01, "{at}: {long:?} is as wide as its name");
         assert!(long.rect.w > 1.5 * long.rect.h, "{at}");
         let hero = of(&page, PieceKind::Hero)[0].rect;
-        assert!((hero.x - field.right() - 24.0 * k).abs() < 0.01, "{at}: {field:?} ends 24 short of {hero:?}");
+        assert!((hero.y - field.bottom() - 24.0 * k).abs() < 0.01, "{at}: {hero:?} stands 24 under {field:?}");
+    }
+}
+
+// The entry's `go` stands at the right end of the field's row, as high as the field, with its words whole; the
+// field, in what it leaves, is wider than two fifths of the page and runs over the big character's place.
+#[test]
+fn go_ends_the_field_s_row_and_the_field_is_the_page_s_widest_thing_under_the_title() {
+    for (theme, viewport) in [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
+    {
+        let at = format!("{} at {viewport:?}", theme.name);
+        let entry = Entry { go: "Start".into(), ..entry(2, 80) };
+        let placed = layout_entry(&entry, theme, viewport, &MEASURE);
+        let kinds: Vec<_> = placed.iter().map(|p| p.piece).collect();
+        assert_eq!(kinds, [PieceKind::Entry, PieceKind::Go, PieceKind::Chip, PieceKind::Chip], "{at}");
+        let (field, go) = (placed[0].rect, &placed[1]);
+        assert_eq!((go.text[0].text.as_str(), go.id.as_str()), ("Start", "wish"), "{at}");
+        assert!(go.text[0].rect.inside(&go.rect.grown(0.5)), "{at}: {go:?}");
+        assert!(field.right() < go.rect.x && (go.rect.y, go.rect.h) == (field.y, field.h), "{at}: {go:?}");
+        assert!(field.w > 0.4 * viewport.w && go.rect.right() > end(theme, viewport), "{at}: {field:?}");
+        let page = layout(&Scene::sample(), theme, viewport, &MEASURE);
+        for other in page.iter().filter(|p| p.piece != PieceKind::Paper) {
+            assert!(!go.rect.overlaps(&outline(other)) && !field.overlaps(&outline(other)), "{at}: {other:?}");
+        }
     }
 }

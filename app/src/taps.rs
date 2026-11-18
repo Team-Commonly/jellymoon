@@ -63,6 +63,17 @@ impl Today {
         let data = jellymoon_core::with_made(&self.home, page.data.clone());
         let made = data.wishes.len().saturating_sub(page.data.wishes.len());
         let mut shown = scene::ruled(&Page { data, ..page.clone() }, &standing, made);
+        // With no project on offer the field takes a new project's name, so the empty page says so, folder first.
+        let listed = || jellymoon_core::projects(&self.home).is_ok_and(|known| !known.projects.is_empty());
+        if page.data.read.projects.is_empty() && !listed() {
+            for note in &mut shown.notes {
+                if let Note::Plain { title, body } = note
+                    && title == scene::NOTHING
+                {
+                    *body = scene::NO_PROJECT.to_string();
+                }
+            }
+        }
         if !page.data.clashes.is_empty() && !jellymoon_core::hook_installed(&self.home) {
             // Before the clashes, so a full page never shows a clash to tap and hides that no session would hear.
             let clash = |note: &Note| matches!(note, Note::Choice { id, .. } if id.starts_with("clash-"));

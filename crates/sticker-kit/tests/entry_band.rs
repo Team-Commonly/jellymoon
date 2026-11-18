@@ -18,6 +18,8 @@ fn the_small_characters_begin_under_the_entry_wherever_a_theme_puts_its_big_one(
         options: vec!["alpha".repeat(20); 6],
         most: 0,
         action: String::new(),
+        go: String::new(),
+        loud: false,
     };
     for viewport in SIZES {
         let ours = layout_entry(&entry, &high, viewport, &MEASURE);

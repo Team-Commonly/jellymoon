@@ -369,6 +369,26 @@ this", below): that a day nothing was typed on prints it as any day does is prov
 (`crates/jellymoon/tests/f63.rs`). What only a person at a window can see is not tested: the input method's
 candidate window, the caret, the pale words of an entry that waits, and which piece has the keys.
 
+### The walk: the loop step by step, with pictures (`app/examples/walk.rs`)
+
+So that someone looks at the steps of the loop in order before a release: the page when a wish is entered,
+while its run goes, when its work waits with its result, and after `Keep it`. The example makes the calls the window
+makes, in its order, through `Showing`, against a real core in the home the environment names; it is meant for a
+made-up home. It opens no window and starts no program; core starts what the app starts.
+
+```
+cargo run -p jellymoon-app --example walk --features sticker-kit/headless -- <folder> 1440x900 \
+  type:garden enter "type:<a wish>" enter until:done:30 poke:m1 picture:waits "tap:work-m1:Keep it" picture:kept
+```
+
+The steps are `type:<words>`, `chip:<name>`, `enter`, `start` (the tap on `Start`), `folder:<path>` (as
+`Choose a folder` gives it, with no picker), `look`, `until:<state or note>:<seconds>` (a look once a second, and a
+plain line and exit 1 past the bound), `poke:<wish id>`, `tap:<note title or id>:<option>` (only where the page
+places it) and `picture:<name>`. After each it prints one line: the step, its milliseconds, the titles of the notes
+and each wish's state; a typed step is counted, never shown. `app/tests/walk.rs` walks a whole loop with the made-up
+agent. It does not prove the window's own wiring: the timer, the picker, keys and focus, the kit's keeping of an
+entry with words in it, or the window's other thread.
+
 ## A tap that stops a run (`app/src/stopping.rs`)
 
 The rules are core's ([run.md](run.md#a-stop-the-person-asks-for)) and are proved at `jellymoon run stop`. The app

@@ -1,5 +1,6 @@
 //! A tap on a little one opens its wish, and work that waits is shown, kept or tossed there (F47, ADR 0017,
-//! decision 9). The rules and every word are core's: `jellymoon_core::waits` says whether a made wish's work
+//! decision 9). The rules are core's, and every word but the result's note's, which are the app's (`told.rs`,
+//! ADR 0023, "Found while building F86"): `jellymoon_core::waits` says whether a made wish's work
 //! waits and what the note says of it, `work_tapped` is a tap on one of its choices, and `stands` is what is said
 //! of any other wish. Here a tap is carried to core and core's answer is put in notes. Each call reads files and
 //! asks git, and a keep or a toss writes to the repo, so each is work the window runs off its own thread; what the

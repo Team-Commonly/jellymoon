@@ -381,7 +381,16 @@ every row after it are counted, `+N more`, and no later row is drawn in its
 place. A text that cleaning would cut is a row that does not fit. A row's
 `marks` are the note's own small words in `row_sub`, each level with the
 quote of its place and before it; a row with one sets its quotes close
-together, each ground after the widest word. While a told note is among the
+together, each ground after the widest word. A row's `name` (a file's, the
+other's word) shares the label's line only when the two lay out as one line
+and it holds no blank, unseen or control character; else the label stands
+alone and the name is the row's first quote. A told note costs no other note
+anything (`told::guarded`): with one among the notes they are laid out twice,
+with and without the told notes, and where a note drawn in both differs but
+for its place down the page, or the note a drawn told note is over is drawn
+only without them, the layout without them is kept. A later note may give way
+whole, left out and counted. That is a second layout only when a told note is
+in the scene. While a told note is among the
 notes, the count of the notes left out is one plain line in the same words
 (a `more` piece, no sheet) close under the last note, so the told note keeps
 the room a sheet would take; without one the count is the sheet. The note's own

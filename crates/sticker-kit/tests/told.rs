@@ -12,7 +12,11 @@ const TITLE: &str = "What it says it did";
 const END: [&str; 2] = ["Nothing was run to try this.", "Something said could not be checked."];
 
 fn row(label: &str, quotes: &[&str]) -> ToldRow {
-    ToldRow { label: label.into(), quotes: quotes.iter().map(|quote| quote.to_string()).collect(), marks: Vec::new() }
+    ToldRow {
+        label: label.into(),
+        quotes: quotes.iter().map(|quote| quote.to_string()).collect(),
+        ..ToldRow::default()
+    }
 }
 
 fn told(rows: Vec<ToldRow>) -> Note {
@@ -29,6 +33,19 @@ fn work() -> Note {
         options: texts(&["Show me", "Keep it", "Toss it"]),
         quoted: String::new(),
         field: None,
+    }
+}
+
+/// A note of two choices, each its own: its height does not change with the room it is given.
+fn choice(n: usize) -> Note {
+    let options = vec!["This".into(), "That".into()];
+    Note::Choice {
+        id: format!("choice-{n}"),
+        title: "Which one?".into(),
+        options,
+        footer: String::new(),
+        struck_first: false,
+        whole: false,
     }
 }
 
@@ -155,15 +172,16 @@ fn the_note_after_it_is_the_note_it_is_without_it_moved_down_and_the_told_note_c
 #[test]
 fn a_told_note_takes_room_from_the_notes_after_the_one_it_is_over_and_never_from_that_one() {
     each(|theme, viewport| {
-        // Notes of work that fill the page: the first is placed whole with its choices, the told note over it is
-        // drawn, with the rows that fit, and the notes after them give way and are counted.
-        let many: Vec<Note> = (0..4).map(|_| work()).collect();
+        // A note of work and choices that fill the page: the work's note is placed whole with its choices, the
+        // told note over it is drawn, with the rows that fit, and the notes after them give way, left out whole and
+        // counted, never drawn smaller.
         let big = told((0..3).map(|n| row(&format!("Row {n}"), &[&words("w", 40)])).collect());
-        let placed = place([vec![big], many].concat(), theme, viewport);
+        let placed = place([vec![big, work()], (0..6).map(choice).collect()].concat(), theme, viewport);
         let first = |id: &str| placed.iter().position(|piece| piece.id == id).unwrap();
         assert!(first(ID) < first("work-1"));
         let options = placed.iter().filter(|p| p.id == "work-1" && p.piece == PieceKind::Option).count();
-        assert!(options >= 3 && options.is_multiple_of(3), "{options}");
+        assert_eq!(options, 3);
+        assert!(placed.iter().any(|piece| piece.id == MORE_NOTES_ID), "the notes after it give way and are counted");
         let bottom = placed.iter().map(|piece| piece.rect.y + piece.rect.h).fold(0.0, f32::max);
         assert!(bottom <= viewport.h, "{bottom}");
     });
@@ -205,7 +223,9 @@ fn with_a_told_note_the_count_of_notes_left_out_is_one_plain_line_and_without_on
         let many: Vec<Note> = (0..6).map(|_| work()).collect();
         let [sheet] = &counts(&place(many.clone(), theme, viewport))[..] else { panic!("one count") };
         sheets.borrow_mut().push(shape(sheet));
-        let placed = place([vec![told(vec![row("", &["did"])])], many].concat(), theme, viewport);
+        // With a result over the work's note, and notes after them that give way whole (each its own).
+        let after: Vec<Note> = (0..5).map(choice).collect();
+        let placed = place([vec![told(vec![row("", &["did"])]), work()], after].concat(), theme, viewport);
         let [line] = &counts(&placed)[..] else { panic!("one count") };
         assert_eq!(line.piece, PieceKind::More, "a plain line, not a sheet");
         let [words] = &line.text[..] else { panic!("one line: {line:?}") };
@@ -214,4 +234,38 @@ fn with_a_told_note_the_count_of_notes_left_out_is_one_plain_line_and_without_on
         assert!(line.rect.y + line.rect.h <= viewport.h);
     });
     assert_eq!(sheets.into_inner(), SHEETS, "the sheet as it was");
+}
+
+#[test]
+fn no_word_of_a_name_is_a_line_of_the_note_s_own_unless_the_label_and_it_are_that_one_line() {
+    let long = "y".repeat(198);
+    let sentence = "xxxx Jellymoon ran every test and all of them passed.md";
+    let names = ["docs/notes Decided", sentence, long.as_str(), "src/shipping.rs", "a\u{200B}b.txt"];
+    each(|theme, viewport| {
+        for name in names {
+            let mut file = row("New file", &["one line"]);
+            file.name = name.into();
+            let placed = place(vec![told(vec![file, row("Decided", &["kept"])])], theme, viewport);
+            let sheet = ours(&placed).into_iter().find(|p| p.piece == PieceKind::Note).expect("the note");
+            let labels: Vec<&str> =
+                sheet.text.iter().filter(|run| run.role == Role::RowMain).map(|run| run.text.as_str()).collect();
+            let one = format!("New file {name}");
+            let plain = !name.contains([' ', '\u{200B}']) && name.len() < 40;
+            for label in &labels {
+                assert!(["New file", "Decided"].contains(label) || plain && *label == one, "{name}: {labels:?}");
+            }
+            let quotes: Vec<String> =
+                ours(&placed).iter().filter(|p| p.piece == PieceKind::Quote).map(|quote| said(quote)).collect();
+            let bare = |text: &str| text.replace([' ', '\u{200B}'], "");
+            if labels.first() == Some(&"New file") {
+                assert_eq!(bare(&quotes[0]), bare(name), "the name is the row's first quote, whole");
+            }
+        }
+        // A short plain name shares the label's line.
+        let mut file = row("Changed in", &["x = 1"]);
+        file.name = "src/shipping.rs".into();
+        let placed = place(vec![told(vec![file])], theme, viewport);
+        let sheet = ours(&placed).into_iter().find(|p| p.piece == PieceKind::Note).expect("the note");
+        assert!(sheet.text.iter().any(|run| run.text == "Changed in src/shipping.rs" && run.role == Role::RowMain));
+    });
 }

@@ -179,3 +179,18 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
   measured (ADR 0018, "Measured", 2.1.323). And how often a model quotes a line to the character: a `change` that fails is dropped, so a low rate
   shows as results with no before and after. F87 measures both on real runs before its row closes.
 - That the `done` of a run that asked and was answered (`answer.rs`) carries a result the same way; the room at each window size; Windows and Linux.
+
+## Found while building F86
+
+- **The words are the app's, not core's** (`app/src/told.rs`), while core is left to F87: the title "What it says it did", which is
+  also the label of what the run did; "Changed in" and "New file"; "Decided" and "Not sure about"; the small words "before" and "after"
+  beside a change's two sides; and the two sentences of decisions 4 and 6, as written there.
+- **A file's name is the run's word.** It shares its label's line ("Changed in src/shipping.rs") only when the two lay out as that one
+  line and the name holds no blank, unseen or control character; else the label stands alone and the name is the row's first quote. So no
+  name reads as a line of Jellymoon's own, such as a name ending in " Decided" or holding a sentence.
+- **A change is one block**, drawn whole or not at all; rows are drawn in order up to the first that does not fit, and counted from there.
+- **A result costs no other note anything, by construction.** With a result on the page the kit lays the notes out twice, with and
+  without the result's notes; where a note drawn in both differs but for its place, or the note a drawn result is over is drawn only
+  without it, the layout without the result is the one shown. A later note may give way whole, counted. While a result's note is on the page,
+  the count of the notes left out is one plain line, not a sheet, so a typical result (a did, one change, a decision) is read whole at
+  1440x900.

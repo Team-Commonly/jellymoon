@@ -788,7 +788,9 @@ max_file_lines = 400
 # The page says it is working raised the kit by 3: the test that the entry's ring is no red (`tests/colours.rs`).
 # The told guard raised the kit by 58: a result never costs a later note its choices (`told::chooses`, 11 net), the
 # test of a second work's note and a clash after a long result, and the sweep's third case after the work's note.
-"crates/sticker-kit" = 11085
+# Typing goes to the entry raised the kit by 10: the entry is given the keys whenever nothing holds them (6 in
+# `draw/entry.rs`), and the pins of the old keys in `tests/entry_draw.rs` and `tests/field_draw.rs` (4).
+"crates/sticker-kit" = 11095
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -942,7 +944,8 @@ max_file_lines = 400
 # The hold in hand raised the app by 47 (68 added, 21 removed): 44 are tests (`src/showing/tests.rs` 38, the taps
 # that hold the looks and the looks held after a note in hand; `tests/work_shows.rs` 6, the looks held after a stop's
 # choice went), 3 `showing.rs` (a look made while a note is in hand holds the looks after it).
-"app" = 14765
+# Typing goes to the entry raised the app by 142: its test, `tests/entry_keys.rs`, 142 lines; the source lost a net 0.
+"app" = 14907
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

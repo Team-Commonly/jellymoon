@@ -97,16 +97,16 @@ fn answer(page: &Entity<Page>, cx: &mut VisualTestContext, kept: bool) {
 
 #[cfg(debug_assertions)] // it asks `cx.debug_bounds`: see `tests/draw.rs`
 #[test]
-fn a_click_gives_the_entry_the_keys_and_enter_gives_what_was_typed() {
+fn the_entry_has_the_keys_from_the_first_frame_and_enter_gives_what_was_typed() {
     let mut cx = context();
     let (page, cx, made, _) = open(&mut cx);
     assert!(cx.debug_bounds("Entry:wish:0:0").is_some(), "an empty entry shows its hint");
     keys(cx, "t");
-    assert_eq!(state(&page, cx), (String::new(), 0, Some(0), false), "a key is not the entry's until it is clicked");
+    assert_eq!(state(&page, cx), ("t".into(), 1, Some(0), true), "a key is the entry's with no click");
 
     let field = piece(&page, cx, PieceKind::Entry, 0);
     click(cx, field.rect.center());
-    keys(cx, "t e a space a t space 4");
+    keys(cx, "e a space a t space 4");
     assert_eq!(state(&page, cx), ("tea at 4".into(), 8, Some(0), true));
     assert!(cx.debug_bounds("Entry:wish:0:0").is_none(), "the hint gives way to what is typed");
     keys(cx, "backspace backspace backspace backspace backspace backspace backspace backspace space space");
@@ -125,9 +125,9 @@ fn a_click_gives_the_entry_the_keys_and_enter_gives_what_was_typed() {
     keys(cx, "enter space enter");
     assert_eq!(made.borrow().len(), 1, "nothing typed is nothing entered");
     keys(cx, "escape");
-    assert!(!state(&page, cx).3, "Escape gives the keys back");
+    assert!(state(&page, cx).3, "Escape leaves the keys with the entry, where nothing else holds them");
     keys(cx, "x");
-    assert_eq!(state(&page, cx).0, " ", "and a key is no longer text");
+    assert_eq!(state(&page, cx).0, " x", "and a key after it is still text");
 }
 
 #[test]
@@ -210,7 +210,8 @@ fn a_chip_chooses_its_option_and_the_page_under_the_entry_still_takes_taps() {
     click(cx, option.rect.center());
     assert_eq!(*taps.borrow(), [Tap::Option { note_id: "picnic-place".into(), index: 1 }]);
     keys(cx, "x");
-    assert_eq!(state(&page, cx), (String::new(), 0, Some(2), false), "a press elsewhere gives the keys back");
+    assert_eq!(state(&page, cx), ("x".into(), 1, Some(2), true), "a press elsewhere gives the entry the keys");
+    keys(cx, "backspace");
 
     let field = piece(&page, cx, PieceKind::Entry, 0);
     click(cx, field.rect.center());
@@ -358,7 +359,7 @@ fn an_entry_that_waits_does_not_take_escape_so_the_keys_stay_its_own() {
     assert_eq!(state(&page, cx), ("tea".into(), 3, Some(0), true), "Escape was taken while the entry waited");
     answer(&page, cx, false);
     keys(cx, "escape");
-    assert!(!state(&page, cx).3, "Escape gives the keys back once the answer has come");
+    assert!(state(&page, cx).3, "after the answer Escape leaves the keys with the entry too");
 }
 
 #[test]

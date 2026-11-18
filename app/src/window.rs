@@ -1,6 +1,6 @@
-//! The page's window: the kit's view of one scene, and of the scene that replaces it when a day has been read. `t`
-//! switches between the two built-in themes. A tap is written to stderr as one line: the piece's id, and the option
-//! when it was one, never a word of the page. A tap on an option of a day's page then goes to `taps.rs`, and the
+//! The page's window: the kit's view of one scene, and of the scene that replaces it when a day has been read. The
+//! command key and T switch between the two built-in themes; what else is typed goes to the entry. A tap is
+//! written to stderr as one line: the piece's id, and the option when it was one, never a word of the page. A tap on an option of a day's page then goes to `taps.rs`, and the
 //! page it gives is shown. Enter in a day's entry goes to `wishing.rs`, and a tap on a wish's character or on the
 //! choice to stop its run to `stopping.rs`: core is asked off this thread, and the page is shown as soon as it has
 //! answered. Once a second the day is looked at again, so a run's end is drawn with no tap. A folder dropped on
@@ -77,13 +77,11 @@ pub fn open(asked: Asked) {
 }
 
 /// A key pressed in a window: in the page's, the one that switches the theme does.
-pub(crate) fn key(key: &str, window: &mut gpui::Window, cx: &mut App) {
+fn key(keystroke: &gpui::Keystroke, window: &mut gpui::Window, cx: &mut App) {
     let Some(Some(page)) = window.root::<Page>() else { return };
-    page.update(cx, |page, cx| {
-        if switches_theme(key, page.entry_focused(window)) {
-            page.set_theme(other_theme(&page.theme().name), cx);
-        }
-    });
+    if switches_theme(&keystroke.key, keystroke.modifiers.secondary(cx)) {
+        page.update(cx, |page, cx| page.set_theme(other_theme(&page.theme().name), cx));
+    }
 }
 
 /// The entry of the first page, then each scene the day's reading gives with the entry of its page. Which
@@ -272,8 +270,10 @@ fn chose(note: &str, index: usize, shown: &Showing, page: WeakEntity<Page>, cx: 
     .detach();
 }
 
-/// The view of one page, its taps and its Enter wired to `shown`. It is its window's root, and outlives it.
+/// The view of one page, its taps, its Enter and the key that switches its theme wired to `shown`. It is its
+/// window's root, and outlives it.
 pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> Entity<Page> {
+    cx.observe_keystrokes(|event, window, cx| key(&event.keystroke, window, cx)).detach();
     cx.new(|cx| {
         let (page, on_show, on_show_drop) = (cx.weak_entity(), shown.clone(), shown.clone());
         let entry_of = page.clone();

@@ -97,7 +97,6 @@ pub fn wire(asked: Asked, room: Room, cx: &mut App) -> gpui::Result<Opened> {
     }
     let closing = opened.clone();
     cx.on_window_closed(move |cx, _| closing.closed(cx)).detach();
-    cx.observe_keystrokes(|event, window, cx| window::key(&event.keystroke.key, window, cx)).detach();
     let (reading, read_into) = (shown.clone(), page.clone());
     cx.spawn(async move |cx| window::reads(reading, later, read_into, cx).await).detach();
     cx.spawn(async move |cx| window::looks(shown, page, cx).await).detach();

@@ -124,7 +124,8 @@ fn a_click_gives_a_note_s_field_the_keys_and_enter_gives_its_words_once_with_the
     let mut cx = context();
     let (page, cx, entered, _) = open(&mut cx);
     keys(cx, "x");
-    assert_eq!(typed(&page, cx), (String::new(), String::new(), String::new(), false), "no field has the keys yet");
+    assert_eq!(typed(&page, cx), ("x".into(), String::new(), String::new(), true), "the entry has the keys first");
+    keys(cx, "backspace");
     let field = piece(&page, cx, PieceKind::Field, "asks");
     click(cx, field.rect.center());
     keys(cx, "t h e space o l d");
@@ -173,12 +174,13 @@ fn each_field_and_the_entry_hold_their_own_words_and_a_tap_on_the_offer_gives_it
     press(&page, cx, PieceKind::Field, "asks");
     keys(cx, "!");
     assert_eq!(typed(&page, cx).1, "cd!");
-    // Escape gives the keys back, and so does a press anywhere else on the page.
+    // Escape gives the entry the keys, and so does a press anywhere else on the page.
     keys(cx, "escape z");
-    assert_eq!(typed(&page, cx), ("ef".into(), "cd!".into(), "ab1234567890".into(), false));
+    assert_eq!(typed(&page, cx), ("efz".into(), "cd!".into(), "ab1234567890".into(), true));
     press(&page, cx, PieceKind::Field, "asks");
     click(cx, (4.0, 4.0));
-    assert!(!typed(&page, cx).3);
+    keys(cx, "?");
+    assert_eq!(typed(&page, cx), ("efz?".into(), "cd!".into(), "ab1234567890".into(), true));
     // Someone else's words, the field and the offer are no tap: nothing was tapped in all of this.
     press(&page, cx, PieceKind::Quote, "asks");
     assert!(taps.borrow().is_empty(), "{:?}", taps.borrow());
@@ -247,7 +249,7 @@ fn a_field_s_words_are_dropped_when_its_offer_changes_and_stay_when_only_its_hin
     show(&page, cx, vec![note("asks", "", "More of it"), note("more", "", "More of it")]);
     assert_eq!((field(&page, cx, "asks"), field(&page, cx, "more")), (has(""), has("")));
     keys(cx, "x");
-    assert_eq!(typed(&page, cx), (String::new(), String::new(), String::new(), false), "the new field has no keys");
+    assert_eq!(typed(&page, cx), ("x".into(), String::new(), String::new(), true), "the new field has no keys");
 }
 
 // The review of F54, finding 1: a note that stands in another's place for a while has no field, and the words
@@ -264,7 +266,7 @@ fn a_keyed_field_keeps_its_words_while_no_note_has_it_and_under_another_note_wit
     keys(cx, "x");
     let fields = page.read_with(cx, |page, _| page.placed().iter().filter(|p| p.piece == PieceKind::Field).count());
     assert_eq!((field(&page, cx, "work"), field(&page, cx, "busy"), fields), (None, None, 0));
-    assert!(!typed(&page, cx).3, "a field that is not drawn has the keys");
+    assert_eq!((typed(&page, cx).0, typed(&page, cx).3), ("x".into(), true), "a field not drawn has no keys");
     show(&page, cx, vec![keyed("work", "k")]);
     assert_eq!(field(&page, cx, "work"), has("next"));
     // Another note with the same key and offer has the same field; one with another key has its own.
@@ -298,8 +300,9 @@ fn a_field_that_waits_is_kept_apart_while_its_note_has_no_field_and_a_refusal_le
     keys(cx, "o l d enter");
     show(&page, cx, vec![bare("asks")]);
     keys(cx, "x enter");
-    assert_eq!((field(&page, cx, "asks"), entered.borrow().len()), (None, 1));
-    assert!(!typed(&page, cx).3, "the keys are free while the note has no field");
+    let wish = EntryMade { id: "wish".into(), text: "x".into(), option: Some("garden".into()) };
+    assert_eq!((field(&page, cx, "asks"), entered.borrow().clone()), (None, vec![made("asks", "old"), wish]));
+    assert!(typed(&page, cx).3, "the keys are the entry's while the note has no field");
     // Not kept: the words are there when the note has its field again, and the field takes keys.
     answer(&page, cx, "asks", false);
     show(&page, cx, both());

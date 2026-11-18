@@ -335,12 +335,13 @@ impl Showing {
     }
 }
 
-/// Whether a key switches the theme: `t` does, unless the entry has the keys, where it is a letter of a wish.
-pub fn switches_theme(key: &str, entry_has_keys: bool) -> bool {
-    key == "t" && !entry_has_keys
+/// Whether a key switches the theme: `t` with the platform's command key (Ctrl off the Mac), which no field takes.
+/// A bare `t` is always a letter: the entry has the keys whenever nothing else does.
+pub fn switches_theme(key: &str, command: bool) -> bool {
+    key == "t" && command
 }
 
-/// The built-in theme `t` switches to from the theme named `name`: the plain one, and from that the sticker one.
+/// The built-in theme the command key and T switches to from the theme named `name`: the plain one, and from that the sticker one.
 pub fn other_theme(name: &str) -> Theme {
     if name == "plain" { Theme::sticker() } else { Theme::plain() }
 }

@@ -604,7 +604,11 @@ max_file_lines = 400
 # start (`tests/support/fake_shell.rs`, 78), and the `harness` command in `main.rs` and `parse.rs` (6).
 # The gate of F78 raised the binary by 48, all in `tests/f78.rs` and `tests/f78/`: a mode is set on a copy, and
 # two looks of one command with a harness in the answer and with none.
-"crates/jellymoon" = 29178
+# The door notes raised it by 216, all tests and their support: `tests/f74/notes.rs` is 135 (a `PATH` that holds a
+# harness, a drive with no root), the rule grew by 49 (`tests/support/door/world.rs`), `tests/f74.rs` by 24,
+# `tests/support/mod.rs` by 13 (`git_alone`, which `tests/f39/world.rs` lost, 16) and `tests/support/door.rs` by 9
+# (the asker's start); F38's worlds cost 3 and F41's asker lost 1.
+"crates/jellymoon" = 29394
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -653,7 +657,10 @@ max_file_lines = 400
 # F78 raised xtask by 31: the smoke chain's `harness` step (`smoke/off_path.rs`, `smoke/steps.rs`).
 # The gate of F78 raised xtask by 15: the door's rule knows `search()` and `harness_found(None` (`rules/door.rs`
 # and its tests).
-"crates/xtask" = 2816
+# The door notes raised it by 63: 22 in `rules/door.rs` (the asker, four more ways a folder or the look is named,
+# the word `tempdir` in a longer name or a string let be) and 41 in its tests, `rules/door_tests.rs`.
+# Joined, F78's and the door notes' additions to the door's rule share 6 lines.
+"crates/xtask" = 2873
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).
@@ -867,7 +874,9 @@ max_file_lines = 400
 # (`today.rs`, 9), a made-up third offer (`answering.rs`, 20) and a comment (`tests/f54/answered.rs`, 1). The
 # rest: the bodies of a call not started and of a wait that failed (`today.rs`, 9), one rule for a field to
 # answer in (`answering.rs`, 2).
-"app" = 11991
+# The door notes raised it by 16, all tests and their support: `tests/f75.rs` 12 (the held variables turned
+# round) and 4 in the header of `tests/support/door.rs`, which lists what the rule holds.
+"app" = 12007
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

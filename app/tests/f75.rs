@@ -74,8 +74,16 @@ fn a_home_a_folder_of_jellymoon_s_or_the_harness_s_outside_the_temporary_folders
     for name in FOLDERS {
         assert_eq!(with(name), Some(name.to_string()));
     }
-    // Any other variable may name any path: only these are a person's own folders.
-    assert_eq!(refused(&[("JELLYMOON_CLAUDE", real.as_path()), ("TMPDIR", real.as_path())], NO_FLAG), None);
+    // The harness a world names is a made-up one under a temporary folder, and the folders and the file the
+    // programs hand on are held too (the door's review, findings 3 and 4).
+    let more = ["JELLYMOON_CLAUDE", "TMPDIR", "TEMP", "TMP", "XDG_CONFIG_HOME", "APPDATA", "LOCALAPPDATA"];
+    for name in more.into_iter().chain(["GIT_CONFIG_GLOBAL"]) {
+        assert_eq!(refused(&[(name, real.as_path())], NO_FLAG), Some(name.to_string()));
+        assert_eq!(refused(&[(name, dir.path().join(name).as_path())], NO_FLAG), None, "{name} of the test's own");
+        assert_eq!(refused(&[(name, Path::new("../up"))], NO_FLAG), Some(name.to_string()), "{name} that climbs");
+    }
+    // Any other variable may name any path: only these are a person's own.
+    assert_eq!(refused(&[("JELLYMOON_RELEASE_URL", real.as_path())], NO_FLAG), None);
     // As Windows reads a world a name is the same in any case, and the door reads it as the system does.
     let lower = [("userprofile", real.as_path())];
     assert_eq!(door::refusal_as(true, &door::roots(), &lower, NO_FLAG), Some("userprofile".to_string()));
@@ -113,9 +121,13 @@ fn a_world_under_either_temporary_folder_passes_and_layout_with_no_home_still_st
     for folder in door::roots() {
         assert_eq!(refused(&[("HOME", folder.as_path())], NO_FLAG), None, "a temporary folder itself");
     }
-    for home in ["", "user", ".", "..", "~"] {
+    for home in ["", "user", ".", "~"] {
         let vars = [("HOME", Path::new(home)), ("USERPROFILE", Path::new(home)), ("JELLYMOON_HOME", Path::new(home))];
         assert_eq!(refused(&vars, NO_FLAG), None, "{home:?}");
+    }
+    // One that climbs out of the folder it is read from does not pass (the door's review, finding 1).
+    for name in FOLDERS {
+        assert_eq!(refused(&[(name, Path::new(".."))], NO_FLAG), Some(name.to_string()));
     }
     assert_eq!(refused(&[], NONE), None, "no variable at all");
 

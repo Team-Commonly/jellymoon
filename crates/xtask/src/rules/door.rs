@@ -16,10 +16,15 @@ struct Door {
     look: &'static str,
 }
 
-/// The binary's tests, with core's; and the app's, which build `jellymoon` and two made-up windows that are the
-/// app's own code under names of their own.
+/// The binary's tests, with core's, which build a made-up asker that starts `jellymoon` with the variables it was
+/// started with itself; and the app's, which build `jellymoon` and two made-up windows that are the app's own code
+/// under names of their own.
 const DOORS: [Door; 2] = [
-    Door { tests: "crates/jellymoon/tests/", programs: &["CARGO_BIN_EXE_jellymoon"], look: "crates/jellymoon-core/" },
+    Door {
+        tests: "crates/jellymoon/tests/",
+        programs: &["CARGO_BIN_EXE_jellymoon", "CARGO_BIN_EXE_fake-asker"],
+        look: "crates/jellymoon-core/",
+    },
     Door {
         tests: "app/tests/",
         programs: &[
@@ -32,21 +37,36 @@ const DOORS: [Door; 2] = [
     },
 ];
 
-/// What makes a temporary folder, in the system's or anywhere: `tempfile`'s functions and the standard library's.
-const HOME: [&str; 3] = ["tempdir", "TempDir::new", "temp_dir("];
-/// The look's two names in core, each a call with nothing handed to it.
-const LOOK: [&str; 2] = ["harness()", "search()"];
-/// The ways into the look that are handed no harness, and a call's options that name none, which is how the look is
-/// reached from outside.
-const UNNAMED: [&str; 3] = ["named_or_found(None", "harness_found(None", "harness: None"];
+/// What makes a temporary folder, in the system's or anywhere: `tempfile`'s functions and the standard library's,
+/// called, or taken under another name.
+const HOME: [&str; 7] =
+    ["tempdir(", "tempdir_in(", "tempdir as ", "TempDir::new", "TempDir::with_prefix", "temp_dir(", "temp_dir as "];
+/// The look's two names in core, and what reaches it from outside: a call that names no harness, by its function
+/// or in its options.
+const LOOK: [&str; 6] =
+    ["harness()", "search()", "named_or_found(None", "harness_found(None", "missed(None", "harness: None"];
 
-/// Whether a line has the harness looked for: the look called by a name of its own (`find::harness()`, `search()`
-/// alone, but no method or longer name that ends so, and not where a function of that name is written), or a way
-/// in or options that name no harness.
+/// Whether the name before this place in a line goes on to the left: what stands here is then the end of a longer
+/// name, or a method when `dot` counts too.
+fn longer(before: &str, dot: bool) -> bool {
+    before.ends_with(|last: char| last.is_alphanumeric() || last == '_' || dot && last == '.')
+}
+
+/// Whether a line makes a temporary folder: one of the functions by its own name, not the end of a longer name
+/// (`my_tempdir()`), and not inside a string.
+fn builds(code: &str) -> bool {
+    let quoted = |at: usize| !code[..at].matches('"').count().is_multiple_of(2);
+    let written = |at: usize| !longer(&code[..at], false) && !quoted(at);
+    HOME.iter().any(|made| code.match_indices(made).any(|(at, _)| written(at)))
+}
+
+/// Whether a line has the harness looked for: the look called by one of its own names (`find::harness()`, or
+/// `harness()` alone, but no method or longer name that ends so, and not where a function of that name is
+/// written), or a call that names no harness.
 fn looks(code: &str) -> bool {
-    let named = |before: &str| before.ends_with(|last: char| last.is_alphanumeric() || last == '_' || last == '.');
-    let called = |(at, _): (usize, &str)| !named(&code[..at]) && !code[..at].ends_with("fn ");
-    LOOK.iter().any(|look| code.match_indices(look).any(called)) || UNNAMED.iter().any(|look| code.contains(look))
+    let called = |(at, _): (usize, &str)| !longer(&code[..at], true) && !code[..at].ends_with("fn ");
+    LOOK[..2].iter().any(|look| code.match_indices(look).any(called))
+        || LOOK[2..].iter().any(|look| code.contains(look))
 }
 
 /// No test names a built program outside the door or builds a home outside the support, and none in core or in
@@ -75,7 +95,7 @@ pub fn outside_the_door(root: &Path, files: &[String]) -> Vec<String> {
                 continue;
             } else if beside && !is_door && door.programs.iter().any(|program| code.contains(program)) {
                 "names a built program outside `support/door.rs`; start it through `support::door`"
-            } else if beside && !file.starts_with(&support) && HOME.iter().any(|made| code.contains(made)) {
+            } else if beside && !file.starts_with(&support) && builds(code) {
                 "builds a home outside the test support; take the folder from `support::scratch`"
             } else if (whole || inside) && looks(code) {
                 "has the harness looked for with the process's own environment; name a made-up harness"

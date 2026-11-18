@@ -616,3 +616,35 @@ twelve are taken in F75, which gives the app's tests the same door: the two shar
    own environment, and `cargo xtask check` refuses one that does.
 5. **Held by a check.** In each program's tests `support/door.rs` alone may name a built program; the rest of
    `support/` may make a temporary folder and nothing more.
+
+### Amended after the review of the app's door
+
+The app's door (F75) was reviewed after it merged and failed on two faults, with eight notes. Nine are taken in
+one follow-up and one is left as a named limit. Decision 7 now holds this, and `docs/development/workflow.md`
+carries the same list:
+
+1. **Folders.** `HOME`, `USERPROFILE`, `JELLYMOON_HOME`, `JELLYMOON_APP_DIR`, `JELLYMOON_BIN_DIR`,
+   `CLAUDE_CONFIG_DIR`, and now `TMPDIR`, `TEMP`, `TMP`, `XDG_CONFIG_HOME`, `APPDATA` and `LOCALAPPDATA`, which
+   the programs hand on to a harness, to git and to the installer: a full path is under a temporary folder.
+2. **A file.** `GIT_CONFIG_GLOBAL`: the file and its folder are under a temporary folder.
+3. **Programs.** `JELLYMOON_CLAUDE` is under a temporary folder: every made-up harness is planted there, and it
+   is the one variable that names a program to start. A login shell that is named is a full path under one.
+4. **Lists of folders.** The look reads `PATH` first. No full-path folder of a world's `PATH`, or of a
+   `JELLYMOON_SYSTEM_BIN` a test names, that is outside the temporary folders holds a `claude`, `claude.exe` or
+   `claude.cmd`. The folder is asked for the name only. A world that needs git takes it alone.
+5. **A value that is no full path** is refused for every variable above, and for `--logs`, when it climbs with
+   `..` or, on Windows, is rooted with no drive or has a drive and no root. The first amendment held only
+   `CLAUDE_CONFIG_DIR` and `--logs` to this, on the ground that `jellymoon` ignores or refuses the others. The
+   installer does not: `install.sh` takes `HOME`, `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` as given. No home,
+   an empty one, and one that is no full path and stays in its folder are let through as before.
+6. **Flags.** `--logs`, `--settings` and `--repo`, as before.
+7. **The temporary folders.** One that is or holds the home's `.claude`, `.jellymoon` or `.local` is taken for
+   none, as one that is or holds the home is. Otherwise the `TMPDIR` of the process that runs the tests is
+   trusted.
+8. **Held by a check.** The made-up asker is a program only the binary's door may name. The rule also catches
+   `TempDir::with_prefix`, either function taken under another name, the look's other name (`search()`) and
+   `missed(None`, and no longer refuses the word `tempdir` at the end of a longer name or inside a string.
+
+**Left as limits**, named in `workflow.md`: a flag value that is not UTF-8, and what a rule that reads text cannot
+see (`concat!` in `env!`, a program found from `current_exe`, a bare `Command::new("claude")`, a block comment,
+`mod tests;` in a file of its own).

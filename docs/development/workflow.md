@@ -28,21 +28,42 @@ One long-running builder session builds Jellymoon, with subagents for parallel p
 - **A test starts `jellymoon` or `jellymoon-app` through the door, and only there.** Each program's tests have
   one: `crates/jellymoon/tests/support/door.rs` and `app/tests/support/door.rs`, the one file of each that names a
   built program. Their rule is one file, `crates/jellymoon/tests/support/door/world.rs`, which the app's door
-  takes as a module of its own, since the two are different crates. It refuses, in one fixed sentence and before
-  anything is started, a world whose home (`HOME`, `USERPROFILE`), `JELLYMOON_HOME`, `JELLYMOON_APP_DIR`,
-  `JELLYMOON_BIN_DIR`, `CLAUDE_CONFIG_DIR`, or value of `--logs`, `--settings` or `--repo` is a full path outside
-  the temporary folders, with links resolved on both sides as far as the path is there; a path through more than
-  32 links whose end is not there is refused. The temporary folders are the one the system gives the process and
-  the one Cargo gives tests, and for the binary's tests `/tmp` on Unix too; the app's door has no third. No home,
-  an empty one and one that is not a full path still start, but a `--logs` or `CLAUDE_CONFIG_DIR` that is no full
-  path is refused when it climbs with `..` or is rooted with no drive: the program reads it from the folder it is
-  started in. On Windows a variable is the same variable in any case. The door sets `JELLYMOON_SHELL` and
-  `JELLYMOON_SYSTEM_BIN` to nothing in every world; a test may name a made-up login shell under a temporary
-  folder, and folders of its own to look for a harness in. A temporary folder that is a file system's root, or
-  that is or holds the home of the person running the tests, is taken for none: the door then says so and starts
-  nothing. A program that starts `jellymoon` itself (the hook's entry, the installer, a made-up asker, the app's
-  made-up windows, git) is started through `door::command`, with the same check. A test's folder comes from the
-  support too (`scratch`, `system_scratch`, `kept_scratch`).
+  takes as a module of its own, since the two are different crates. It refuses a world in one fixed sentence,
+  before anything is started. What it holds:
+  - **Folders.** `HOME`, `USERPROFILE`, `JELLYMOON_HOME`, `JELLYMOON_APP_DIR`, `JELLYMOON_BIN_DIR`,
+    `CLAUDE_CONFIG_DIR`, `TMPDIR`, `TEMP`, `TMP`, `XDG_CONFIG_HOME`, `APPDATA` and `LOCALAPPDATA`: a full path is
+    under a temporary folder.
+  - **A file.** `GIT_CONFIG_GLOBAL`: the file and the folder it is in are under a temporary folder.
+  - **Programs.** `JELLYMOON_CLAUDE` is under a temporary folder, where every made-up harness is planted. A
+    `JELLYMOON_SHELL` that is named is a full path under one.
+  - **Lists of folders.** No full-path folder of `PATH`, or of a `JELLYMOON_SYSTEM_BIN` the test names, that is
+    outside the temporary folders holds a `claude`, `claude.exe` or `claude.cmd`. The folder is asked for the
+    name: nothing is started and nothing of the file is read. A world that needs git takes it alone
+    (`support::git_alone`), never the `PATH` of the person running the tests.
+  - **Flags.** A full-path value of `--logs`, `--settings` or `--repo` is under a temporary folder.
+  - **A value that is no full path.** Each variable above, and `--logs`, is refused when its value climbs with
+    `..`, or on Windows is rooted with no drive (`\Users`) or has a drive and no root (`D:logs`): a program reads
+    it from the folder it is started in, which the door never sees, and `install.sh` takes its folders as given.
+    No home, an empty one, and one that is no full path and stays in its folder still start.
+  - **Links** are resolved on both sides as far as the path is there; a path through more than 32 links whose
+    end is not there is refused.
+  - **Names.** On Windows a variable is the same variable in any case.
+  - **Set by the door.** `JELLYMOON_SHELL` and `JELLYMOON_SYSTEM_BIN` are set to nothing in every world unless
+    the world names its own.
+  - **The temporary folders** are the one the system gives the process and the one Cargo gives tests, and for
+    the binary's tests `/tmp` on Unix too; the app's door has no third. One that is a file system's root, or
+    that is or holds the home of the person running the tests or that home's `.claude`, `.jellymoon` or
+    `.local`, is taken for none: the door then says so and starts nothing. Otherwise the `TMPDIR` of the process
+    that runs the tests is trusted: with no home set there is nothing to compare it with, and a folder under the
+    person's `.claude` passes.
+  - **Not held.** `JELLYMOON_RELEASE_URL`, `GIT_CONFIG_SYSTEM`, `HOMEDRIVE`, `HOMEPATH`, `ProgramData` and the
+    `JELLYMOON_TEST_*` family. A `claude` in a temporary folder of `PATH` that is a link to a program outside.
+    A flag value that is not UTF-8 is read as the nearest text, so the door may resolve another name than the
+    program opens; no test writes one.
+
+  A program that starts `jellymoon` itself (the hook's entry, the installer, the app's made-up windows, git) is
+  started through `door::command`, with the same check, and the made-up asker through `door::asker`. A test's
+  folder comes from the support too (`scratch`, `system_scratch`, `kept_scratch`).
 - **A home of another owner is `door::not_ours()`**, which is `/tmp` where that is not the tests' own. Where it is
   (a sandbox with a `/tmp` of its own, or tests run as root) there is none, and the cases that need one say so
   and are left out (`f35/delivery.rs`, `f41/refused.rs`, `f62/refused.rs`); before the door they ran against the
@@ -51,16 +72,27 @@ One long-running builder session builds Jellymoon, with subagents for parallel p
   no `PATH` is the world's there, so a look would be made with the variables of the person running the tests.
 - **`cargo xtask check` holds tests to the door** (`crates/xtask/src/rules/door.rs`). It reads lines, not Rust. In a
   file under `crates/jellymoon/tests` or `app/tests` other than that program's `support/door.rs` it refuses a line
-  that names a built program of the door (`CARGO_BIN_EXE_jellymoon`, and for the app also `f42-jellymoon`,
-  `f42-wisher` and `f47-tapper`), and outside `support/` a line that makes a temporary folder (`tempdir`,
-  `TempDir::new`, `temp_dir(`). In the tests of core and of the app (a file under `tests/`, a `tests.rs`, and what
-  `mod tests` holds under `#[cfg(test)]` in a file) it refuses the harness looked for with the process's own
-  environment (`harness()` called by that name, `named_or_found(None`, `harness: None`). It cannot see a program
-  started from a path a test read out of a file or took from `door::built()`, an argument or a variable added to
-  a command after the door made it, a home put in a variable by hand and given to another program with
-  `Command::new`, options built with `..Default::default()`, or the same thing written across two lines. The
-  ignored test of F29 that runs the real Claude Code starts it with the person's own variables, by design, and is
-  not covered.
+  that names a built program of the door (`CARGO_BIN_EXE_jellymoon`, for the binary also the made-up asker
+  `fake-asker`, and for the app also `f42-jellymoon`, `f42-wisher` and `f47-tapper`), and outside `support/` a
+  line that makes a temporary folder (`tempdir(`, `tempdir_in(`, `TempDir::new`, `TempDir::with_prefix`,
+  `temp_dir(`, or `tempdir` or `temp_dir` taken under another name with `as`; the word at the end of a longer
+  name or inside a string makes none). In the tests of core and of the app (a file under `tests/`, a `tests.rs`,
+  and what `mod tests` holds under `#[cfg(test)]` in a file) it refuses the harness looked for with the process's
+  own environment (`harness()` or `search()` called by that name, `named_or_found(None`, `missed(None`,
+  `harness: None`). The limits of a rule that reads text:
+  - a program started from a path a test read out of a file or took from `door::built()`, or found from
+    `current_exe`;
+  - a program's name put together with `concat!` inside `env!`;
+  - a bare `Command::new("claude")` in a test file, which nothing refuses;
+  - an argument or a variable added to a command after the door made it;
+  - a home put in a variable by hand and given to another program with `Command::new`;
+  - options built with `..Default::default()`, or the same thing written across two lines;
+  - a line inside a `/* */` comment, which is read as code;
+  - `#[cfg(test)] mod tests;` with the tests in a file of their own: what ships after that line in the same
+    file is read as tests, until a `}` in the first column.
+
+  The ignored test of F29 that runs the real Claude Code starts it with the person's own variables, by design,
+  and is not covered.
 - **Builders on different trees never share one `CARGO_TARGET_DIR`.** The programs Cargo lifts to the folder's top,
   `xtask` among them, overwrite each other, and a test runs another tree's program. Take a copy-on-write copy of a
   warm folder and clear the workspace crates' builds in it.

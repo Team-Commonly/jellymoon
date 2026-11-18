@@ -204,5 +204,5 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
   `ended_alone` ([show.md](../development/show.md), "Told alone"). The note's sentences start with the app's
   "Nothing in your folder was changed."; decision 6's sentence stays, as it is still true.
 - A run that did not finish keeps no result (decision 2), so none is shown of it. Its wish's note says, in core's
-  fixed words, that it stopped before it was done, that nothing in the folder was changed, and what the person
+  fixed words, that it did not finish, that nothing in the folder was changed, and what the person
   can do; no word of core's reason, which names the run and the harness's last word.

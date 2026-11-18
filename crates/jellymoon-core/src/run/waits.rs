@@ -261,9 +261,10 @@ impl ShownFile {
 }
 
 /// What a page says after the wish's words of a run that did not finish (told alone): what came of it and what the
-/// person can do, and no reason of core's, which names a run and a word of the harness's.
+/// person can do, and no reason of core's, which names a run and a word of the harness's. True of every failed
+/// run: some stopped early, and some had finished when their work could not be committed or their end recorded.
 const UNFINISHED: [&str; 2] = [
-    "It stopped before it was done, and nothing in your folder was changed.",
+    "It did not finish, and nothing in your folder was changed.",
     "You can type the wish again, or type it with what should be different.",
 ];
 

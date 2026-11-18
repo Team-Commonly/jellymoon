@@ -450,7 +450,8 @@ that fit and counts the rest in a last line, `+N more`.
   words and core's reason, and no choice. Any other wish: one note, `wish-<wish>`, with how
   it stands and its own words, and no choice. Of a made wish whose run did not finish (its record says it
   failed), "This wish needs you." and its words are followed by two fixed sentences of core's (`stands`): "It
-  stopped before it was done, and nothing in your folder was changed." and "You can type the wish again, or
+  did not finish, and nothing in your folder was changed." (true of every failed run, whether it stopped early
+  or had finished when its work could not be committed or its end recorded) and "You can type the wish again, or
   type it with what should be different." No run's id and no word of core's reason are on it. Either note can have a field under it ("A question answered, and
   more like this", below). One wish is open at a time. A tap on no wish, or on a wish whose
   note is on show, shows nothing. Nothing is written by any of it.
@@ -458,8 +459,11 @@ that fit and counts the rest in a last line, `+N more`.
   puts the wish's work on the page with no tap: the notes a tap on its character gives (`told-<wish>` when there
   is one, and `work-<wish>` with its choices), from the calls to core a tap makes, off the window's thread, in
   the same look that draws the star. A run that finished and changed nothing, and said something that passed,
-  shows itself the same way, by the same rules: `told-<wish>` over the wish's own note (told alone, below). The
-  rules:
+  shows itself the same way, by the same rules: `told-<wish>` over the wish's own note (told alone, below),
+  but never in place of work that waits: the look asks on past it, shows the first wish's work that waits if
+  any, and only else the first told-alone note; a wish passed over so keeps its turn. A told-alone note put on
+  the page with no work under it holds the three looks after it (`HOLD`), as a choice's answer does, since it
+  has nothing to choose and is never in hand. The rules:
   - *Whose work.* A made wish this window saw being worked on or saw made, whose run is not going now. Core is
     asked of it once for that end: a wish with no work waiting is not asked of again until it is worked on
     again, and work that was shown is not shown by itself again. A look whose scene was dropped is made again.

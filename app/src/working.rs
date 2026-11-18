@@ -88,6 +88,13 @@ pub(crate) fn shown(scene: &Scene) -> impl Iterator<Item = &str> {
     scene.notes.iter().filter_map(|note| id_of(note).and_then(|id| id.strip_prefix(WORK).or(id.strip_prefix(TOLD))))
 }
 
+/// Whether a scene holds what a run says it did with no work that waits under it (told alone): a note with
+/// nothing to choose, which the looks after it leave on the page as they leave a choice's answer.
+pub(crate) fn told_on(scene: &Scene) -> bool {
+    let has = |start: &str| scene.notes.iter().filter_map(id_of).any(|id| id.starts_with(start));
+    has(TOLD) && !has(WORK)
+}
+
 /// `notes` over the scene `from`, as the notes of an opened wish go: what core is at work on stays, and every
 /// other note of an opened wish gives way to these. With `said`, what was done with work stays too: the answer
 /// to a person's own tap is not taken away by a look.
@@ -270,11 +277,12 @@ impl Today {
     /// The work of the made wish `id` that waits, or what its run that changed nothing says it did, over the scene
     /// `from`, as a tap on its character shows it ([`Today::opened`]), but over what was said of work kept or
     /// tossed, which a tap takes away: for a look that found the wish's run ended (`showing.rs`). The calls to
-    /// core are a tap's. None when neither is.
-    pub(crate) fn waiting_over(&self, page: Option<&Page>, from: &Scene, id: &str) -> Option<Scene> {
+    /// core are a tap's. None when neither is; with the scene, whether it is work that waits.
+    pub(crate) fn waiting_over(&self, page: Option<&Page>, from: &Scene, id: &str) -> Option<(Scene, bool)> {
         let notes = self.notes_on_open(page, id)?;
-        let shows = notes.iter().filter_map(id_of).any(|one| one.starts_with(WORK) || one.starts_with(TOLD));
-        shows.then(|| over(from, notes, true))
+        let has = |start: &str| notes.iter().filter_map(id_of).any(|one| one.starts_with(start));
+        let (work, told) = (has(WORK), has(TOLD));
+        (work || told).then(|| (over(from, notes, true), work))
     }
 
     /// `notes` of `wish`, its work that waits among them with the offer of a follow-up when core says one may

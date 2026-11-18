@@ -402,7 +402,9 @@ max_file_lines = 400
 # Told alone raised core by 57 (72 added, 15 removed): `ended_alone` and `Alone`, the split of `found` so a look
 # knows how a run ended, the result of a run that changed nothing (`run/show.rs`), and the two sentences of a run that
 # did not finish (`run/waits.rs`). Nothing could be deleted for it.
-"crates/jellymoon-core" = 17905
+# The told-alone gate fix raised core by 1: the sentence of a failed run, and why it is true of every one
+# (`run/waits.rs`).
+"crates/jellymoon-core" = 17906
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -951,7 +953,9 @@ max_file_lines = 400
 # Typing goes to the entry raised the app by 142: its test, `tests/entry_keys.rs`, 142 lines; the source lost a net 0.
 # Told alone raised the app by 180: 155 are its test (`tests/told_alone.rs`), 25 the told note of a run with no work
 # and its look (`src/told.rs`, `src/working.rs`).
-"app" = 15087
+# The told-alone gate fix raised the app by 132: 113 are its tests (`tests/told_alone.rs`), the rest a look
+# that asks on past a told-alone note and the hold after one (`src/showing.rs`, `src/working.rs`).
+"app" = 15219
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

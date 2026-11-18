@@ -18,7 +18,8 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
   gives the same numbers on every system; `draw::GlyphMeasure` asks GPUI, which
   kerns and knows the system's fonts. The view draws with the second.
 
-`draw::Page` is the GPUI view; taps on characters and options reach `on_tap`.
+`draw::Page` is the GPUI view; taps on characters and options reach `on_tap`. Files or folders dropped on it
+from outside the app reach `on_paths`, with their paths, called while the page is in use as `on_tap` is.
 
 ## The entry: one line to type
 
@@ -42,7 +43,10 @@ the field (`PieceKind::Entry`) and a chip for each of the first six options
 past its room are: `+N more` (`PieceKind::More`), in words, after the last
 chip, whose row keeps its width free. It is no option: no click chooses it. It
 is left out only where that row could not hold its chips at their least width
-beside it. It places nothing for a theme whose big character leaves the field under 160 design
+beside it. An entry's `action`, when it is not empty, is one thing to do that is no option
+(`PieceKind::Action`): whole, after the chips and the count, in the last row, whose chips share what it leaves. A
+tap on it reaches `on_tap` as `Tap::Action` with the entry's id; it is never chosen, and Enter never gives it.
+`page.choose_option(name, cx)` chooses the option of that name when it is offered, and says whether it was. It places nothing for a theme whose big character leaves the field under 160 design
 pixels.
 
 Three things about an entry are told apart by more than a shade, and each is
@@ -110,7 +114,7 @@ theme files to all of this.
 
 ```rust
 Page::new(scene, theme)
-    .with_entry(Entry { id: "wish".into(), hint: "wish for something".into(), options, most: 200 })
+    .with_entry(Entry { id: "wish".into(), hint: "wish for something".into(), options, most: 200, action: String::new() })
     .on_entry(|made, window, cx| { /* made.id, made.text, made.option */ })
 ```
 

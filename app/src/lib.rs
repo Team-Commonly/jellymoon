@@ -7,6 +7,7 @@
 //! - [`wishing`]: a wish typed in the window: kept by core, its run asked of core, and the page looked at again.
 //! - [`working`]: a tap on a little one opens its wish, and work that waits is shown, kept or tossed through core.
 //! - [`answering`]: what is typed under a made wish: an answer to its run's question, or a follow-up, through core.
+//! - [`starting`]: a folder dropped or chosen, or a new project named, given to core as a project.
 //! - [`today`]: the day's page, kept in the user's own folder and read again through core when the day has moved on.
 //! - [`showing`]: what the window does with a key, a tap, Enter, a reading step and a look, with no window.
 //! - [`window`]: the kit's view of the scene in a window (feature `window`): wiring only.
@@ -71,6 +72,7 @@ pub mod scene;
 #[cfg(feature = "window")]
 pub mod shell;
 pub mod showing;
+pub mod starting;
 pub mod stopping;
 pub mod taps;
 pub mod today;

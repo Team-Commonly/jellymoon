@@ -610,7 +610,7 @@
         "the project has a chip at once"
       ],
       "test": "cargo test -p jellymoon-app --test f64",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F62"
       ]
@@ -639,7 +639,7 @@
         "the name is handed to core's `project new` off the window's thread; the new project has a chip, or core's refusal is one note"
       ],
       "test": "cargo test -p jellymoon-app --test f66",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F63",
         "F65"

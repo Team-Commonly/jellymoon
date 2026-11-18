@@ -42,6 +42,8 @@ pub enum PieceKind {
     /// What stands for the options of an entry past the ones offered, `+N more`: `id` is the entry's, `index`
     /// how many they are. It is words and no option: nothing chooses it.
     More,
+    /// An entry's one thing to do that is no option, after its chips: `id` is the entry's. A tap acts on it.
+    Action,
     /// Someone else's words under a text note, on a ground of their own: `id` is the note's. Text and no more.
     Quote,
     /// The field of a text note, which a person types one line in: `id` is the note's; its text is the hint.
@@ -187,7 +189,7 @@ impl PieceKind {
             PieceKind::Paper => 0,
             PieceKind::Hole => 1,
             PieceKind::Title | PieceKind::Legend | PieceKind::Footer => 3,
-            PieceKind::Entry | PieceKind::Chip | PieceKind::More => 4,
+            PieceKind::Entry | PieceKind::Chip | PieceKind::More | PieceKind::Action => 4,
             PieceKind::Label => 10,
             PieceKind::Hero | PieceKind::Character => 11,
             PieceKind::Star => 12,

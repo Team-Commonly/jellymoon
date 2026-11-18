@@ -54,7 +54,8 @@ fn a_project_switched_off_is_not_offered_from_the_first_scene_on_and_no_wish_is_
     fs::write(world.home.join("skip.txt"), "alpha\n").unwrap();
     assert_eq!((on.offering())().unwrap().options, ["private-notes"], "skip.txt switches a folder off too");
     fs::write(world.home.join("skip.txt"), b"alpha\n\xff").unwrap();
-    assert!((on.offering())().is_none(), "a list that cannot be read offers nothing");
+    let new = (on.offering())().map(|entry| entry.id);
+    assert_eq!(new.as_deref(), Some("new"), "a list that cannot be read offers no project, only a new one (F66)");
     fs::remove_file(world.home.join("skip.txt")).unwrap();
 
     // At the binary: the day cannot be read again, so the page is the one kept from the earlier reading.
@@ -74,7 +75,8 @@ fn a_project_switched_off_by_a_name_above_its_folder_has_no_chip_and_no_wish_is_
     assert!(asking.is_none() && kept_wishes(&world).is_none(), "a wish was made for a folder switched off");
     assert_eq!(first(&scene), Some((UNKEPT, format!("“{SAID}”: {GONE}").as_str())));
     on.today.skip = projects(&["work"]);
-    assert!((on.offering())().is_none(), "every folder is under a name switched off");
+    let new = (on.offering())().map(|entry| entry.id);
+    assert_eq!(new.as_deref(), Some("new"), "every folder is under a name switched off: only a new one (F66)");
 }
 
 #[test]
@@ -255,7 +257,8 @@ fn every_folder_switched_off_under_typed_words_ends_the_reading_with_no_entry_an
     let page = on.page.clone().unwrap();
     let end = Next { scene: on.today.draw(&page), page: Some(page), later: None };
     let (_, entry) = on.today.clone().offered(Box::new(move || Some(end)))().expect("the reading's last step");
-    assert!(entry.is_none(), "the reading's end gave an entry with no folder switched on");
+    // With no project on offer the entry is the one a new project is named in (F66): no wish can be made in it.
+    assert_eq!(entry.map(|entry| entry.id), Some("new".to_string()), "a wish entry with no folder switched on");
     let (scene, asking) = on.wished(SAID, Some("alpha"));
     assert!(asking.is_none() && kept_wishes(&world).is_none(), "a wish was made for a folder switched off");
     assert_eq!(first(&scene), Some((UNKEPT, format!("“{SAID}”: {GONE}").as_str())));

@@ -50,7 +50,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     if data.wishes.is_empty() && page.unknown.is_empty() {
         notes.push(Note::Plain {
             title: NOTHING.to_string(),
-            body: "Ask one of your agents for something and it will show up here.".to_string(),
+            body: "Start in the field at the top: type what you want done, or name a new project.".to_string(),
         });
     }
     let came_true: Vec<(String, String)> =

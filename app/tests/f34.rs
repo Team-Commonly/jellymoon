@@ -54,7 +54,7 @@ fn a_kept_page_is_shown_without_a_call_until_the_day_has_turns_it_did_not_see() 
     let other = shown(&world, &["--date", "2026-03-09"]);
     assert_eq!(
         notes(&other)[0],
-        "Nothing wished for yet today. Ask one of your agents for something and it will show up here."
+        "Nothing wished for yet today. Start in the field at the top: type what you want done, or name a new project."
     );
     assert!(!called(&world), "a day with nothing typed makes no call");
     assert_eq!(other.iter().find(|piece| piece.kind() == "tape").unwrap().said(), "Mon · Mar 9");

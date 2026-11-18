@@ -4,6 +4,8 @@
 
 pub mod day;
 pub mod door;
+#[cfg(all(target_os = "macos", feature = "window"))]
+pub mod windowed;
 pub mod wished;
 pub mod worked;
 

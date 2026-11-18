@@ -50,7 +50,13 @@ fn enters(page: &Entity<Page>, cx: &mut VisualTestContext, words: &str) -> (Stri
 #[test]
 fn the_window_answers_an_enter_on_a_page_with_no_day_and_the_words_stay() {
     let mut cx = context();
-    let wish = Entry { id: "wish".into(), hint: "wish".into(), options: vec!["alpha".into()], most: 200 };
+    let wish = Entry {
+        id: "wish".into(),
+        hint: "wish".into(),
+        options: vec!["alpha".into()],
+        most: 200,
+        action: String::new(),
+    };
     let (page, cx) = opened(&mut cx, Showing::of(None), wish);
     assert_eq!(enters(&page, cx, "tea at four"), ("tea at four".to_string(), false), "answered, and not kept");
 }

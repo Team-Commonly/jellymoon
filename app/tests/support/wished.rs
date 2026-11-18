@@ -154,10 +154,19 @@ impl World {
 
     /// [`World::enters`] in a window started with `--skip <skip>`, when that is not empty.
     pub fn enters_with(&self, project: &str, then: &str, skip: &str) -> Window {
+        self.window(project, SAID, then, skip)
+    }
+
+    /// The made-up window given `typed` as a new project's name (`then` is `name`) or a folder (`folder`).
+    pub fn gives(&self, typed: &str, then: &str) -> Window {
+        self.window("", typed, then, "")
+    }
+
+    fn window(&self, project: &str, typed: &str, then: &str, skip: &str) -> Window {
         let said = self.at("tmp").join(format!("window-{}", fs::read_dir(self.at("tmp")).unwrap().count()));
         let file = |name: &str| fs::File::create(said.with_extension(name)).unwrap();
         let paths = [self.at("jm"), self.at("logs"), self.bin(), self.at("agent").join("claude")];
-        let words = [DAY, project, SAID, then, skip].map(OsStr::new);
+        let words = [DAY, project, typed, then, skip].map(OsStr::new);
         let args: Vec<&OsStr> = paths.iter().map(|path| path.as_os_str()).chain(words).collect();
         let vars = self.vars.iter().map(|(name, value)| (name, value));
         let mut window = door::window(false, vars, &args);

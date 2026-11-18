@@ -222,6 +222,7 @@ fn entry(options: usize, most: usize) -> Entry {
         hint: "wish for something".into(),
         options: (0..options).map(|i| format!("project-{i}")).collect(),
         most,
+        action: String::new(),
     }
 }
 
@@ -248,8 +249,13 @@ fn a_scene_s_entry_is_held_to_a_count_of_options_and_a_cap() {
 #[test]
 fn the_chosen_option_is_kept_by_its_name_when_the_options_change() {
     let names = |names: &[&str]| names.iter().map(|name| name.to_string()).collect::<Vec<_>>();
-    let named =
-        |options: &[String]| Entry { id: "wish".into(), hint: String::new(), options: options.to_vec(), most: 80 };
+    let named = |options: &[String]| Entry {
+        id: "wish".into(),
+        hint: String::new(),
+        options: options.to_vec(),
+        most: 80,
+        action: String::new(),
+    };
     let was = names(&["garden", "kitchen", "letters"]);
     let mut state = EntryState::of(&named(&was));
     state.choose(1);

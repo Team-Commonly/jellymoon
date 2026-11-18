@@ -28,6 +28,9 @@ pub struct Entry {
     pub options: Vec<String>,
     /// The most characters the entry takes: at most [`crate::entry::MAX_ENTRY_CHARS`], which 0 also means.
     pub most: usize,
+    /// One thing to do that is no option, after the chips, or nothing when empty: a tap on it is
+    /// `Tap::Action` with the entry's id. It is never chosen and Enter never gives it.
+    pub action: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

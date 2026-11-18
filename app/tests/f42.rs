@@ -97,10 +97,16 @@ fn layout_prints_one_entry_on_a_day_s_page_with_a_chip_for_each_project_read() {
         assert_eq!(called(&world), !again, "the second page is the kept one");
         let entry = entries(&placed);
         assert_eq!((entry.len(), entry[0].id()), (1, "wish"));
-        assert_eq!(entry[0].said(), "Type a wish: Tab for its project, Enter", "the hint, whole");
+        assert_eq!(
+            entry[0].said(),
+            "What to do? Tab: project. Enter: start.",
+            "the hint, whole: Tab is said, as there are two chips"
+        );
         assert_eq!(chips(&placed), ["alpha", "private-notes"]);
-        let last = placed.len() - 3;
-        assert!(placed[last..].iter().all(|piece| ["entry", "chip"].contains(&piece.kind())), "they are printed last");
+        let last = placed.len() - 4;
+        let entry = ["entry", "chip", "action"];
+        assert!(placed[last..].iter().all(|piece| entry.contains(&piece.kind())), "they are printed last");
+        assert_eq!(placed[placed.len() - 1].said(), "Choose a folder", "the folder picker, after the chips");
     }
     // The hint is whole at the smallest page, the design's size and one between, in both themes, as `layout`
     // measures it: by the advances of the bundled Nunito, which also stands in for the plain theme's system font.
@@ -109,7 +115,7 @@ fn layout_prints_one_entry_on_a_day_s_page_with_a_chip_for_each_project_read() {
     {
         let placed = shown(&world, &["--theme", theme, "--size", size]);
         let said = entries(&placed)[0].said();
-        assert_eq!(said, "Type a wish: Tab for its project, Enter", "{theme} at {size}: the hint, whole");
+        assert_eq!(said, "What to do? Tab: project. Enter: start.", "{theme} at {size}: the hint, whole");
     }
     // A folder switched off was not read, so no wish can be made for it.
     assert_eq!(chips(&shown(&world, &["--fresh", "--skip", "private-notes"])), ["alpha"]);
@@ -137,8 +143,13 @@ fn a_day_with_no_project_read_prints_no_entry() {
     // The waiting page, and a day on which nothing was typed.
     let waiting = shown(&world, &["--waiting"]);
     assert_eq!((entries(&waiting).len(), chips(&waiting).len()), (0, 0));
+    // A day with no project on offer has the entry a new project is named in (F66).
     let quiet = shown(&world, &["--date", "2026-03-11"]);
-    assert_eq!((entries(&quiet).len(), chips(&quiet).len()), (0, 0));
+    let new = (entries(&quiet).iter().map(|entry| entry.said()).collect::<Vec<_>>(), chips(&quiet));
+    assert_eq!(
+        new,
+        (vec!["Name a new project, or drop a folder here".to_string()], vec!["Start something new".to_string()])
+    );
     assert!(today(&world).entry(None).is_none());
 }
 

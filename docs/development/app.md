@@ -182,20 +182,22 @@ the clashes, so on a page too full for all its notes it is a clash that falls in
 A day's page has one entry (the kit's, `crates/sticker-kit/README.md`): a field to type a wish in, and under it a
 chip for each project a wish can be made for that day, whatever the page read, of which one is always
 chosen. It stands in the left column, under the title "what I wished for today", where the wishes are listed. The chips
-stand in one row when their names fit it and in two when they do not; the hint is "Type a wish: Tab for its project,
-Enter". It is whole in both themes from the smallest page (960x640) up as `layout` measures it, by the advances of
+stand in one row when their names fit it and in two when they do not, and after them stands "Choose a folder"
+(below, "A project given in the window"). The hint is "What do you want done? Enter starts it.", and with more than
+one chip "What to do? Tab: project. Enter: start.", where Tab helps. Each is whole in both themes from the smallest page (960x640) up as `layout` measures it, by the advances of
 the bundled Nunito at the kit's small size (13 design pixels, never under 11), which also stands in for the plain
-theme's system font (`app/tests/f42.rs`, at three sizes); and as the window shapes it on a Mac, in Nunito and in the
+theme's system font (`app/tests/f42.rs`, at three sizes; `app/tests/f66.rs` at the smallest); and, for the hint
+of F42's words, as the window shapes it on a Mac, in Nunito and in the
 system's font (headless pictures at 960x640 and 1440x900). A wider font cuts it with an ellipsis at the
 smallest page: one whose every character advances by 0.56 of its size, as the kit's layout tests measure, does. The rules are core's ([wish.md](wish.md), [run.md](run.md#a-run-started-apart)) and are proved at
 `jellymoon wish` and `jellymoon wish --run`. The app carries the words and a project's name to core, and draws
 what core keeps.
 
 - **When there is an entry.** On a day's page, when a project is on offer that day: a day nothing was typed on
-  has one for a listed project (F63). A day with no page (still being read, or not readable), a day with no such
-  project, the waiting page and a `--page` file
-  have none: a wish needs a project, and the app names none of its own. The window opens with no entry, and has
-  one as soon as core has said which projects have a chip. The entry takes at most 200 characters,
+  has one for a listed project (F63). A day with no project on offer, page or none, has the entry a new project
+  is named in (F66, below). A day with no page (still being read, or not readable) and a project on offer, the
+  waiting page and a `--page` file have none: a wish needs a project, and the app names none of its own. The
+  window opens with no entry, and has one as soon as core has said which projects have a chip. The entry takes at most 200 characters,
   core's cap on a wish (`jellymoon_core::MADE_SAID_MAX`). `layout` prints the field as one `entry` piece, its
   hint as text, and a `chip` piece for each option, after the scene's pieces.
 - **Which projects have a chip.** Core says (`jellymoon_core::offered`): a name `jellymoon wish --project`
@@ -270,6 +272,53 @@ what core keeps.
 `OnShow::offering`, `wishing`, `answered`, `asked`, `look` and `seen` need no window (`wished` is two of them in
 one, for a caller with none); `app/tests/f42.rs` and `f42/notes.rs` follow them, and `f42/run.rs` the run, through
 a made-up window that is a program of its own.
+
+## A project given in the window (`app/src/starting.rs`)
+
+ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project add` and `jellymoon project new`
+([project.md](project.md)). The app carries a folder or a name to core and draws what core says.
+
+- **Start something new (F66).** With no project on offer the entry's place holds one choice, "Start something
+  new", as its one chip, and a field for a name, whose hint is "Name a new project, or drop a folder here". The
+  entry's id is `new` and it takes at most 100 characters. Enter carries the name to
+  `jellymoon_core::new_project`, off the window's thread. The row says "in core's words": core has no words for
+  the choice, so they are ADR 0020's, kept in the app (`starting::START`).
+- **A folder dropped (F64).** A folder dropped anywhere on the page's window goes to `jellymoon_core::add_project`,
+  off the window's thread, with or without projects on offer. Of several dropped, the first is given. The kit
+  tells the app of a drop (`Page::on_paths`).
+- **Choose a folder.** Every entry of a day has one thing to do after its chips, "Choose a folder" (`layout`
+  prints it as one `action` piece). A tap on it opens the system's folder picker for one folder, and what is
+  chosen goes where a drop goes. A picker that is cancelled does nothing.
+- **Core's answer is one note**, in place of the one before it (it is a wish's note, `wishing.rs`): "A project was
+  added." or "Your new project is ready.", with "“<name>” is ready: type what you want done."; or "That
+  folder was not added." or "No project was made.", with core's refusal. Core's words of `--repo` are said of
+  "that folder", and of `project new` of "a new project"; nothing else of them changes. The path is carried to
+  core and is never drawn: core's refusals do not name it, and the app adds nothing.
+- **The chip at once.** Once core has answered, the page's entry is asked again: the project has its chip, which
+  is the chosen one, and the entry has the keys. A day that had no page has the one core gives a day with no logs
+  and a project on offer (F63), by the first step of a reading, which makes no call; a step that would call the
+  model is not taken, and the entry waits for the page, as before.
+- **While the day is read.** A drop, a folder chosen or a name entered while "Reading your day…" is on show goes
+  to core at once, and its note is shown when core answers. When no entry offers the project yet, the window
+  keeps its name (`Showing::wait_for`): its chip is chosen, with the keys, as soon as an entry offers it, the
+  entry asked again at once or the one a step of the reading gives.
+- **A drop after a key.** GPUI's own drop (`on_drop`) asks whether the page is hovered, and after a key it is
+  not until the mouse moves; a drag from another app moves no mouse over the window. So a folder dropped after
+  typing was lost. The kit takes a drop from any mouse-up while something is dragged (`Page::on_paths`).
+- **Nothing typed is lost.** The kit keeps what is typed when the entry changes (`Page::set_entry`): words typed
+  for a wish stay through a drop, and a half-typed name stays in the wish's field. A name core takes empties the
+  field; a name it refuses stays.
+- **The empty page says what to do here.** The note of a page with no wish is "Nothing wished for yet today.",
+  with "Start in the field at the top: type what you want done, or name a new project."; a day with no session
+  logs says "You can start here: name a new project in the field, or drop a folder on this window."
+
+`OnShow::listing` and `listed` need no window. `app/tests/f64.rs` and `f66.rs` carry a folder and a name through
+the made-up window of F42 (`tests/support/wisher.rs`), where core starts git with the test's variables;
+`f64/window.rs` drops a folder on the page on GPUI's test platform (`FileDropEvent`) and answers the folder
+picker (`simulate_path_prompt_response`); `f66/window.rs` enters a name core refuses and cancels the picker. A
+name core takes is not entered in the window on the test platform: core would start git with the test's own
+variables. What only a person at a window can see is not tested: the system's picker itself, and a drop from
+the Finder.
 
 ## What the window does, with no window (`app/src/showing.rs`)
 

@@ -12,7 +12,13 @@ fn the_small_characters_begin_under_the_entry_wherever_a_theme_puts_its_big_one(
     (high.metrics.hero_size, high.metrics.hero_top, high.metrics.hero_x) = (40.0, 60.0, 800.0);
     assert_eq!(high.check(), Ok(()));
     // Six names too long for one row: the band is kept free down to the second row of chips.
-    let entry = Entry { id: "wish".into(), hint: "wish".into(), options: vec!["alpha".repeat(20); 6], most: 0 };
+    let entry = Entry {
+        id: "wish".into(),
+        hint: "wish".into(),
+        options: vec!["alpha".repeat(20); 6],
+        most: 0,
+        action: String::new(),
+    };
     for viewport in SIZES {
         let ours = layout_entry(&entry, &high, viewport, &MEASURE);
         assert_eq!(ours.len(), 7, "{viewport:?}: the field and six chips");

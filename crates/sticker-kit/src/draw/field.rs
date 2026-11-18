@@ -33,7 +33,13 @@ pub(super) fn fit(scene: &Scene, mut was: Vec<EntryView>) -> (Vec<EntryView>, Ve
     let mut held = Vec::new();
     for note in &scene.notes {
         let Note::Text { id, field: Some(field), .. } = note else { continue };
-        let entry = Entry { id: id.clone(), hint: field.hint.clone(), options: Vec::new(), most: field.most };
+        let entry = Entry {
+            id: id.clone(),
+            hint: field.hint.clone(),
+            options: Vec::new(),
+            most: field.most,
+            action: String::new(),
+        };
         let at = was.iter().position(|view| same(view, id, field));
         let mut view = at.map(|at| was.remove(at)).unwrap_or_default();
         view.state.fit(&entry);

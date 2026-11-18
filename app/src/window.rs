@@ -3,7 +3,9 @@
 //! when it was one, never a word of the page. A tap on an option of a day's page then goes to `taps.rs`, and the
 //! page it gives is shown. Enter in a day's entry goes to `wishing.rs`, and a tap on a wish's character or on the
 //! choice to stop its run to `stopping.rs`: core is asked off this thread, and the page is shown as soon as it has
-//! answered. Once a second the day is looked at again, so a run's end is drawn with no tap.
+//! answered. Once a second the day is looked at again, so a run's end is drawn with no tap. A folder dropped on
+//! the page, or chosen with the system's picker from the entry's "Choose a folder", and a name entered in the
+//! entry of a day with no project on offer, go to `starting.rs`, off the window's thread too.
 //!
 //! This file is wiring. What each act does is `showing.rs`, which a test calls with no window: here its work is
 //! run off the window's thread, and each scene it gives is handed to the kit's view. The view outlives its window
@@ -17,12 +19,13 @@
 
 use std::cell::OnceCell;
 use std::io::Write;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Duration;
 
 use gpui::{
-    App, Bounds, Entity, KeyBinding, Menu, MenuItem, Pixels, QuitMode, TitlebarOptions, WeakEntity, WindowBounds,
-    WindowHandle, WindowOptions, actions, prelude::*, px, size,
+    App, Bounds, Entity, KeyBinding, Menu, MenuItem, PathPromptOptions, Pixels, QuitMode, TitlebarOptions, WeakEntity,
+    WindowBounds, WindowHandle, WindowOptions, actions, prelude::*, px, size,
 };
 use gpui_platform::application;
 use sticker_kit::draw::{EntryMade, Page, Tap, load_fonts};
@@ -31,6 +34,7 @@ use sticker_kit::{Scene, Theme, Viewport};
 use crate::jellyfish::Room;
 use crate::shell::{Asked, Opened, wire};
 use crate::showing::{Entered, Showing, entry_line, other_theme, switches_theme, tap_line};
+use crate::starting::{Given, Listing, NEW, Shown};
 use crate::today::Later;
 
 actions!(jellymoon, [Quit]);
@@ -89,6 +93,7 @@ pub(crate) async fn reads(shown: Showing, later: Option<Later>, page: WeakEntity
     let Some(first) = shown.offering() else { return };
     let entry = cx.background_executor().spawn(async move { first() }).await;
     let _ = page.update(cx, |page, cx| page.set_entry(entry, cx));
+    cx.update(|cx| choose_waiting(&shown, &page, cx));
     let mut later = later;
     while let Some(work) = later.take().and_then(|step| shown.reading(step)) {
         let Some((next, entry)) = cx.background_executor().spawn(async move { work() }).await else { break };
@@ -97,6 +102,7 @@ pub(crate) async fn reads(shown: Showing, later: Option<Later>, page: WeakEntity
             page.set_entry(entry, cx);
             page.set_scene(scene, cx);
         });
+        cx.update(|cx| choose_waiting(&shown, &page, cx));
         later = next.later;
     }
 }
@@ -121,6 +127,9 @@ pub(crate) async fn looks(shown: Showing, page: WeakEntity<Page>, cx: &mut gpui:
 /// thread too, and what it has to say is shown when it ends.
 fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     say(&entry_line(&made.id, &made.text));
+    if made.id == NEW {
+        return listing(shown.listing(Given::Name(made.text.clone())), true, shown.clone(), page, cx);
+    }
     // What is typed under a made wish (F54) is carried as a wish is, and answers the field it was typed in.
     let field = (made.id != crate::wishing::ENTRY).then(|| made.id.clone());
     let (at_once, wishing) = match &field {
@@ -172,6 +181,68 @@ fn answer_entry(page: &WeakEntity<Page>, field: Option<&str>, kept: bool, scene:
     }
 }
 
+/// A folder dropped on the page, or chosen with the picker: the first one is given to core.
+fn given(paths: &[PathBuf], shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
+    if let Some(folder) = paths.first() {
+        listing(shown.listing(Given::Folder(folder.clone())), false, shown.clone(), page, cx);
+    }
+}
+
+/// The system's folder picker, for one folder: what is chosen goes where a drop goes. Cancelled, it is nothing.
+fn choosing(shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
+    let options = PathPromptOptions { files: false, directories: true, multiple: false, prompt: None };
+    let (picked, shown) = (cx.prompt_for_paths(options), shown.clone());
+    cx.spawn(async move |cx| {
+        let Ok(Ok(Some(paths))) = picked.await else { return };
+        cx.update(|cx| given(&paths, &shown, page, cx));
+    })
+    .detach();
+}
+
+/// Core is asked off the window's thread at once, while the day is still being read too; then the page shows its
+/// answer and the entry the page has now, with the project's chip chosen and the keys. With no entry for it yet,
+/// the entry is asked for again, and the chip is chosen when the reading gives a page whose entry offers it.
+/// `named`: the name was entered in the entry, which is answered first.
+fn listing(work: Option<Listing>, named: bool, shown: Showing, page: WeakEntity<Page>, cx: &mut App) {
+    cx.spawn(async move |cx| {
+        let listed = match work {
+            Some(work) => Some(cx.background_executor().spawn(async move { work() }).await),
+            None => None,
+        };
+        let now = listed.and_then(|listed| shown.listed(listed));
+        cx.update(|cx| {
+            let kept = now.as_ref().is_some_and(|now| now.name.is_some());
+            if named {
+                answer_entry(&page, None, kept, None, cx);
+            }
+            let (Some(Shown { scene, entry, name }), Some(view)) = (now, page.upgrade()) else { return };
+            shown.wait_for(name);
+            view.update(cx, |page, cx| {
+                page.set_entry(entry, cx);
+                page.set_scene(scene, cx);
+            });
+            choose_waiting(&shown, &page, cx);
+        });
+        let Some(offering) = shown.waiting().and(shown.offering()) else { return };
+        let entry = cx.background_executor().spawn(async move { offering() }).await;
+        let _ = page.update(cx, |page, cx| page.set_entry(entry, cx));
+        cx.update(|cx| choose_waiting(&shown, &page, cx));
+    })
+    .detach();
+}
+
+/// The chip of the project core listed is chosen once an entry offers it, and the entry has the keys.
+fn choose_waiting(shown: &Showing, page: &WeakEntity<Page>, cx: &mut App) {
+    let (Some(name), Some(view)) = (shown.waiting(), page.upgrade()) else { return };
+    if !view.update(cx, |page, cx| page.choose_option(&name, cx)) {
+        return;
+    }
+    shown.wait_for(None);
+    if let Some(open) = page_window(cx) {
+        let _ = open.update(cx, |page, window, cx| page.focus_entry(window, cx));
+    }
+}
+
 /// A tap on a character: core is asked off the window's thread, and what it gives is shown.
 fn poked(id: &str, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     let (Some(look), shown) = (shown.poked(id), shown.clone()) else { return };
@@ -204,12 +275,16 @@ fn chose(note: &str, index: usize, shown: &Showing, page: WeakEntity<Page>, cx: 
 /// The view of one page, its taps and its Enter wired to `shown`. It is its window's root, and outlives it.
 pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> Entity<Page> {
     cx.new(|cx| {
-        let (page, on_show) = (cx.weak_entity(), shown.clone());
+        let (page, on_show, on_show_drop) = (cx.weak_entity(), shown.clone(), shown.clone());
         let entry_of = page.clone();
         let tapped = move |tap: &Tap, _: &mut gpui::Window, cx: &mut App| {
             let (id, option) = match tap {
                 Tap::Character { id } => (id, None),
                 Tap::Option { note_id, index } => (note_id, Some(*index)),
+                Tap::Action { id } => {
+                    say(&tap_line(id, None));
+                    return choosing(&on_show, page.clone(), cx);
+                }
             };
             say(&tap_line(id, option));
             match option {
@@ -220,8 +295,12 @@ pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> 
         let made = move |made: &EntryMade, _: &mut gpui::Window, cx: &mut App| {
             entered(made, &shown, entry_of.clone(), cx);
         };
+        let (dropped_on, dropped) = (cx.weak_entity(), on_show_drop);
+        let paths = move |paths: &[PathBuf], _: &mut gpui::Window, cx: &mut App| {
+            given(paths, &dropped, dropped_on.clone(), cx);
+        };
         // The entry comes with the first answer of `reads`.
-        Page::new(scene, theme).on_tap(tapped).on_entry(made)
+        Page::new(scene, theme).on_tap(tapped).on_entry(made).on_paths(paths)
     })
 }
 

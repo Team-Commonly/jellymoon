@@ -29,7 +29,9 @@ pub const NO_LOGS: &str =
 pub const NOTHING: &str = "Nothing wished for yet today.";
 pub const UNREAD: &str = "Today could not be read.";
 pub const NO_PAGE: &str = "There is no page for this day yet.";
-pub const HINT: &str = "Type a wish: Tab for its project, Enter";
+pub const HINT: &str = "What do you want done? Enter starts it.";
+pub const NEW_HINT: &str = "Name a new project, or drop a folder here";
+pub const START: &str = "Start something new";
 pub const READ_NOTHING: &str = "Nothing typed on this day was read, so there is no reading.";
 pub const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
@@ -86,9 +88,13 @@ fn a_day_with_nothing_typed_nothing_made_and_no_project_on_offer_is_drawn_as_it_
     for logs in [Logs::Empty, Logs::OtherDay] {
         let w = nothing_typed(logs);
         let placed = w.placed();
-        for kind in ["entry", "chip", "more", "character"] {
+        for kind in ["more", "character"] {
             assert!(of(&placed, kind).is_empty(), "{logs:?}: a {kind} was placed");
         }
+        assert_eq!(
+            (words(&placed, "entry"), words(&placed, "chip")),
+            (vec![NEW_HINT.to_string()], vec![START.to_string()])
+        );
         let said = notes(&placed);
         assert!(said.len() == 1 && said[0].contains(NOTHING), "{logs:?}: {said:?}");
         assert_eq!(words(&placed, "footer"), [READ_NOTHING], "{logs:?}");
@@ -98,9 +104,13 @@ fn a_day_with_nothing_typed_nothing_made_and_no_project_on_offer_is_drawn_as_it_
     // No logs at all, and nothing to draw: the day has no page, and none is kept.
     let w = nothing_typed(Logs::Absent);
     let placed = w.placed();
-    for kind in ["entry", "chip", "more", "character"] {
+    for kind in ["more", "character"] {
         assert!(of(&placed, kind).is_empty(), "a {kind} was placed");
     }
+    assert_eq!(
+        (words(&placed, "entry"), words(&placed, "chip")),
+        (vec![NEW_HINT.to_string()], vec![START.to_string()])
+    );
     let said = notes(&placed);
     assert!(said.len() == 1 && said[0].contains(NO_PAGE) && said[0].contains("No Claude Code session logs"));
     assert!(!said[0].contains(UNREAD), "{said:?}");
@@ -152,7 +162,11 @@ fn a_page_that_read_something_stays_when_the_logs_are_gone_and_a_made_wish_alone
     w.jellymoon(&["wish", "--date", DAY, "--say", "tidy the uploader", "--project", "alpha"]);
     w.jellymoon(&["project", "forget", "alpha"]);
     let placed = w.placed();
-    assert_eq!((of(&placed, "character").len(), of(&placed, "entry").len()), (1, 0), "{placed:?}");
+    assert_eq!(
+        (of(&placed, "character").len(), words(&placed, "entry")),
+        (1, vec![NEW_HINT.to_string()]),
+        "{placed:?}"
+    );
     assert_eq!(words(&placed, "footer"), [format!("{FOUND_NO_LOGS} 1 made wish is in your own words.")]);
     assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), NO_LOGS);
     assert!(!called(&w.day));
@@ -175,6 +189,9 @@ fn a_project_that_is_forgotten_takes_the_entry_with_it_and_logs_that_come_are_re
     // Nothing is on offer any more: no entry, and the page is the empty day's.
     w.jellymoon(&["project", "forget", "alpha"]);
     let placed = w.placed();
-    assert!(of(&placed, "entry").is_empty() && of(&placed, "chip").is_empty(), "{placed:?}");
+    assert_eq!(
+        (words(&placed, "entry"), words(&placed, "chip")),
+        (vec![NEW_HINT.to_string()], vec![START.to_string()])
+    );
     assert!(notes(&placed)[0].contains(NOTHING) && !called(&w.day));
 }

@@ -56,8 +56,13 @@ fn open(cx: &mut TestAppContext) -> (Entity<Page>, &mut VisualTestContext, Seen<
     cx.update(|cx| load_fonts(cx)).expect("bundled fonts load");
     let (made, taps) = (Seen::<EntryMade>::default(), Seen::<Tap>::default());
     let (entered, tapped) = (made.clone(), taps.clone());
-    let entry =
-        Entry { id: "wish".into(), hint: "wish for something".into(), options: vec!["garden".into()], most: 12 };
+    let entry = Entry {
+        id: "wish".into(),
+        hint: "wish for something".into(),
+        options: vec!["garden".into()],
+        most: 12,
+        action: String::new(),
+    };
     let (page, cx) = cx.add_window_view(move |_, _| {
         Page::new(scene(both()), Theme::sticker())
             .reduce_motion(true)

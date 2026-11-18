@@ -13,7 +13,7 @@ use gpui::{
 use super::field::Which;
 use super::measure::{font_for, hsla};
 use super::{Page, Stale};
-use crate::entry::EntryState;
+use crate::entry::{EntryState, MAX_ENTRY_OPTIONS};
 use crate::layout::{PieceKind, Placed, line_height, page_scale};
 use crate::scene::Entry;
 use crate::text::Role;
@@ -177,6 +177,17 @@ impl Page {
     pub fn answer_entry_closed(&mut self, kept: bool, cx: &mut Context<Self>) {
         self.entry.state.answer(kept);
         self.entry_settled(cx);
+    }
+
+    /// Chooses the entry's option of that name, when it is one of the options offered: false when it is not.
+    pub fn choose_option(&mut self, name: &str, cx: &mut Context<Self>) -> bool {
+        let mut offered = self.entry.what.iter().flat_map(|what| what.options.iter().take(MAX_ENTRY_OPTIONS));
+        let at = offered.position(|one| one == name);
+        if let Some(at) = at {
+            self.entry.state.choose(at);
+            cx.notify();
+        }
+        at.is_some()
     }
 
     /// What is typed in the entry now.

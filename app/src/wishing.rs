@@ -17,6 +17,7 @@ use sticker_kit::{Entry, Note, Scene};
 
 use crate::answering::{UNANSWERED, UNSETTLED};
 use crate::read::Page;
+use crate::starting::{ADDED, CHOOSE, MADE, UNADDED, UNMADE, new_entry};
 use crate::stopping;
 use crate::taps::{OnShow, UNTOLD};
 use crate::today::{Later, Next, Today};
@@ -25,7 +26,9 @@ use crate::working;
 /// The id of the entry a wish is typed in.
 pub const ENTRY: &str = "wish";
 
-const HINT: &str = "Type a wish: Tab for its project, Enter";
+/// The hint of the entry with one project on offer, and with more, where Tab is said too.
+pub const HINT: &str = "What do you want done? Enter starts it.";
+pub const HINT_TAB: &str = "What to do? Tab: project. Enter: start.";
 
 /// The title of the note for words that were not kept as a wish. Its body names the words, then core's reason.
 pub const UNKEPT: &str = "That wish was not kept.";
@@ -103,7 +106,7 @@ pub(crate) fn of(words: &str, why: &str) -> String {
 }
 
 fn of_a_wish(note: &Note) -> bool {
-    matches!(note, Note::Plain { title, .. } if [UNKEPT, UNSTARTED, UNANSWERED, UNSETTLED].contains(&&**title))
+    matches!(note, Note::Plain { title, .. } if [UNKEPT, UNSTARTED, UNANSWERED, UNSETTLED, ADDED, MADE, UNADDED, UNMADE].contains(&&**title))
 }
 
 /// How many notes of wishes a scene begins with: a note put on it later goes under them.
@@ -204,10 +207,14 @@ impl OnShow {
     }
 }
 
-/// An entry with a chip for each of `options`. None with no option: a wish needs a project.
-pub fn entry_of(options: Vec<String>) -> Option<Entry> {
-    let entry = |options| Entry { id: ENTRY.into(), hint: HINT.into(), options, most: MADE_SAID_MAX };
-    (!options.is_empty()).then(|| entry(options))
+/// An entry with a chip for each of `options`, and the folder picker after them. With no option a wish needs a
+/// project first: the entry is the one a new project is named in (`starting.rs`).
+pub fn entry_of(options: Vec<String>) -> Entry {
+    if options.is_empty() {
+        return new_entry();
+    }
+    let hint = if options.len() > 1 { HINT_TAB } else { HINT };
+    Entry { id: ENTRY.into(), hint: hint.into(), options, most: MADE_SAID_MAX, action: CHOOSE.into() }
 }
 
 impl Today {
@@ -220,10 +227,11 @@ impl Today {
     /// The entry of a day's page: one option for each project core says a wish can be made for on the day
     /// (`jellymoon_core::offered`: a folder of its name was typed in that day, or it is on the list of projects
     /// Jellymoon knows), whatever the page read, and core's own cap on a wish's length. The kit offers the first
-    /// six and counts the rest. None for a day with no page, or with no such project: the app names none of its
-    /// own. It reads the day's session logs, so the window never calls it on its own thread.
+    /// six and counts the rest. With no such project, page or none, the entry a new project is named in (F66).
+    /// None for a day with no page and a project on offer: a wish waits for the page. It reads the day's session logs, so the window never calls it on its own thread.
     pub fn entry(&self, page: Option<&Page>) -> Option<Entry> {
-        page.and_then(|_| entry_of(jellymoon_core::offered(&self.read())))
+        let offered = jellymoon_core::offered(&self.read());
+        (offered.is_empty() || page.is_some()).then(|| entry_of(offered))
     }
 
     /// A step of the reading with the entry of the page it gives, as work for another thread.

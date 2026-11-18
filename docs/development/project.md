@@ -116,7 +116,10 @@ run there, with no `--repo` and no session log.
   by another command while it was being made…`. It writes nothing and removes nothing: the day is the one the
   other command listed it on. That is a making whose lock was taken over after 30 seconds and a `project add`
   of its folder. With the name listed for another folder, or not at all, the file's loss is `removed, replaced
-  or changed…` as before.
+  or changed…` as before. All of this is so only where the system has a number for a folder, which is Unix.
+  On Windows a making that finds its file gone never takes the folder at the name for its own, whatever the
+  list holds: it ends `removed, replaced or changed…`, exit 1, and changes nothing. A folder the other
+  command listed stays listed there, though the sentence says nothing was listed: this command listed nothing.
 - **A command that is killed** between making the folder and writing the list leaves the folder, unlisted,
   with the making's file in it beside the repo, and the lock. For half a minute every change to the list is told one has not finished; then the lock is taken
   over, and the next `project new` of that name says something is there. Mend it by `project add --repo` with
@@ -143,7 +146,7 @@ listed `app` followed by a heart and U+FE0F, and kept wishes for it.
 | `project new <name>` | refused |
 | `project add --repo`, the folder's last name | refused: `…its last name holds a character that cannot be seen…` |
 | `wish --project` for a name the list does not hold | refused: `--project takes one folder's name…` |
-| `wish --project` when the list cannot be used | refused in the list's own sentence: `the list of projects (projects.json in Jellymoon's folder) is not used: …` |
+| `wish --project` when the list cannot be used | refused in the list's own sentence: `the list of projects (projects.json in Jellymoon's folder) is not used: …`. For such a name the list is mended, not moved away as the sentence advises: `project add` of that folder is refused from then on, so a list begun again never holds the name |
 | `wish --project` for a name the list holds, letter for letter | kept, and its run starts in the listed folder |
 | the offers: a chip on a page, a wish said aloud, a wish made from a page | never offered |
 | a line of the list, read back | used: listed, found by a run, forgotten by `project forget` |
@@ -231,7 +234,7 @@ stdout, exit 0: `the new project's folder was listed by another command…`, in 
 | `new`: Jellymoon's folder is someone else's, or the person has no home folder | `Jellymoon's folder is not a folder of your own, and a project is listed only in a folder of your own, so nothing was made` |
 | `new`: the path of Jellymoon's folder is not text, or too long | `the full path of Jellymoon's folder is not text, or a project's in it would be over 4096 bytes, so a new project could not be listed and nothing was made` |
 | `new`: no folder, another folder, or the folder without the making's file is at the name once the repo is made | `the new project's folder was removed, replaced or changed while it was being made, so nothing was listed, and what is there now was left as it is` |
-| `new`: the making's file is gone from the made folder, and the list holds the name for that folder (exit 0, beside the project's line) | `the new project's folder was listed by another command while it was being made, so the project is on the list as that command listed it, and this one changed nothing more` |
+| `new`, on Unix: the making's file is gone from the made folder, and the list holds the name for that folder (exit 0, beside the project's line) | `the new project's folder was listed by another command while it was being made, so the project is on the list as that command listed it, and this one changed nothing more` |
 | `new`: the folder is kept under another name than was asked | `this file system does not keep the folder under the name it was given, so what was made was taken back and nothing was listed; pick a name of plain letters` |
 | `forget` is given no project's name | ``project forget takes a project's name, as `jellymoon project list` prints it`` |
 | the name is not listed | `no project of that name is on the list, so nothing was changed` |
@@ -340,7 +343,11 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
 - **What tells the made folder from another on Windows** is the making's file alone. Windows has no number
   for a folder that stable Rust reads, and it hands a folder made again under a name within a few seconds
   its old time of making (CI on Windows showed it: a folder removed and made again had the mark of the first),
-  so the time says nothing there. The folder is not held open against a hand for the length of a making: a
+  so the time says nothing there. So with the file gone nothing tells them apart, and a making whose folder
+  another command listed meanwhile is told `removed, replaced or changed…`, exit 1, where on Unix it ends as
+  a made project: the folder at the name may be one a hand put there and wrote a line for. The rule is one
+  function of the two marks (`made_still` in `project/new.rs`), tested from both sides on every system; at the
+  binary Windows is held to it by `f65/mark.rs`. The folder is not held open against a hand for the length of a making: a
   hand's `remove` goes through, and the making then says the folder was removed, replaced or changed.
 - **The making's file is in the folder while git works.** Git is told nothing of it and its commit has no
   file, so the file is never in the repo's history; a killed making leaves it, with the folder.
@@ -351,7 +358,8 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
   taken back and nothing was listed`, though nothing of that other folder is taken back.
 - **`project add` takes the making's file out after the lock is let go**, and only then. A making whose lock
   was taken over after 30 seconds, and whose folder is added meanwhile, finds its file gone and lists
-  nothing itself; the folder is listed by the `add`, and the making says so and ends as a made project does.
+  nothing itself; the folder is listed by the `add`, and the making says so and ends as a made project does
+  (on Unix; on Windows it ends `removed, replaced or changed…`, and the folder stays listed).
   It says "another command" of a hand too: a line written by hand for the folder, with the file taken out by
   hand, reads the same to it.
 - **Unicode forms.** Two forms of one name are two projects where the file system keeps them apart.
@@ -378,7 +386,8 @@ and a list written over meanwhile, each taken back; a lock that stays, with noth
 half way, its lock, and both ways to mend it; six at once; `f65/alone.rs`: a folder put in place of the one
 being made, left and never listed, and one removed; a line a hand wrote for the folder being made; a list
 that cannot be written; a home made for the lock; `f65/mark.rs`: the making's file, its mode, a making whose
-file a hand removed, a cut-off making's folder added, a making whose folder an `add` listed meanwhile, a git
+file a hand removed, a cut-off making's folder added, a making whose folder an `add` listed meanwhile (a made
+project on Unix, a folder replaced on Windows), a git
 that fails in a folder that could not be taken back, and a folder that could not be taken back;
 `f62/earlier.rs`: a list and a day's wishes an earlier build kept under a name refused today, and a wish for such a name with a list that cannot be used; a second `new`, an `add` and a `forget` that meet a making; the looks taken
 again behind the lock; a home that is nobody's or whose path is not text; a branch that is there before the

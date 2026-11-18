@@ -146,6 +146,24 @@ fn a_folder_that_looks_like_the_made_one_from_outside_and_holds_no_file_of_the_m
     assert_ne!(Made::new().token, Made::new().token);
 }
 
+// A making that finds its file gone has only the system's word for the folder at its name. A mark with the
+// system's number in it is that word. A mark with none (Windows) is a time a folder put in place can share, and
+// is no word at all. Both sides are values here, so each system proves the side it does not run.
+#[test]
+fn a_folder_with_no_number_is_never_taken_for_the_made_one_by_its_mark_and_one_with_a_number_is() {
+    let at = |seconds| Some(UNIX_EPOCH + std::time::Duration::from_secs(seconds));
+    let numbered = |number: u64, seconds| Some((Some((7, number)), at(seconds)));
+    assert!(made_still(numbered(40, 1), numbered(40, 1)));
+    assert!(!made_still(numbered(40, 1), numbered(41, 1)), "another number is another folder");
+    assert!(!made_still(numbered(40, 1), numbered(40, 2)), "another time is another folder");
+    // No number: the same time is what Windows hands a folder made again under the name.
+    assert!(!made_still(Some((None, at(1))), Some((None, at(1)))), "a time alone told two folders as one");
+    assert!(!made_still(Some((None, None)), Some((None, None))));
+    assert!(!made_still(numbered(40, 1), Some((None, at(1)))));
+    // No folder made, or none there now.
+    assert!(!made_still(None, None) && !made_still(None, numbered(40, 1)) && !made_still(numbered(40, 1), None));
+}
+
 #[test]
 fn what_is_said_of_the_made_folder_is_passed_on_and_only_another_name_is_the_file_system_s() {
     let asked = |name: &str| Ok((name.to_string(), "/p/alpha".to_string()));

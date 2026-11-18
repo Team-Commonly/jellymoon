@@ -57,16 +57,25 @@ fn add_refuses_a_folder_that_is_not_there_is_no_repo_s_top_or_is_not_named_as_a_
                 most 100 characters, with nothing that cannot be seen and nothing shaped like a credential";
     // One that cleaning leaves and nobody sees whole is a name an earlier build kept, and is told so: U+200B is
     // none of those, as cleaning takes it out.
-    let unseen = ["200b", "34f", "115f", "3164", "2800", "fe0f"].map(|code| u32::from_str_radix(code, 16).unwrap());
-    let unseen = unseen.map(|code| format!("al{}pha", char::from_u32(code).unwrap()));
-    for (at, odd) in [hub_key(), "a".repeat(101)].into_iter().chain(unseen).enumerate() {
+    let holding = |unseen: char| format!("al{unseen}pha");
+    let cases = [
+        (hub_key(), name),
+        ("a".repeat(101), name),
+        (holding('\u{200b}'), name),
+        (holding('\u{34f}'), EARLIER),
+        (holding('\u{115f}'), EARLIER),
+        (holding('\u{3164}'), EARLIER),
+        (holding('\u{2800}'), EARLIER),
+        (holding('\u{fe0f}'), EARLIER),
+    ];
+    for (odd, why) in cases {
         // Not every file system takes every name: one it refuses is no case here.
         if fs::create_dir_all(w.at("work").join(&odd)).is_err() {
             skipped("this file system does not take one of the names");
             continue;
         }
         let ran = w.add(&w.repo(&odd));
-        assert_eq!(refused(&ran), format!("jellymoon: {}\n", if at < 3 { name } else { EARLIER }), "{odd:?}");
+        assert_eq!(refused(&ran), format!("jellymoon: {why}\n"), "{odd:?}");
         assert!(!shows(&ran.stderr, &odd) && !w.at("jm").exists());
     }
     assert!(!w.at("jm").exists(), "a refusal made Jellymoon's folder");

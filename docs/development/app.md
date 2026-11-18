@@ -266,6 +266,7 @@ what core keeps.
   is drawn with no tap and without opening the app again: the star, or the wish needing the person. A wish made
   or run in a terminal shows up the same way. A look can end a run that was cut off, as any look does
   ([run.md](run.md#a-run-that-was-cut-off)), which can take a few seconds; the next look waits for it.
+  A look that finds a run ended also shows the work of it that waits ("Work that waits shows itself", below).
 - **A look never takes a note away.** The plain notes the app put over the page (a reading that is going or
   failed, a tap that did nothing, a wish that was not kept or has no run, a stop) stay over what a look draws.
   A look made from a scene that is no longer on show is dropped.
@@ -342,7 +343,7 @@ view. What each act does is `Showing`, the day on show behind the calls the wind
 | a key | `switches_theme(key, entry has the keys)`, `other_theme(name)` | |
 | the first page | `offering()` | the entry is set |
 | a step of the reading | `reading(step)` | `read(&next)`: the scene, and the step's entry |
-| once a second | `look()` | `seen(seen)`: the scene, or none for a look of a scene that is gone |
+| once a second | `look()`, which also asks core of a wish whose run ended | `seen(seen)`: the scene, or none for a look of a scene that is gone |
 | Enter | `wishing(words, chip's name)` | `answered(answer)`: what the entry is told, the scene, the asking |
 | the asking's end | | `asked(said)`: the scene, when there is something to say |
 | a tap on a character | `poked(id)` | `seen(seen)` |
@@ -379,7 +380,8 @@ made-up home. It opens no window and starts no program; core starts what the app
 
 ```
 cargo run -p jellymoon-app --example walk --features sticker-kit/headless -- <folder> 1440x900 \
-  type:garden enter "type:<a wish>" enter until:done:30 poke:m1 picture:waits "tap:work-m1:Keep it" picture:kept
+  type:garden enter "type:<a wish>" enter "until:Work waits for this wish.:30" picture:waits \
+  "tap:work-m1:Keep it" picture:kept
 ```
 
 The steps are `type:<words>`, `chip:<name>`, `enter`, `start` (the tap on `Start`), `folder:<path>` (as
@@ -387,7 +389,8 @@ The steps are `type:<words>`, `chip:<name>`, `enter`, `start` (the tap on `Start
 plain line and exit 1 past the bound), `poke:<wish id>`, `tap:<note title or id>:<option>` (only where the page
 places it) and `picture:<name>`. After each it prints one line: the step, its milliseconds, the titles of the notes
 and each wish's state; a typed step is counted, never shown. `app/tests/walk.rs` walks a whole loop with the made-up
-agent. A leading `--logs <dir>` is the app's own option: the day is read from that folder's logs, so a walk with
+agent, with no tap on the wish: the look shows its work. A second walk there taps the wish as well (`until:done:30
+poke:m1`). A leading `--logs <dir>` is the app's own option: the day is read from that folder's logs, so a walk with
 a real harness in a made-up home need not read the person's. It does not prove the window's own wiring: the timer, the picker, keys and focus, the kit's keeping of an
 entry with words in it, or the window's other thread.
 
@@ -434,6 +437,34 @@ that fit and counts the rest in a last line, `+N more`.
   it stands and its own words, and no choice. Either note can have a field under it ("A question answered, and
   more like this", below). One wish is open at a time. A tap on no wish, or on a wish whose
   note is on show, shows nothing. Nothing is written by any of it.
+- **Work that waits shows itself** (`Showing::look`, `app/src/showing.rs`). A look that finds a wish's run ended
+  puts the wish's work on the page with no tap: the notes a tap on its character gives (`told-<wish>` when there
+  is one, and `work-<wish>` with its choices), from the calls to core a tap makes, off the window's thread, in
+  the same look that draws the star. The rules:
+  - *Whose work.* A made wish this window saw being worked on or saw made, whose run is not going now. Core is
+    asked of it once for that end: a wish with no work waiting is not asked of again until it is worked on
+    again, and work that was shown is not shown by itself again. A look whose scene was dropped is made again.
+    A page with nothing new is looked at as before: the notes and characters on show are gone through, and no
+    call is added.
+  - *Work that waited when the window opened.* The first look that is free to shows the newest done wish's
+    work that waits, asking the done wishes from the newest until one waits. Once a window, and one work: an
+    older wish's stays behind its character.
+  - *Never over a note in the person's hand.* While the scene on show, placed or not, holds a choice with an
+    option (a clash's, the one that turns delivery on, a stop's), a text note with an option or a field (work
+    that waits, the same asked once more, a question, a follow-up), or a note core's answer comes in the place
+    of (`busy-<wish>`, "That run is being stopped.", a wish's note that says it is being worked on), the look
+    is the plain one. The work waits its turn and is shown by the first look after that note is gone, or
+    never when the person taps its character first. So a look moves no option and no field, and takes no
+    typed word; the characters stand where they stood, since the page had notes before. A page with a clash's
+    choice on it therefore opens no work by itself: a tap does.
+  - *Several ends at once.* One is shown, the first in core's order; the others wait behind its choices.
+  - *What stays.* The look's notes go before the others. What was said of work kept or tossed (`said-<wish>`)
+    stays under them, where a tap on a character takes it away: a run's end does not take away the answer to
+    the person's own tap. Every other note of an opened wish gives way, as to a tap.
+
+  `app/tests/work_shows.rs` holds these with the made-up window's `look` act, and `app/src/showing/tests.rs`
+  the turns alone. Not proved: the kit's keeping of the entry's words and keys under a new scene, which is the
+  window's (`set_scene`, as every look).
 - **What the run says it did** (F86, ADR 0023, `app/src/told.rs`): when core prints a `result` with a piece
   that passed, the work's note has one more note before it, `told-<wish>`, the kit's `Note::Told`. Its title is
   "What it says it did", which is also the label of what the run did: that text is the first thing under it.

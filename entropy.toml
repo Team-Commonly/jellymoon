@@ -918,7 +918,11 @@ max_file_lines = 400
 # The walk's `--logs` raised the app by 3: a walk with a real harness reads a folder of its own, not the person's logs.
 # The walk fixes raised the app by 85: the hint's order, a note kept under "Nothing to start yet.", no legend or footer
 # with nothing read, and their tests (`tests/entry_first.rs`, a unit test in `starting.rs`).
-"app" = 13885
+# Work that waits shows itself raised the app by 587: 394 are its tests (`tests/work_shows.rs` 309, the turns alone
+# in `src/showing/tests.rs` 85), 138 `showing.rs` (whose turn it is, and the look that asks core), 39 `working.rs`
+# (a note in the person's hand, the work's notes over a scene), 12 `tests/walk.rs` (the loop with no tap on the
+# wish, and with one), 4 the made-up window's `look` act.
+"app" = 14472
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

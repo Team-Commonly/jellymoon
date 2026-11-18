@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 use serde_json::json;
 
+use super::alone::told_apart;
 use super::refused::{LISTED, THERE, new_refused};
 use super::*;
 use crate::support::{plant, tree};
@@ -60,14 +61,17 @@ pub fn held_before_the_list(w: &World, name: &str) -> (Going, PathBuf) {
 fn a_git_step_that_fails_takes_back_what_was_made_and_lists_nothing() {
     let steps = ["init", "config", "symbolic-ref", "write-tree", "commit-tree", "update-ref"];
     // In a home that was not there: nothing is left but the folder git is started in, which Jellymoon keeps
-    // empty, and `take-over.lock`, empty, which the hold of the list's lock left and no command removes.
+    // empty, and `take-over.lock`, empty, which the hold of the list's lock left and no command removes. And
+    // `projects`, empty, where the system's word does not tell the one this making made from another.
     let w = heard_world();
+    let kept = (!told_apart(&w)).then(|| w.jm("projects"));
     for step in steps {
         let ran = w.run_with(&failing_at(&w, step), &["project", "new", "alpha", "--date", DAY]);
         assert_eq!(refused(&ran), format!("jellymoon: {GIT_FAILED}\n"), "{step}");
         names_no_path(&w, &ran);
         assert!(w.at("fake").join("held").exists(), "the made-up git was never at the step {step}");
-        let left = [w.jm("runs"), w.jm("runs").join("no-hooks"), w.jm("take-over.lock")].map(|path| (path, Vec::new()));
+        let left = [w.jm("runs"), w.jm("runs").join("no-hooks"), w.jm("take-over.lock")];
+        let left: Vec<_> = kept.iter().cloned().chain(left).map(|path| (path, Vec::new())).collect();
         assert_eq!(tree(&w.at("jm")), left, "{step}");
     }
     // Beside a project that is there: the whole test folder is as it was.

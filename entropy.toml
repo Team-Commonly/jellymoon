@@ -372,10 +372,13 @@ max_file_lines = 400
 # The second notes on F65 raised core by 26: `project/new.rs` 8 (a folder's mark holds the system's number or
 # none, and `made_still`, which takes no folder for the made one by a mark with no number), and its test from
 # both sides in `project/new/tests.rs`, 18.
+# The third notes on F65 raised core by 25: `project/new.rs` 7 (`projects` taken back by `made_still` too, and
+# what a mark says without a time of making) and `project/new/tests.rs` 18 (every pair of what two marks hold,
+# and the folder of projects by the same question).
 # The third app notes raised core by 112: `call/wait.rs`, the wait on a started command, is 94 (39 of them its test
 # of a wait that fails, played with a stand-in for the command) and took 14 lines out of `call.rs`, which gained 11
 # (the folder and the program said apart); `error.rs` 21 (three answers of their own, with their sentences).
-"crates/jellymoon-core" = 16495
+"crates/jellymoon-core" = 16520
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -575,8 +578,11 @@ max_file_lines = 400
 # (`tests/support/door.rs`) lost 82, and the installer's arguments handed to the door cost 1.
 # The second notes on F65 raised it by 16, all tests: `tests/f62/refused.rs` 9 (each name beside its sentence)
 # and `tests/f65/mark.rs` 7 (a making whose folder was listed meanwhile ends as moved where a folder has no number).
+# The third notes on F65 raised it by 11, all tests: `tests/f65/alone.rs` 9 (the sentence `mark.rs` held, and
+# whether the system says a time of making, asked of the system), `tests/f65/half.rs` 4 (an empty `projects`
+# left where it does not); `tests/f65/mark.rs` lost 2.
 # The third app notes raised the binary by 3: the line for a `JELLYMOON_CLAUDE` that names no program (`tests/f27.rs`).
-"crates/jellymoon" = 27698
+"crates/jellymoon" = 27709
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

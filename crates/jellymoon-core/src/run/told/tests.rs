@@ -187,6 +187,9 @@ fn the_schema_file_is_json_its_bounds_are_core_s_and_both_worked_examples_fit_it
         (&parts["after"], &json!(["did", "change", "decided", "unsure"]))
     );
     assert_eq!(parts["after"]["items"]["maxLength"], LINE_MAX);
+    // The fixed words (`run.rs`, `PROMPT`) quote these: one `did`, two `change`, three `decided` and `unsure`
+    // each, three lines a side of under 100 characters, 160 characters of a `decided` or an `unsure`.
+    assert_eq!((BEFORE, ORDER.map(|(_, most)| most), LINES, LINE_MAX, SAYS_MAX), (2, [1, 2, 3, 3], 3, 100, 160));
     // The two worked examples of ADR 0023, typed by hand: each fits the schema, is `done`, and is a result of all
     // its pieces as core reads one.
     let shipping = json!({"state": "done", "result": {"pieces": [

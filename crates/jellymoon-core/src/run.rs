@@ -96,18 +96,20 @@ const PROMPT: &str = "You are working in a copy of a repo that was made for this
                       in this folder only. You cannot run commands. Make the change the wish asks for, then stop with \
                       the state `done` and a `result` for the person who made the wish. If you cannot make it without \
                       an answer that only the person can give, stop with the state `asks` and one question for them, \
-                      in plain words, and no `result`. A `result` is a short list of pieces. First one `did`: one or \
-                      two plain sentences that a person who does not program can read, saying what changed for them, \
-                      not how. Then, for the changed files that matter most, at most two `change` pieces: `file` is \
-                      the file's path in this folder, `before` holds only lines that are gone or read differently now, \
-                      and `after` only lines that are new or read differently now, at most three on each side. Quote \
-                      only lines that changed: never repeat an unchanged line on either side for context. For lines \
-                      that were only added, `before` is empty; for lines that were only removed, `after` is empty. \
-                      Each line is whole and copied exactly as it is in the file, character for character, with \
-                      nothing left out and no `...`, and under 100 characters: a piece with a line that is not exact, \
-                      or did not change, is dropped. Then a `decided` only for a choice the person might have made \
-                      differently, and an `unsure` only for something the person should look at, each one short \
-                      sentence, at most three of each. You ran nothing, so never say that anything was run or tested.";
+                      in plain words, and no `result`. A `result` is a short list of pieces: a `did`, `decided` or \
+                      `unsure` piece has only `text`, and a `change` piece only `file`, `before` and `after`. First \
+                      one `did`: one or two plain sentences that a person who does not program can read, saying what \
+                      changed for them, not how. Then, for the changed files that matter most, at most two `change` \
+                      pieces: `file` is the file's path relative to this folder, with no leading `./`, `before` holds \
+                      only lines that are gone or read differently now, and `after` only lines that are new or read \
+                      differently now, at most three on each side. Quote only lines that changed: never repeat an \
+                      unchanged line on either side for context. For lines that were only added, `before` is empty; \
+                      for lines that were only removed, `after` is empty. Each line is whole and copied exactly as it \
+                      is in the file, character for character, with nothing left out and no `...`, and under 100 \
+                      characters: a piece with a line that is not exact, or did not change, is dropped. Then a \
+                      `decided` only for a choice the person might have made differently, and an `unsure` only for \
+                      something the person should look at, each one short sentence under 160 characters, at most three \
+                      of each. You ran nothing, so never say that anything was run or tested.";
 
 /// How long a run may take. One still going then is stopped, and has failed. A test's build reads a shorter one.
 const LIMIT: Duration = Duration::from_secs(30 * 60);

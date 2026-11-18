@@ -73,7 +73,9 @@ fn a_run_is_given_a_schema_with_a_result_of_four_kinds_and_words_that_ask_for_it
     assert_eq!(piece["properties"]["type"]["enum"], json!(KINDS));
     assert_eq!(schema["required"], json!(["state"]), "a result is never required: `done` alone is a last word");
     // The fixed words ask for the result and each of its kinds, and say what a quote must be.
-    for asked in ["`result`", "`did`", "`change`", "`decided`", "`unsure`", "character for character"] {
+    let parts = ["has only `text`", "only `file`, `before` and `after`", "no leading `./`", "under 160 characters"];
+    let kinds = ["`result`", "`did`", "`change`", "`decided`", "`unsure`", "character for character"];
+    for asked in kinds.iter().chain(&parts) {
         assert!(words.contains(asked), "the fixed words do not ask for {asked}");
     }
     // Nothing of the wish or the repo is in either.
@@ -136,4 +138,18 @@ fn a_harness_too_old_for_the_schema_is_refused_in_the_words_of_today() {
                Claude Code and run the wish again";
     let want = json!({"run": null, "wish": wish, "outcome": "not_started", "star": null, "denied": 0, "why": why});
     assert_eq!(printed(&w.start(&wish, &repo)), want);
+}
+
+#[test]
+fn a_run_that_asks_with_a_result_beside_its_question_asks_and_keeps_no_result() {
+    let w = world();
+    let word = r#"{"state":"asks","question":"Which colour should the heading be?","result":{"pieces":[
+     {"type":"did","text":"There is a new page."}]}}"#;
+    plays(&w, "told", PAGE, word);
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let asked = printed(&w.start(&wish, &repo));
+    let question = json!("Which colour should the heading be?");
+    assert_eq!((&asked["outcome"], &asked["question"]), (&json!("asks"), &question), "{asked}");
+    let run = asked["run"].as_str().unwrap();
+    assert!(!w.jm("runs").join(run).join("result.json").exists(), "a run that asks keeps no result");
 }

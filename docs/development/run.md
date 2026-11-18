@@ -117,8 +117,13 @@ apart from the code, and its version is in its name: it is a format, which anoth
 without Jellymoon, and a shape that changes is a new file beside it (`last-word.v2.json`), never an edit of this one.
 It holds only what a schema can say: the four kinds, which parts a piece may have, and the bounds core holds a
 result to (twelve pieces, three lines a side of 100 characters each, and 280 characters of a text, the most of any
-kind). Which parts go with which kind, the first-one and first-two rules and each kind's own length are core's check
-(`run/told.rs`); a last word over them is no result, and never a failed run. No `oneOf`: `type` is an enum.
+kind). Which parts go with which kind, how many of each kind are looked at and each kind's own length are core's
+check (`run/told.rs`), and the fixed words say them; none of them ever fails a run. A piece with a part its kind does
+not have (a `did` with a `file`), or without the part it needs, makes the whole result no result: core reads the
+pieces whole or not at all. A text over its kind's length (280 characters of a `did`, 160 of a `decided` or an
+`unsure`) drops that piece alone, and `dropped` counts it. A piece past its kind's count (a second `did`, a third
+`change`, a fourth `decided` or `unsure`) is left out and not counted, since it failed no check. No `oneOf`: `type` is
+an enum.
 
 Since F51 there is no `--no-session-persistence`: the harness keeps the run's session, in its own store.
 
@@ -134,16 +139,18 @@ The fixed words are these, and nothing of a wish or a repo is in them: "You are 
 made for this one wish. You can read and edit files in this folder only. You cannot run commands. Make the change
 the wish asks for, then stop with the state `done` and a `result` for the person who made the wish. If you cannot
 make it without an answer that only the person can give, stop with the state `asks` and one question for them, in
-plain words, and no `result`. A `result` is a short list of pieces. First one `did`: one or two plain sentences that
-a person who does not program can read, saying what changed for them, not how. Then, for the changed files that
-matter most, at most two `change` pieces: `file` is the file's path in this folder, `before` holds only lines that
-are gone or read differently now, and `after` only lines that are new or read differently now, at most three on each
-side. Quote only lines that changed: never repeat an unchanged line on either side for context. For lines that were
-only added, `before` is empty; for lines that were only removed, `after` is empty. Each line is whole and copied
-exactly as it is in the file, character for character, with nothing left out and no `...`, and under 100 characters:
-a piece with a line that is not exact, or did not change, is dropped. Then a `decided` only for a choice the person
-might have made differently, and an `unsure` only for something the person should look at, each one short sentence,
-at most three of each. You ran nothing, so never say that anything was run or tested."
+plain words, and no `result`. A `result` is a short list of pieces: a `did`, `decided` or `unsure` piece has only
+`text`, and a `change` piece only `file`, `before` and `after`. First one `did`: one or two plain sentences that a
+person who does not program can read, saying what changed for them, not how. Then, for the changed files that matter
+most, at most two `change` pieces: `file` is the file's path relative to this folder, with no leading `./`, `before`
+holds only lines that are gone or read differently now, and `after` only lines that are new or read differently now,
+at most three on each side. Quote only lines that changed: never repeat an unchanged line on either side for
+context. For lines that were only added, `before` is empty; for lines that were only removed, `after` is empty. Each
+line is whole and copied exactly as it is in the file, character for character, with nothing left out and no `...`,
+and under 100 characters: a piece with a line that is not exact, or did not change, is dropped. Then a `decided`
+only for a choice the person might have made differently, and an `unsure` only for something the person should look
+at, each one short sentence under 160 characters, at most three of each. You ran nothing, so never say that anything
+was run or tested."
 
 The words ask for what core can check and the person can read. A `did` is written for someone who does not read
 code, since the person who made the wish may not. Two changes at most, since core looks at the first two. A quote is
@@ -395,8 +402,10 @@ one it was given is stopped at once and has failed.
 **The last word is data.** The harness is given a schema, and the first result line's `structured_output` is read
 in two shapes only: exactly `{"state":"done"}`, and exactly `{"state":"asks","question":<text>}`. Since F85
 `done` may have one part beside it, `result`, of any value: `{"state":"done","result":<anything>}` is `done`.
-A `result` beside `asks`, beside a question or beside any other part is a failed run as before. A `result`
-named twice is no result, whatever the two values are, and the word is `done`. Since F87 the schema a harness
+A `result` beside `asks` and its question is left out: the run asks, with its question held to the same checks,
+and nothing of the result is kept or printed. A `result` beside a question of `done`, beside `asks` with no question
+or beside any other part is a failed run as before. A `result` named twice beside `done` is no result, whatever the
+two values are, and the word is `done`. Since F87 the schema a harness
 is given has room for a `result`, and the fixed words ask for one ("What the harness is started with"). A result
 never fails a run: `done` alone finishes as it did before F87, and so does a `result` that is not the shape.
 Any other value (another state, `done` with a question, `asks` without one, a question that is not text, any part more, a
@@ -1263,6 +1272,7 @@ coordinator:
 - Second measure, with the tightened words, the same ten wishes on the same day: ten of ten runs ended
   `completed` in 8 to 14 seconds; a last word was 195 to 638 bytes; of 10 `change` pieces written, 10 passed and
   none was dropped. Nine of ten results had a before and after; the tenth wrote no `change` piece.
+- Third measure, after the words named each kind's parts: (to be filled by the coordinator)
 
 ## Not covered
 

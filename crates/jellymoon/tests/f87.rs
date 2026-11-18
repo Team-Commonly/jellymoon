@@ -129,6 +129,31 @@ fn a_run_that_asks_its_answer_and_a_follow_up_are_given_one_schema_and_the_answe
     assert_eq!(line(&w), (schema, words), "the follow-up's start");
 }
 
+// A plain question typed as a wish: the model answered it, and copied the person's question into its `done`.
+#[test]
+fn a_run_done_with_a_question_beside_it_is_done_with_its_result_and_keeps_no_question() {
+    let w = world();
+    let question = "What time does the shop open?";
+    let word = WORD.replacen(r#"{"state":"done","#, &format!(r#"{{"state":"done","question":"{question}","#), 1);
+    plays(&w, "told", PAGE, &word);
+    let (repo, wish) = (w.repo("alpha"), w.wish("alpha"));
+    let went = w.start(&wish, &repo);
+    let (run, said) = ran(&went);
+    assert_eq!((&said["outcome"], &said["star"]), (&json!("completed"), &json!(STAR)), "{said}");
+    assert_eq!(show(&w, &wish, &repo)["result"], printed_result());
+    let none = (w.record(&run).get("question").cloned(), w.kept(&wish).get("question").cloned());
+    assert_eq!((none, w.on_page(&wish).get("question").cloned()), ((None, None), None));
+    // No word of the question is printed or kept.
+    let logs = w.at("logs");
+    let page = w.run(&["page", "--date", DAY, "--logs", logs.to_str().unwrap()]);
+    let shown = w.run(&["run", "show", "--wish", &wish, "--date", DAY, "--repo", repo.to_str().unwrap()]);
+    for out in [&went, &page, &shown] {
+        assert!(!format!("{}{}", out.stdout, out.stderr).contains("the shop open"), "{}", out.stdout);
+    }
+    let held = support::tree(&w.at("jm")).into_iter().find(|kept| String::from_utf8_lossy(&kept.1).contains("shop"));
+    assert!(held.is_none(), "{:?}", held.map(|held| held.0));
+}
+
 #[test]
 fn a_harness_too_old_for_the_schema_is_refused_in_the_words_of_today() {
     let w = world();

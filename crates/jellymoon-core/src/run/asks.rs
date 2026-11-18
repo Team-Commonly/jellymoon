@@ -44,8 +44,7 @@ pub(super) enum Last {
     Asks(String),
     /// `asks`, with a question of more bytes than the door looks at. No byte of it is kept.
     Long,
-    /// Anything else: not an object, another state, `asks` with no question that is text, `done` with a
-    /// question, or any other part.
+    /// Anything else: not an object, another state, `asks` with no question that is text, or any other part.
     Unfit,
 }
 
@@ -84,27 +83,30 @@ impl<'de> Deserialize<'de> for Parts {
 }
 
 impl Word {
-    /// What a run that is done says of its work (F85, `told.rs`): the one `result` beside `done`, in whatever
-    /// shape it was written. None of any other word, and of a word that writes `result` twice.
+    /// What a run that is done says of its work (F85, `told.rs`): the one `result` beside `done` and any
+    /// questions, in whatever shape it was written. None of any other word, and of a word that writes `result` twice.
     pub(super) fn result(&self) -> Option<&Value> {
         let Word::Object(Parts(word)) = self else { return None };
-        let done = word.len() == 2 && word.iter().any(|part| part.0 == "state" && part.1 == "done");
+        let read = word.iter().filter(|part| part.0 != "question").count();
+        let done = read == 2 && word.iter().any(|part| part.0 == "state" && part.1 == "done");
         word.iter().find(|part| done && part.0 == "result").map(|part| &part.1)
     }
 }
 
-/// Reads a last word: `{"state":"done"}`, alone or with a `result` beside it, or exactly
+/// Reads a last word: `{"state":"done"}`, alone or with a `result` or a `question` beside it, or exactly
 /// `{"state":"asks","question":<text>}`. A word that names a part twice has one part too many, whatever the two
-/// say. A `result` is the one part that is not counted: beside `done` or beside `asks` and its question it is of
-/// any shape and written any number of times, since what a run says of its work never fails it, and a run that
-/// asks keeps none (`Word::result`). Beside anything else it is a part too many.
+/// say. A `result` is not counted: beside `done` or beside `asks` and its question it is of any shape and written
+/// any number of times, since what a run says of its work never fails it, and a run that asks keeps none
+/// (`Word::result`). Beside anything else it is a part too many. Nor is a `question` beside `done`, which is never
+/// read: the state is the run's claim, and a run that needs an answer says `asks` (done with a question).
 pub(super) fn last(word: Option<Word>) -> Last {
     let Some(word) = word else { return Last::None };
     let Word::Object(Parts(word)) = word else { return Last::Unfit };
     let part = |name: &str| word.iter().find(|part| part.0 == name).map(|part| &part.1);
-    let results = word.iter().filter(|part| part.0 == "result").count();
-    match (part("state").and_then(Value::as_str), part("question"), word.len() - results) {
-        (Some("done"), None, 1) => Last::Done,
+    let state = part("state").and_then(Value::as_str);
+    let unread = |name: &str| name == "result" || (state == Some("done") && name == "question");
+    match (state, part("question"), word.iter().filter(|part| !unread(&part.0)).count()) {
+        (Some("done"), _, 1) => Last::Done,
         (Some("asks"), Some(Value::String(question)), 2) if question.len() > LOOKED => Last::Long,
         (Some("asks"), Some(Value::String(question)), 2) => Last::Asks(question.clone()),
         _ => Last::Unfit,
@@ -242,7 +244,7 @@ mod tests {
             let asks = json!({"state": "asks", "question": "which?", "result": said});
             assert_eq!(last(asks), Last::Asks("which?".into()), "{said}");
             assert_eq!(last(json!({"state": "asks", "result": said})), Last::Unfit, "{said}");
-            assert_eq!(last(json!({"state": "done", "question": "which?", "result": said})), Last::Unfit, "{said}");
+            assert_eq!(last(json!({"state": "done", "question": "which?", "result": said})), Last::Done, "{said}");
             assert_eq!(last(json!({"result": said})), Last::Unfit, "{said}");
             assert_eq!(last(json!({"state": "done", "result": said, "more": 1})), Last::Unfit, "{said}");
         }
@@ -250,7 +252,11 @@ mod tests {
         assert_eq!(read(r#"{"state":"done","state":"done","result":1}"#), Last::Unfit);
         let result = |word: &str| serde_json::from_str::<Word>(word).unwrap().result().cloned();
         assert_eq!(result(r#"{"result":[1],"state":"done"}"#), Some(json!([1])));
+        assert_eq!(result(r#"{"state":"done","question":"which?","result":[1]}"#), Some(json!([1])));
+        assert_eq!(result(r#"{"question":7,"state":"done","question":null,"result":[1]}"#), Some(json!([1])));
         for none in [
+            r#"{"state":"done","question":"which?","result":1,"result":2}"#,
+            r#"{"state":"done","question":"which?"}"#,
             r#"{"state":"done"}"#,
             r#"{"state":"done","result":1,"result":2}"#,
             r#"{"state":"asks","result":1}"#,
@@ -279,6 +285,11 @@ mod tests {
             assert_eq!(read(twice), Last::Unfit, "{twice}");
         }
         assert_eq!(last(Some(json!({"state": "done"}))), Last::Done);
+        // A question beside `done`, of any shape and written any number of times, is not read: the run is done.
+        for question in [json!("which?"), json!(""), json!(null), json!(["which?"]), json!({"q": 1})] {
+            assert_eq!(last(Some(json!({"state": "done", "question": question}))), Last::Done, "{question}");
+        }
+        assert_eq!(read(r#"{"state":"done","question":"a?","question":"b?"}"#), Last::Done);
         assert_eq!(last(Some(json!({"state": "asks", "question": "which?"}))), Last::Asks("which?".into()));
         assert_eq!(last(Some(json!({"state": "asks", "question": ""}))), Last::Asks(String::new()));
         let (fits, over) = ("q".repeat(LOOKED), "q".repeat(LOOKED + 1));
@@ -298,9 +309,7 @@ mod tests {
             json!({"state": "asks", "question": ["which?"]}),
             json!({"state": "asks", "question": "which?", "more": 1}),
             json!({"state": "asks", "more": "which?"}),
-            json!({"state": "done", "question": "which?"}),
-            json!({"state": "done", "question": ""}),
-            json!({"state": "done", "question": null}),
+            json!({"state": "done", "question": "which?", "more": 1}),
             json!({"state": "done", "more": 1}),
             json!({"question": "which?"}),
         ] {

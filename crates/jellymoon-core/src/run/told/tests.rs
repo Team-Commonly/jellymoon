@@ -146,11 +146,12 @@ fn a_quoted_line_is_printed_without_its_ends_or_not_at_all() {
 
 /// Whether a value fits a schema, for the few words the schema of a last word uses: a type, an enum, an
 /// object's properties, required parts and no other part, an array's items and most items, a text's most
-/// characters. Any other word of a schema fails it, so a word added to the file is added here too.
+/// characters, and a description, which holds a value to nothing. Any other word of a schema fails it, so a word
+/// added to the file is added here too.
 fn fits(value: &Value, schema: &Value) -> bool {
     let known = ["type", "enum", "properties", "required", "additionalProperties", "items", "maxItems", "maxLength"];
     let schema = schema.as_object().unwrap();
-    assert!(schema.keys().all(|word| known.contains(&word.as_str())), "{schema:?}");
+    assert!(schema.keys().all(|word| known.contains(&word.as_str()) || word == "description"), "{schema:?}");
     let most = |word: &str, n: usize| {
         schema.get(word).and_then(Value::as_u64).is_none_or(|most| u64::try_from(n).is_ok_and(|n| n <= most))
     };

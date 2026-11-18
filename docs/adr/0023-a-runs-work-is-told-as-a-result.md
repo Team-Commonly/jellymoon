@@ -206,3 +206,14 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
 - A run that did not finish keeps no result (decision 2), so none is shown of it. Its wish's note says, in core's
   fixed words, that it did not finish, that nothing in the folder was changed, and what the person
   can do; no word of core's reason, which names the run and the harness's last word.
+
+## Found after told alone: done with a question (2026-11-18)
+
+- **Decision 1 is widened: `done` takes a `question` beside it, unread.** ADR 0018 ("Found while building F51") read
+  `done` with a question as a failed run because "a harness that enforces the schema never sends them". It does: the
+  schema lets `question` stand beside any state. A person typed a plain question as a wish, and the model answered it
+  in `result` and copied the person's question into `question`; the run failed and the answer was lost, while the same
+  wish on another run ended `done` alone and was shown. The state is the run's own claim, so beside `done` a
+  `question` of any shape, written any number of times, is not kept, shown, asked or counted, and the `result` beside
+  it is read as beside any `done`. `asks` is unchanged. The schema's `state` and `question` now say when a question
+  is written ([run.md](../development/run.md), "A run that asks").

@@ -163,7 +163,7 @@ Each is one line on stderr, exit 1, and nothing is written.
 | A ninth made wish for one day, a follow-up too | A day holds eight |
 | `--after` a wish that cannot be followed ("A follow-up") | There is no work to follow |
 | A project that is not one folder's name: empty, over 100 characters, a path, `.` or `..`, or anything cleaning would change (a line break, a character that cannot be seen, a credential shape, which a name of 40 letters and digits with no break is), or a character nobody sees that cleaning leaves, unless the list of projects holds that very name ([project.md](project.md), "A name that comes in, and a name that was kept") | F39 finds the folder by this name |
-| A project whose name holds a character nobody sees that cleaning leaves, when the list of projects cannot be used: the list's own sentence is said (`the list of projects (projects.json in Jellymoon's folder) is not used: …`) | The list is why a name that worked before is refused |
+| A project whose name holds a character nobody sees that cleaning leaves, when the list of projects cannot be used: the list's own sentence is said (`the list of projects (projects.json in Jellymoon's folder) is not used: …`). For such a name the list is mended, not moved away as that sentence advises: `project add` of the folder is refused from then on | The list is why a name that worked before is refused |
 | Made wishes that cannot be used (below) | They are never written over |
 | A day whose lock is held for 3 seconds | Another change has not finished |
 

@@ -69,8 +69,15 @@ fn a_making_whose_folder_another_command_listed_meanwhile_says_so_as_a_made_proj
     fs::write(&go, "").unwrap();
     let ran = ended(going);
     // The project is made and listed: the line the list holds is printed, exit 0, and the sentence beside it.
-    assert_eq!((ran.code, ran.stderr.as_str()), (0, format!("jellymoon: {BY_ANOTHER}\n").as_str()), "{}", ran.stdout);
-    assert_eq!(serde_json::from_str::<serde_json::Value>(&ran.stdout).unwrap(), later);
+    // That is so where the system has a number for a folder. Where it has none (Windows) nothing but the file
+    // tells the made folder from one put in its place, so the making ends as one whose folder was replaced.
+    if cfg!(unix) {
+        let said = format!("jellymoon: {BY_ANOTHER}\n");
+        assert_eq!((ran.code, ran.stderr.as_str()), (0, said.as_str()), "{}", ran.stdout);
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&ran.stdout).unwrap(), later);
+    } else {
+        assert_eq!(refused(&ran), format!("jellymoon: {MOVED}\n"));
+    }
     names_no_path(&w, &ran);
     // It wrote nothing and removed nothing: not the lock, which is another's now, and not `take-over.lock`.
     assert!(but_the_lock(&w) == before, "a making that found its project listed changed something");

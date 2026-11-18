@@ -137,18 +137,26 @@ fn make(folder: &Path) -> io::Result<()> {
     make.create(folder)
 }
 
-/// What the system says of a folder: where it keeps it (Unix), and when it was made. None for what is not a
-/// real folder. It does not tell a folder this command made from another put at its name on every system:
-/// Windows has no number to read here, and hands a folder made again under a name its old time of making.
-type Mark = (u64, u64, Option<SystemTime>);
+/// What the system says of a folder: its number for it (the device's and the folder's own, on Unix; none on
+/// Windows, where stable Rust reads none), and when it was made. None for what is not a real folder. Without
+/// the number it does not tell a folder this command made from another put at its name: Windows hands a folder
+/// made again under a name its old time of making.
+type Mark = (Option<(u64, u64)>, Option<SystemTime>);
 
 fn mark(folder: &Path) -> Option<Mark> {
     let meta = fs::symlink_metadata(folder).ok().filter(fs::Metadata::is_dir)?;
     #[cfg(unix)]
-    let (device, number) = (std::os::unix::fs::MetadataExt::dev(&meta), std::os::unix::fs::MetadataExt::ino(&meta));
+    let number = Some((std::os::unix::fs::MetadataExt::dev(&meta), std::os::unix::fs::MetadataExt::ino(&meta)));
     #[cfg(not(unix))]
-    let (device, number) = (0, 0);
-    Some((device, number, meta.created().ok()))
+    let number = None;
+    Some((number, meta.created().ok()))
+}
+
+/// Whether the folder now at the name (`there`) is the made one (`made`) on the system's word alone, as a
+/// making must take it whose own file is gone from the folder: the two marks are one, and carry the system's
+/// number. A mark with no number says nothing, so on Windows no folder is taken for the made one this way.
+fn made_still(made: Option<Mark>, there: Option<Mark>) -> bool {
+    made.is_some_and(|(number, _)| number.is_some()) && there == made
 }
 
 /// The folders this command made, each as it was made, and the name of the file this making puts in the
@@ -198,9 +206,9 @@ impl Made {
 
     /// The line the list holds for this name and this very folder, when the folder is the made one still and
     /// only this making's file is gone from it: another command listed it, and took the file out ([`tidy`]).
+    /// None where the system has no number for a folder ([`made_still`]): the making then ends as [`MOVED`].
     fn by_another(&self, home: &Path, project: &Path, name: &str, real: &str) -> Option<Known> {
-        let made = self.project.is_some() && mark(project) == self.project;
-        let lines = listed(home).ok().filter(|_| made)?;
+        let lines = listed(home).ok().filter(|_| made_still(self.project, mark(project)))?;
         lines.iter().find(|line| line.name == name && line.folder == real).map(Line::known)
     }
 }

@@ -9,7 +9,7 @@ things you said cannot both stand. Tapping that note settles it, and the answer 
 It needs no account and no server. Your session logs stay on your computer; the one model call that reads a day goes
 through the harness you already use, under your own sign-in, with every tool turned off. A sign-in held only in
 an environment variable (`ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_USE_BEDROCK`) is not passed
-on; Jellymoon starts your installed Claude Code under the sign-in it keeps itself.
+on; Jellymoon starts your installed Claude Code under the sign-in Claude Code keeps itself.
 
 ## Install (Mac)
 

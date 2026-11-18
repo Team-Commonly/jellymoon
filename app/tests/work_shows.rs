@@ -343,13 +343,16 @@ fn work_is_not_opened_over_a_choice_to_stop_a_run_and_has_its_turn_when_that_cho
     assert_eq!(wish(&w), "m2");
     let mut lines = Vec::new();
     going(&w, &["m2"], |go| {
-        let mut window = w.taps("logs", &["poke:m2", "look", "look", &hold(&w, "ended"), "look", "look", "look"]);
+        let acts = ["poke:m2", "look", "look", &hold(&w, "ended"), "look"];
+        let mut window = w.taps("logs", &[&acts[..], &["look"; HOLD + 2][..]].concat());
         window.printed(3);
         go();
         release(&w, "ended");
         lines = window.ended();
     });
-    let [poked, first, second, ended, turn, last] = &lines[..] else { panic!("six lines: {lines:#?}") };
+    let [poked, first, second, ended, held @ .., turn, last] = &lines[..] else {
+        panic!("four lines and the looks held: {lines:#?}")
+    };
     // A tap on the wish whose run goes: the choice to stop it. The older wish's work waited at the opening, and
     // no look puts it over that choice.
     assert_eq!(ids(&scene(poked).expect("a tap on a wish at work")), ["stop-m2"]);
@@ -357,7 +360,10 @@ fn work_is_not_opened_over_a_choice_to_stop_a_run_and_has_its_turn_when_that_cho
     // The run ended: the look draws its end and takes the choice, as before, and puts nothing in its place.
     let ended = scene(ended).expect("the look draws the run's end");
     assert_eq!((drawn(&ended, "m2"), ids(&ended)), (Some((State::Idle, 1)), Vec::new()));
-    // The next look is free to show work: the newest wish's.
-    assert_eq!(ids(&scene(turn).expect("the look after the choice is gone")), ["work-m2"]);
+    // The page left the person's hand with no tap: the looks held after a tap are held after it too, so no
+    // `Toss it` comes where `Stop it` stood under a tap meant for it.
+    assert_eq!(held, ["null"; HOLD], "no work in the looks after the choice went");
+    // Then the work waited its turn: the newest wish's.
+    assert_eq!(ids(&scene(turn).expect("the look after the hold")), ["work-m2"]);
     assert_eq!(last, "null");
 }

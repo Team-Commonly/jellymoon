@@ -41,7 +41,7 @@ tossed work nobody had read.
 
 ## Lines
 - Added 112 lines of Rust, none removed net: `src/showing/tests.rs` 62, `src/showing.rs` 28, `tests/work_shows.rs`
-  22. `entropy.toml` `"app"` 14385 to 14497. Nothing was deleted but the unsafe assertions of the two changed
+  22. `entropy.toml` `"app"` 14472 to 14584. Nothing was deleted but the unsafe assertions of the two changed
   tests.
 
 ## Holds

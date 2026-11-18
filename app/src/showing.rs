@@ -35,7 +35,7 @@ struct Turns {
     /// The wishes a look asked core of that have no work waiting, told from the look's thread.
     none: Arc<Mutex<Vec<String>>>,
     /// The looks still to be made before one may show work: [`HOLD`] after a tap on an option, an Enter in a
-    /// field, and core's answer to either.
+    /// field, core's answer to either, and a look made while a note was in hand.
     hold: usize,
 }
 
@@ -73,7 +73,9 @@ fn made(scene: &Scene) -> &[Character] {
 
 impl Turns {
     /// A look is about to be made of `scene`: what it may ask core of, or none while a note on the page is in
-    /// the person's hand ([`working::in_hand`]). Then the look is the plain one, and every turn is kept.
+    /// the person's hand ([`working::in_hand`]). Then the look is the plain one, every turn is kept, and the
+    /// [`HOLD`] looks after it show no work, however the page leaves the hand: by a tap, or by a look that took a
+    /// stop's or a clash's choice away.
     fn asks(&mut self, scene: &Scene) -> Option<Asks> {
         let made = made(scene);
         let ids = |of: &dyn Fn(&Character) -> bool| -> Vec<String> {
@@ -96,11 +98,12 @@ impl Turns {
         if self.first == First::Asked {
             self.first = First::Done;
         }
-        if self.hold > 0 {
-            self.hold -= 1;
+        if working::in_hand(scene) {
+            self.hold = HOLD;
             return None;
         }
-        if working::in_hand(scene) {
+        if self.hold > 0 {
+            self.hold -= 1;
             return None;
         }
         let first = self.first == First::Due;
@@ -232,9 +235,9 @@ impl Showing {
     /// One look at the day, as work for another thread. A look that finds a wish's run ended shows the work of
     /// it that waits, as a tap on its character does ([`Showing::poked`]), by the calls to core a tap makes, each
     /// wish asked of once. Not while a note on the page is in the person's hand, and not in the [`HOLD`] looks
-    /// after the person chose or typed or core answered them: then the work waits its turn. Of several, the
-    /// first in core's order is shown. The first look shown also finds the work that waited when the window
-    /// opened, the newest wish's.
+    /// after the page left the hand, the person chose or typed or core answered them: then the work waits its
+    /// turn. Of several, the first in core's order is shown. The first look shown also finds the work that
+    /// waited when the window opened, the newest wish's.
     pub fn look(&self) -> Option<Look> {
         self.with(|on| {
             let Some(asks) = self.2.borrow_mut().asks(&on.scene) else { return on.look() };

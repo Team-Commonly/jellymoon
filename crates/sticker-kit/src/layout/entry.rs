@@ -1,6 +1,8 @@
-//! The entry: a field to type one line in, and under it a chip for each option, in one row or two. It stands in one spot,
-//! in the left column under the title, from the content's left edge to short of the big character's place, whatever
-//! else the page holds. Every page keeps that band free ([`band_bottom`]), so the entry is placed by itself.
+//! The entry: a field to type one line in, with its `go` at the row's right end, and under it a chip for each
+//! option, in one row or two. The field's row is the page's widest thing under the title: from the content's left
+//! edge to the left column's right edge, over the big character, which stands under it ([`under_field`]). The
+//! chips stand short of the big character's place, whatever else the page holds. Every page keeps that band free
+//! ([`band_bottom`]), so the entry is placed by itself.
 
 use super::page::title_bottom;
 use super::{Ctx, PieceKind, Placed, line_height, piece, run};
@@ -10,31 +12,29 @@ use crate::scene::Entry;
 use crate::text::{Measure, Role, fit_middle};
 use crate::theme::Theme;
 
-/// Where the pieces of an entry go: the field (`Entry`, with the hint as its text), then a `Chip` for each of the
-/// first [`MAX_ENTRY_OPTIONS`] options, its `index` the option's, then one `More` that counts the options past
-/// those, when there are any. Nothing for a theme [`Theme::check`] refuses, or one whose own sizes leave no room
-/// left of its big character.
+/// Where the pieces of an entry go: the field (`Entry`, with the hint as its text), its `Go` when it has one, then
+/// a `Chip` for each of the first [`MAX_ENTRY_OPTIONS`] options, its `index` the option's, then one `More` that
+/// counts the options past those, when there are any, then its `Action`. Nothing for a theme [`Theme::check`]
+/// refuses, or one whose own sizes leave the chips no room left of its big character.
 pub fn layout_entry(entry: &Entry, theme: &Theme, viewport: Viewport, measure: &dyn Measure) -> Vec<Placed> {
     if theme.check().is_err() {
         return Vec::new();
     }
     let cx = Ctx::new(theme, viewport, measure, true);
-    let m = &theme.metrics;
-    // The big character's place is kept clear whether or not the page has one: the entry knows no scene.
-    let hero = cx.x(m.hero_x) - cx.px(m.hero_size) / 2.0 - cx.px(GAP);
-    let (left, right) = (cx.x(m.content_left), hero.min(cx.content_right()));
-    if right - left < cx.px(160.0) {
+    let (left, chips_end) = (cx.x(theme.metrics.content_left), chips_right(&cx));
+    if chips_end - left < cx.px(160.0) {
         return Vec::new();
     }
-    let size = cx.size(Role::RowSub);
-    let field = Rect::new(left, field_top(&cx), right - left, field_height(&cx));
+    let row = Rect::new(left, field_top(&cx), cx.content_right() - left, field_height(&cx));
+    let (field, go) = go(&cx, entry, row);
     let pad = cx.px(14.0);
     let mut out = vec![piece(PieceKind::Entry, &entry.id, 0, field)];
-    let (hint, width) = cx.line(&entry.hint, Role::RowSub, field.w - 2.0 * pad);
+    let (hint, width) = cx.line(&entry.hint, WORDS, field.w - 2.0 * pad);
     if !hint.is_empty() {
-        out[0].text.push(run(hint, Role::RowSub, field.x + pad, field.center().1, width, size));
+        out[0].text.push(run(hint, WORDS, field.x + pad, field.center().1, width, cx.size(WORDS)));
     }
-    chips(&cx, entry, field, &mut out);
+    out.extend(go);
+    chips(&cx, entry, Rect::new(left, field.y, chips_end - left, field.h), &mut out);
     out
 }
 
@@ -43,16 +43,46 @@ const GAP: f32 = 24.0;
 const UNDER_TITLE: f32 = 6.0;
 const CHIP_GAP: f32 = 6.0;
 
+/// The role of the hint and of `go`: the size typed words are drawn at.
+const WORDS: Role = Role::RowMain;
+
+/// The right end of the chips' rows: short of the big character's place, which is kept clear whether or not the
+/// page has one, as the entry knows no scene.
+fn chips_right(cx: &Ctx) -> f32 {
+    let m = &cx.theme.metrics;
+    (cx.x(m.hero_x) - cx.px(m.hero_size) / 2.0 - cx.px(GAP)).min(cx.content_right())
+}
+
+/// The entry's `go`, whole, at the right end of the field's row, and the field in what it leaves.
+fn go(cx: &Ctx, entry: &Entry, row: Rect) -> (Rect, Option<Placed>) {
+    let said = cx.clean(&entry.go);
+    if said.is_empty() {
+        return (row, None);
+    }
+    let (size, pad) = (cx.size(WORDS), cx.px(18.0));
+    let width = (cx.measure.width(&said, WORDS, size) + 2.0 * pad).min(row.w / 3.0);
+    let rect = Rect::new(row.right() - width, row.y, width, row.h);
+    let (said, text) = fit_middle(&said, width - 2.0 * pad + 0.01, WORDS, size, cx.measure);
+    let mut go = piece(PieceKind::Go, &entry.id, 0, rect);
+    go.text.push(run(said, WORDS, rect.x + (rect.w - text) / 2.0, rect.center().1, text, size));
+    (Rect::new(row.x, row.y, row.w - width - cx.px(CHIP_GAP), row.h), Some(go))
+}
+
 fn field_top(cx: &Ctx) -> f32 {
     title_bottom(cx) + cx.px(UNDER_TITLE)
 }
 
 fn field_height(cx: &Ctx) -> f32 {
-    cx.px(32.0).max(line_height(cx.size(Role::RowSub)) + 2.0)
+    cx.px(44.0).max(line_height(cx.size(WORDS)) + 2.0)
 }
 
 fn chip_height(cx: &Ctx) -> f32 {
     cx.px(24.0).max(line_height(cx.size(Role::Legend)) + 2.0)
+}
+
+/// The highest the big character's place begins: the field's row runs over it, and is never covered by it.
+pub(crate) fn under_field(cx: &Ctx) -> f32 {
+    field_top(cx) + field_height(cx) + cx.px(GAP)
 }
 
 /// Where the band an entry stands in ends, two rows of chips under the field and the room under those: no page
@@ -70,7 +100,7 @@ const LEAST: f32 = 1.5;
 /// chosen, no name is cut while its row has room, and two names that begin alike are told apart by their ends.
 /// The options past the first [`MAX_ENTRY_OPTIONS`] are counted, as the rows of a list past its room are: `+N
 /// more`, whole, at the end of the last row, whose chips share what it leaves. It is left out only where that row
-/// could not then hold its chips at their least width.
+/// could not then hold its chips at their least width. `field` is the field's row, cut short of the big character.
 fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
     let count = entry.options.len().min(MAX_ENTRY_OPTIONS);
     let size = cx.size(Role::Legend);

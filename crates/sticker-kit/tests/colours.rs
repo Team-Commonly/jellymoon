@@ -37,11 +37,11 @@ fn contrast_is_the_ratio_of_wcag_2() {
 fn both_built_in_themes_draw_the_entry_s_texts_over_their_floors_and_through_the_door_unchanged() {
     assert_eq!((CHOSEN_INK_FLOOR, HINT_FLOOR, RING_FLOOR), (4.5, 2.5, 3.0));
     // Measured: the chosen chip's name on its chip, the hint on the field, the ring on the paper.
-    let measured = [[9.99, 2.80, 5.35], [4.57, 3.06, 15.80]];
+    let measured = [[9.99, 5.36, 5.35], [4.57, 5.37, 15.80]];
     // The field, its edge, the ring, the hint, the caret, a chip, the chosen chip and its name.
     let colours = [
-        ["#FFFFFF", "#CFC8EE", "#C2371C", "#9A9AA0", "#E4573A", "#EDEBF4", "#FFD24D", "#2B2350"],
-        ["#FFFFFF", "#C3C9D1", "#1F2328", "#8E949A", "#2F6FEB", "#ECEDEF", "#2F6FEB", "#FFFFFF"],
+        ["#FFFFFF", "#CFC8EE", "#C2371C", "#6A6A72", "#E4573A", "#EDEBF4", "#FFD24D", "#2B2350"],
+        ["#FFFFFF", "#C3C9D1", "#1F2328", "#676B70", "#2F6FEB", "#ECEDEF", "#2F6FEB", "#FFFFFF"],
     ];
     for (n, theme) in [Theme::sticker(), Theme::plain()].into_iter().enumerate() {
         let p = &theme.palette;

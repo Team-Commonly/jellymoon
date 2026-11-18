@@ -77,8 +77,8 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
 - **A day with no session logs** (F63). The reader's answer is "no session logs", and the app then asks core for
   the day's page all the same (`jellymoon_core::page_with_no_logs`). Core has one when the day has a made wish or
   a project on offer: an empty page that says so (`read.no_logs`), made with no call. It is kept and shown as a
-  reading's page is, with the made wishes on it, the entry and its chips; its footer is "No Claude Code session
-  logs were found, so nothing was read.", then the count of made wishes as on any page. The folder looked in is
+  reading's page is, with the made wishes on it, the entry and its chips; with a made wish on it, its footer is
+  "No Claude Code session logs were found, so nothing was read.", then the count of made wishes as on any page. The folder looked in is
   not named on this page: core's page does not carry it. Core has none for a day with nothing made and no project
   on offer, and that day is the plain note it was. A refusal of core's own (a `--model` that is no name) is the
   note, in core's words. A kept page that read something is never replaced by it: that page stays, under "This
@@ -89,8 +89,8 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   ("When the reading cannot run"). The same page as the one kept is drawn and not written again. The field
   counts only on a page that holds nothing a reading gives (no turn, no project, no clash, no wish of its own);
   on any other page it is not looked at, and the footer is the reading's.
-- **A day whose logs hold no turn of it** makes no call, and its footer is "Nothing typed on this day was read, so
-  there is no reading." It says what was read, not what was typed: turns typed in a folder switched off or in a
+- **A day whose logs hold no turn of it** makes no call; with a made wish on its page, its footer is "Nothing
+  typed on this day was read, so there is no reading.", and with none it has no footer. It says what was read, not what was typed: turns typed in a folder switched off or in a
   run's copy are left out, and a made wish was typed in the window. It ends at the reading and says nothing of
   a model: a made wish on that page may have had a run, whose agent was given the wish's words.
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
@@ -183,9 +183,13 @@ A day's page has one entry (the kit's, `crates/sticker-kit/README.md`): a field 
 chip for each project a wish can be made for that day, whatever the page read, of which one is always
 chosen. It stands in the left column, under the title "what I wished for today", where the wishes are listed. The chips
 stand in one row when their names fit it and in two when they do not, and after them stands "Choose a folder"
-(below, "A project given in the window"). The hint is "What do you want done? Enter starts it.", and with more than
-one chip "What to do? Tab: project. Enter: start.", where Tab helps. Each is whole in both themes from the smallest page (960x640) up as `layout` measures it, by the advances of
-the bundled Nunito at the kit's small size (13 design pixels, never under 11), which also stands in for the plain
+(below, "A project given in the window"). The field is the page's main thing: its row runs from the content's left
+edge to the left column's right edge, over the big character, which stands under it, and "Start" ends the row: it
+does what Enter does, and with nothing typed it enters nothing and the note "Nothing to start yet." says what to
+type first (`starting::UNREADY`). The hint says what the chips are: "What do you want done in the project
+below?", and with more than one chip "What do you want done? Choose its project below." (Tab still changes the
+chip). Each is whole in both themes from the smallest page (960x640) up as `layout` measures it, by the advances of
+the bundled Nunito at the size typed words are drawn (15 design pixels), which also stands in for the plain
 theme's system font (`app/tests/f42.rs`, at three sizes; `app/tests/f66.rs` at the smallest); and, for the hint
 of F42's words, as the window shapes it on a Mac, in Nunito and in the
 system's font (headless pictures at 960x640 and 1440x900). A wider font cuts it with an ellipsis at the
@@ -279,7 +283,9 @@ ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project 
 ([project.md](project.md)). The app carries a folder or a name to core and draws what core says.
 
 - **Start something new (F66).** With no project on offer the entry's place holds one choice, "Start something
-  new", as its one chip, and a field for a name, whose hint is "Name a new project, or drop a folder here". The
+  new", as its one chip, and a field for a name, whose hint is "Type a name for a new project". The chip is a
+  choice like any: a tap on it gives the field the keys. "Choose a folder" is the loud choice there, filled as a
+  chosen chip is, and the words say to choose the folder first (below). The
   entry's id is `new` and it takes at most 100 characters. Enter carries the name to
   `jellymoon_core::new_project`, off the window's thread. The row says "in core's words": core has no words for
   the choice, so they are ADR 0020's, kept in the app (`starting::START`).
@@ -309,8 +315,13 @@ ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project 
   for a wish stay through a drop, and a half-typed name stays in the wish's field. A name core takes empties the
   field; a name it refuses stays.
 - **The empty page says what to do here.** The note of a page with no wish is "Nothing wished for yet today.",
-  with "Start in the field at the top: type what you want done, or name a new project."; a day with no session
-  logs says "You can start here: name a new project in the field, or drop a folder on this window."
+  with "Type what you want done in the field at the top." when a project is on offer, and with none (no project
+  read on the page and none listed) "Choose the folder you want to work in, or type a name for a new project in
+  the field at the top." (`Today::draw`). A day with no session logs says "You can start here: choose the folder
+  you want to work in, or drop it on this window. Or type a name for a new project in the field." Words entered
+  in the entry of a day with no project are a new project's name and never a wish (`starting::named`). A page
+  with nothing read and no wish has no legend and no footer: it has no mark to explain and no reading to speak
+  of (`app/tests/entry_first.rs`).
 
 `OnShow::listing` and `listed` need no window. `app/tests/f64.rs` and `f66.rs` carry a folder and a name through
 the made-up window of F42 (`tests/support/wisher.rs`), where core starts git with the test's variables;

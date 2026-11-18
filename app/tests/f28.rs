@@ -125,8 +125,8 @@ fn a_page_with_no_wishes_says_so() {
     assert!(
         placed.iter().any(|piece| piece.kind() == "note" && piece.said().contains("Nothing wished for yet today."))
     );
-    let footer = placed.iter().find(|piece| piece.kind() == "footer").unwrap().said();
-    assert_eq!(footer, "Nothing typed on this day was read, so there is no reading.");
+    // Nothing read and no wish: no legend to explain marks nobody has, and no line about a reading.
+    assert!(placed.iter().all(|piece| !["footer", "legend"].contains(&piece.kind())), "{placed:?}");
 }
 
 /// Eight labels as long as page data allows: 40 wide letters, 40 East Asian characters, and six sentences of 40.

@@ -124,6 +124,11 @@ impl Showing {
         Entered { kept, scene, asking: asking.flatten() }
     }
 
+    /// `Start` tapped while the entry `id` held no words: the scene to show.
+    pub fn unready(&self, id: &str) -> Option<Scene> {
+        self.with(|on| on.unready(id))
+    }
+
     /// A folder dropped or chosen, or a new project's name entered, as work for another thread.
     pub fn listing(&self, given: Given) -> Option<Listing> {
         self.with(|on| on.listing(given))

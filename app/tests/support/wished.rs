@@ -162,6 +162,16 @@ impl World {
         self.window("", typed, then, "")
     }
 
+    /// The made-up window given `typed` as Enter gives it in the entry `id`: the app says what core is given.
+    pub fn enters_in(&self, id: &str, typed: &str) -> Window {
+        self.window(id, typed, "enter", "")
+    }
+
+    /// The made-up window with `Start` tapped in the entry `id` while it holds no words.
+    pub fn starts_empty(&self, id: &str) -> Window {
+        self.window(id, "", "unready", "")
+    }
+
     fn window(&self, project: &str, typed: &str, then: &str, skip: &str) -> Window {
         let said = self.at("tmp").join(format!("window-{}", fs::read_dir(self.at("tmp")).unwrap().count()));
         let file = |name: &str| fs::File::create(said.with_extension(name)).unwrap();

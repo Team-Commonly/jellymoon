@@ -99,12 +99,12 @@ fn layout_prints_one_entry_on_a_day_s_page_with_a_chip_for_each_project_read() {
         assert_eq!((entry.len(), entry[0].id()), (1, "wish"));
         assert_eq!(
             entry[0].said(),
-            "What to do? Tab: project. Enter: start.",
-            "the hint, whole: Tab is said, as there are two chips"
+            "What do you want done? Choose its project below.",
+            "the hint, whole: it says what the two chips are"
         );
         assert_eq!(chips(&placed), ["alpha", "private-notes"]);
-        let last = placed.len() - 4;
-        let entry = ["entry", "chip", "action"];
+        let last = placed.len() - 5;
+        let entry = ["entry", "go", "chip", "action"];
         assert!(placed[last..].iter().all(|piece| entry.contains(&piece.kind())), "they are printed last");
         assert_eq!(placed[placed.len() - 1].said(), "Choose a folder", "the folder picker, after the chips");
     }
@@ -115,7 +115,7 @@ fn layout_prints_one_entry_on_a_day_s_page_with_a_chip_for_each_project_read() {
     {
         let placed = shown(&world, &["--theme", theme, "--size", size]);
         let said = entries(&placed)[0].said();
-        assert_eq!(said, "What to do? Tab: project. Enter: start.", "{theme} at {size}: the hint, whole");
+        assert_eq!(said, "What do you want done? Choose its project below.", "{theme} at {size}: the hint, whole");
     }
     // A folder switched off was not read, so no wish can be made for it.
     assert_eq!(chips(&shown(&world, &["--fresh", "--skip", "private-notes"])), ["alpha"]);
@@ -146,10 +146,7 @@ fn a_day_with_no_project_read_prints_no_entry() {
     // A day with no project on offer has the entry a new project is named in (F66).
     let quiet = shown(&world, &["--date", "2026-03-11"]);
     let new = (entries(&quiet).iter().map(|entry| entry.said()).collect::<Vec<_>>(), chips(&quiet));
-    assert_eq!(
-        new,
-        (vec!["Name a new project, or drop a folder here".to_string()], vec!["Start something new".to_string()])
-    );
+    assert_eq!(new, (vec!["Type a name for a new project".to_string()], vec!["Start something new".to_string()]));
     assert!(today(&world).entry(None).is_none());
 }
 

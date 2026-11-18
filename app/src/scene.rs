@@ -28,8 +28,12 @@ const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing 
 /// ends at the reading and names no model: a made wish on the page may have had a run.
 const READ_NO_TURN: &str = "Nothing typed on this day was read, so there is no reading.";
 
-/// The title of the one note of a page with no wish on it.
+/// The title of the one note of a page with no wish on it, and its body when a project is on offer. With none,
+/// the body says to choose a folder first (`Today::draw`).
 pub const NOTHING: &str = "Nothing wished for yet today.";
+pub const NOTHING_HERE: &str = "Type what you want done in the field at the top.";
+pub const NO_PROJECT: &str =
+    "Choose the folder you want to work in, or type a name for a new project in the field at the top.";
 
 /// [`ruled`] for a page nobody ruled on, with no made wish on it.
 pub fn scene(page: &Page) -> Scene {
@@ -48,10 +52,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let made = &data.wishes[data.wishes.len().saturating_sub(made)..];
     let mut notes: Vec<Note> = left_out(page.left_out).into_iter().collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
-        notes.push(Note::Plain {
-            title: NOTHING.to_string(),
-            body: "Start in the field at the top: type what you want done, or name a new project.".to_string(),
-        });
+        notes.push(Note::Plain { title: NOTHING.to_string(), body: NOTHING_HERE.to_string() });
     }
     let came_true: Vec<(String, String)> =
         data.wishes.iter().flat_map(|wish| wish.stars.iter().map(|star| (star.clone(), wish.label.clone()))).collect();
@@ -76,15 +77,19 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
         notes.push(Note::Whole { title: MADE.to_string(), rows });
     }
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
+    // Nothing read and no wish: the legend has nothing to explain, and there is no reading to speak of.
+    let blank = read_nothing(data, 0);
+    let read = [footer(data, made.len()), own(made.len())].join(" ");
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
-        footer: [footer(data, made.len()), own(made.len())].join(" ").trim_end().to_string(),
+        footer: if blank { String::new() } else { read.trim_end().to_string() },
+        legend: if blank { Vec::new() } else { legend() },
         ..bare(&data.day, notes)
     }
 }
 
-/// A day's page with no wish on it: the date, the title, the hero, the legend, and these notes. It is what the app
-/// shows while a day is being read and when it could not be.
+/// A day's page with no wish on it: the date, the title, the hero, and these notes, with no legend: nothing on it
+/// has a mark to explain. It is what the app shows while a day is being read and when it could not be.
 pub fn bare(day: &str, notes: Vec<Note>) -> Scene {
     Scene {
         date_label: date_label(day),
@@ -92,16 +97,16 @@ pub fn bare(day: &str, notes: Vec<Note>) -> Scene {
         hero: Some(Character { id: "me".to_string(), ..Character::default() }),
         characters: Vec::new(),
         notes,
-        legend: [
-            (Mark::Star, "finished"),
-            (Mark::Busy, "working on it"),
-            (Mark::NeedsYou, "needs you"),
-            (Mark::Dimmed, "let go"),
-        ]
-        .map(|(mark, text)| LegendItem { mark, text: text.to_string() })
-        .to_vec(),
+        legend: Vec::new(),
         footer: String::new(),
     }
+}
+
+/// The marks of the little ones, each with what it means.
+fn legend() -> Vec<LegendItem> {
+    [(Mark::Star, "finished"), (Mark::Busy, "working on it"), (Mark::NeedsYou, "needs you"), (Mark::Dimmed, "let go")]
+        .map(|(mark, text)| LegendItem { mark, text: text.to_string() })
+        .to_vec()
 }
 
 /// The note that counts what the file held beyond what is drawn, when it held any.
@@ -341,7 +346,7 @@ mod tests {
         let scene = scene(&empty);
         assert!(matches!(&scene.notes[..], [Note::Plain { title, .. }] if title == "Nothing wished for yet today."));
         assert_eq!(scene.characters, []);
-        assert_eq!(scene.footer, "Nothing typed on this day was read, so there is no reading.");
+        assert_eq!((scene.footer.as_str(), scene.legend.len()), ("", 0), "nothing to explain, no reading");
     }
 
     #[test]

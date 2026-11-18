@@ -12,7 +12,7 @@ use gpui::{
 
 use super::field::Which;
 use super::measure::{font_for, hsla};
-use super::{Page, Stale};
+use super::{Page, Stale, Tap};
 use crate::entry::{EntryState, MAX_ENTRY_OPTIONS};
 use crate::layout::{PieceKind, Placed, line_height, page_scale};
 use crate::scene::Entry;
@@ -212,14 +212,18 @@ impl Page {
     }
 
     /// The elements of the entry and of each note's field, over everything else: the typed line in the field,
-    /// and what takes the clicks on the field, on each chip and on a field's offer. None for a page with neither.
+    /// and what takes the clicks on the field, on its `go`, on each chip and on a field's offer. None for a page
+    /// with neither.
     pub(super) fn entry_layer(&mut self, window: &Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
         for view in std::iter::once(&mut self.entry).chain(&mut self.fields) {
             view.lit = view.focus.get_or_insert_with(|| cx.focus_handle()).is_focused(window);
         }
         let pad = px(14.0 * page_scale(&self.theme, self.viewport));
         let typed = |piece: &&Placed| {
-            matches!(piece.piece, PieceKind::Entry | PieceKind::Chip | PieceKind::Field | PieceKind::Offer)
+            matches!(
+                piece.piece,
+                PieceKind::Entry | PieceKind::Chip | PieceKind::Field | PieceKind::Offer | PieceKind::Go
+            )
         };
         self.placed
             .iter()
@@ -234,6 +238,10 @@ impl Page {
                 };
                 let (rect, index) = (piece.rect, piece.index);
                 let at = div().absolute().left(px(rect.x)).top(px(rect.y)).w(px(rect.w)).h(px(rect.h));
+                if piece.piece == PieceKind::Go {
+                    let went = cx.listener(|page, _, window, cx| page.entry_go(window, cx));
+                    return Some(at.id("go").cursor_pointer().on_click(went).into_any_element());
+                }
                 if matches!(piece.piece, PieceKind::Chip | PieceKind::Offer) {
                     let chosen = cx.listener(move |page, _, window, cx| {
                         if which.is_none() {
@@ -266,8 +274,10 @@ impl Page {
         let (x, y) = (f32::from(event.position.x), f32::from(event.position.y));
         let on = |piece: &Placed| {
             let r = piece.rect;
-            matches!(piece.piece, PieceKind::Entry | PieceKind::Chip | PieceKind::Field | PieceKind::Offer)
-                && r.x <= x
+            matches!(
+                piece.piece,
+                PieceKind::Entry | PieceKind::Chip | PieceKind::Field | PieceKind::Offer | PieceKind::Go
+            ) && r.x <= x
                 && x < r.right()
                 && r.y <= y
                 && y < r.bottom()
@@ -318,6 +328,20 @@ impl Page {
         }
         cx.stop_propagation();
         self.entry_changed(window, cx);
+    }
+
+    /// A tap on the entry's `go`, which gives the entry the keys: what Enter does there. With no words in it,
+    /// nothing is entered and the tap is `Tap::Go`, so whoever made the entry can say what to type first.
+    fn entry_go(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.focus_view(None, window, cx);
+        if self.entry.state.holds() || self.entry.state.waiting() {
+            return self.entry_entered(None, window, cx);
+        }
+        let id = self.entry.what.as_ref().map(|what| what.id.clone()).unwrap_or_default();
+        if let Some(handler) = &self.on_tap {
+            handler(&Tap::Go { id }, window, cx);
+        }
+        cx.notify();
     }
 
     /// Enter where the keys are. What a note's field gives carries the note's id, and goes to the entry's handler.

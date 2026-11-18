@@ -17,7 +17,7 @@ use sticker_kit::{Entry, Note, Scene};
 
 use crate::answering::{UNANSWERED, UNSETTLED};
 use crate::read::Page;
-use crate::starting::{ADDED, CHOOSE, MADE, UNADDED, UNMADE, new_entry};
+use crate::starting::{ADDED, CHOOSE, GO, MADE, UNADDED, UNMADE, UNREADY, new_entry};
 use crate::stopping;
 use crate::taps::{OnShow, UNTOLD};
 use crate::today::{Later, Next, Today};
@@ -26,9 +26,9 @@ use crate::working;
 /// The id of the entry a wish is typed in.
 pub const ENTRY: &str = "wish";
 
-/// The hint of the entry with one project on offer, and with more, where Tab is said too.
-pub const HINT: &str = "What do you want done? Enter starts it.";
-pub const HINT_TAB: &str = "What to do? Tab: project. Enter: start.";
+/// The hint of the entry with one project on offer, and with more: the chips under the field are the projects.
+pub const HINT: &str = "What do you want done in the project below?";
+pub const HINT_TAB: &str = "What do you want done? Choose its project below.";
 
 /// The title of the note for words that were not kept as a wish. Its body names the words, then core's reason.
 pub const UNKEPT: &str = "That wish was not kept.";
@@ -106,7 +106,8 @@ pub(crate) fn of(words: &str, why: &str) -> String {
 }
 
 fn of_a_wish(note: &Note) -> bool {
-    matches!(note, Note::Plain { title, .. } if [UNKEPT, UNSTARTED, UNANSWERED, UNSETTLED, ADDED, MADE, UNADDED, UNMADE].contains(&&**title))
+    const OURS: [&str; 9] = [UNKEPT, UNSTARTED, UNANSWERED, UNSETTLED, ADDED, MADE, UNADDED, UNMADE, UNREADY];
+    matches!(note, Note::Plain { title, .. } if OURS.contains(&&**title))
 }
 
 /// How many notes of wishes a scene begins with: a note put on it later goes under them.
@@ -214,7 +215,8 @@ pub fn entry_of(options: Vec<String>) -> Entry {
         return new_entry();
     }
     let hint = if options.len() > 1 { HINT_TAB } else { HINT };
-    Entry { id: ENTRY.into(), hint: hint.into(), options, most: MADE_SAID_MAX, action: CHOOSE.into() }
+    let (action, go) = (CHOOSE.into(), GO.into());
+    Entry { id: ENTRY.into(), hint: hint.into(), options, most: MADE_SAID_MAX, action, go, loud: false }
 }
 
 impl Today {

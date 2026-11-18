@@ -16,14 +16,23 @@ use crate::wishing::{Said, Seen, newest};
 /// The id of the entry a new project is named in.
 pub const NEW: &str = "new";
 
-/// The one choice of the entry a day with no project on offer has.
+/// The one choice of the entry a day with no project on offer has. It is ADR 0020's, and like any chip a tap
+/// on it gives the field the keys: the cursor is in the field a new project is named in.
 pub const START: &str = "Start something new";
+
+/// The choice beside every entry's field that does what Enter does.
+pub const GO: &str = "Start";
 
 /// What the entry offers besides its chips: the system's folder picker.
 pub const CHOOSE: &str = "Choose a folder";
 
-/// The hint of the entry a new project is named in. It says the two ways in.
-pub const NEW_HINT: &str = "Name a new project, or drop a folder here";
+/// The hint of the entry a new project is named in: what it takes is a name.
+pub const NEW_HINT: &str = "Type a name for a new project";
+
+/// The note of `Start` tapped while the entry holds no words: nothing was started, and what to do first.
+pub const UNREADY: &str = "Nothing to start yet.";
+const UNREADY_NEW: &str = "Choose the folder you want to work in, or type a name for a new project first.";
+const UNREADY_WISH: &str = "Type what you want done in the field first.";
 
 /// The most characters of a project's name: one folder's name, as core takes it.
 const NAME_MAX: usize = 100;
@@ -62,10 +71,17 @@ pub struct Shown {
     pub name: Option<String>,
 }
 
-/// The entry of a day with no project on offer: one choice, a field for a name, and the folder picker.
+/// The entry of a day with no project on offer: one choice, a field for a name, and the folder picker, which is
+/// the loud choice: a folder the person works in is the first way in.
 pub fn new_entry() -> Entry {
-    let options = vec![START.to_string()];
-    Entry { id: NEW.into(), hint: NEW_HINT.into(), options, most: NAME_MAX, action: CHOOSE.into() }
+    let (options, action, go) = (vec![START.to_string()], CHOOSE.into(), GO.into());
+    Entry { id: NEW.into(), hint: NEW_HINT.into(), options, most: NAME_MAX, action, go, loud: true }
+}
+
+/// What Enter in the entry `id` gives core as a project: a name, in the entry of a day with no project on offer.
+/// None in the entry of a wish: its words are a wish's.
+pub fn named(id: &str, typed: &str) -> Option<Given> {
+    (id == NEW).then(|| Given::Name(typed.to_string()))
 }
 
 /// Core's refusal in the app's words: what core says of `--repo` is said of the folder, and nothing else changes.
@@ -90,6 +106,14 @@ fn said(given: &Given, answer: Result<(String, Option<&str>), String>) -> (Said,
 }
 
 impl OnShow {
+    /// `Start` tapped while the entry `id` held no words: the scene on show with one note that says what to do
+    /// first, in place of the note of the wish before.
+    pub fn unready(&mut self, id: &str) -> Scene {
+        let body = if id == NEW { UNREADY_NEW } else { UNREADY_WISH };
+        newest(&mut self.scene, Some((UNREADY, body.to_string())));
+        self.scene.clone()
+    }
+
     /// A folder or a name given, as work for another thread: core lists the folder or makes the project, and the
     /// page and its entry are asked again, so the project has a chip as soon as core has answered.
     pub fn listing(&self, given: Given) -> Listing {

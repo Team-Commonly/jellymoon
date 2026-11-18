@@ -29,10 +29,9 @@ pub const NO_LOGS: &str =
 pub const NOTHING: &str = "Nothing wished for yet today.";
 pub const UNREAD: &str = "Today could not be read.";
 pub const NO_PAGE: &str = "There is no page for this day yet.";
-pub const HINT: &str = "What do you want done? Enter starts it.";
-pub const NEW_HINT: &str = "Name a new project, or drop a folder here";
+pub const HINT: &str = "What do you want done in the project below?";
+pub const NEW_HINT: &str = "Type a name for a new project";
 pub const START: &str = "Start something new";
-pub const READ_NOTHING: &str = "Nothing typed on this day was read, so there is no reading.";
 pub const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
 /// What the day's session logs are.
@@ -97,7 +96,7 @@ fn a_day_with_nothing_typed_nothing_made_and_no_project_on_offer_is_drawn_as_it_
         );
         let said = notes(&placed);
         assert!(said.len() == 1 && said[0].contains(NOTHING), "{logs:?}: {said:?}");
-        assert_eq!(words(&placed, "footer"), [READ_NOTHING], "{logs:?}");
+        assert!(words(&placed, "footer").is_empty(), "{logs:?}: nothing read and no wish, so no footer");
         assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), EMPTY, "{logs:?}");
         assert!(!called(&w.day), "{logs:?}: a reading call was made");
     }
@@ -130,8 +129,8 @@ fn a_project_on_offer_gives_the_day_an_entry_and_its_chip_and_no_wish() {
         // No wish and no clash is made up, and the day is not said to be unreadable.
         let said = notes(&placed);
         assert!(said.len() == 1 && said[0].contains(NOTHING), "{logs:?}: {said:?}");
-        let (page, footer) = if logs == Logs::Absent { (NO_LOGS, FOUND_NO_LOGS) } else { (EMPTY, READ_NOTHING) };
-        assert_eq!(words(&placed, "footer"), [footer], "{logs:?}");
+        let page = if logs == Logs::Absent { NO_LOGS } else { EMPTY };
+        assert!(words(&placed, "footer").is_empty(), "{logs:?}: nothing read and no wish, so no footer");
         assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), page, "{logs:?}");
         // The same day again: the same pieces from the same kept page, which is not written a second time.
         let long_ago = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000_000);
@@ -181,10 +180,7 @@ fn a_project_that_is_forgotten_takes_the_entry_with_it_and_logs_that_come_are_re
     // Logs that hold nothing: they were read, and the kept page says so from then on.
     fs::create_dir(w.at("logs")).unwrap();
     let placed = w.placed();
-    assert_eq!(
-        (words(&placed, "chip"), words(&placed, "footer")),
-        (vec!["alpha".to_string()], vec![READ_NOTHING.to_string()])
-    );
+    assert_eq!((words(&placed, "chip"), words(&placed, "footer")), (vec!["alpha".to_string()], vec![]));
     assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), EMPTY);
     // Nothing is on offer any more: no entry, and the page is the empty day's.
     w.jellymoon(&["project", "forget", "alpha"]);

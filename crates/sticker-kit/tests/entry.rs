@@ -223,6 +223,8 @@ fn entry(options: usize, most: usize) -> Entry {
         options: (0..options).map(|i| format!("project-{i}")).collect(),
         most,
         action: String::new(),
+        go: String::new(),
+        loud: false,
     }
 }
 
@@ -255,6 +257,8 @@ fn the_chosen_option_is_kept_by_its_name_when_the_options_change() {
         options: options.to_vec(),
         most: 80,
         action: String::new(),
+        go: String::new(),
+        loud: false,
     };
     let was = names(&["garden", "kitchen", "letters"]);
     let mut state = EntryState::of(&named(&was));

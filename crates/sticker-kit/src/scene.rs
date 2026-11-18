@@ -31,6 +31,12 @@ pub struct Entry {
     /// One thing to do that is no option, after the chips, or nothing when empty: a tap on it is
     /// `Tap::Action` with the entry's id. It is never chosen and Enter never gives it.
     pub action: String,
+    /// The choice beside the field that does what Enter does, or nothing when empty. It is drawn as not ready
+    /// while the field holds no words, and a tap on it then enters nothing: it is `Tap::Go` with the entry's id,
+    /// so whoever made the entry can say what to type first.
+    pub go: String,
+    /// Whether the action is the entry's loud choice: filled as a chosen chip is, while no chip is drawn chosen.
+    pub loud: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

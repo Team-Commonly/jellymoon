@@ -25,6 +25,9 @@ pub(crate) struct Brush<'a> {
     pub lit: bool,
     /// The note whose field has the keys.
     pub keyed: Option<&'a str>,
+    /// Whether the entry's action is its loud choice, and whether its words can be entered now.
+    pub loud: bool,
+    pub ready: bool,
 }
 
 impl Brush<'_> {
@@ -118,8 +121,11 @@ impl Brush<'_> {
             PieceKind::Entry => self.pill(rect, p.entry, p.entry_edge),
             PieceKind::Chip if self.chosen == Some(piece.index) => self.pill(rect, p.chip_chosen, p.chosen_edge()),
             PieceKind::Chip | PieceKind::Offer => self.pill(rect, p.chip, p.chip),
-            // An action is a chip with an edge: it does something, and is never the chosen one.
-            PieceKind::Action => self.pill(rect, p.chip, p.entry_edge),
+            // An action is a chip with an edge: it does something, and is never the chosen one. The loud one,
+            // and a `go` with words to enter, are filled as a chosen chip is; a `go` with none is not ready.
+            PieceKind::Action if self.loud => self.pill(rect, p.chip_chosen, p.chosen_edge()),
+            PieceKind::Go if self.ready => self.pill(rect, p.chip_chosen, p.chosen_edge()),
+            PieceKind::Action | PieceKind::Go => self.pill(rect, p.chip, p.entry_edge),
             // A note's field is drawn as the entry's is, and someone else's words on a ground no other text has.
             PieceKind::Field if self.keyed == Some(piece.id.as_str()) => self.pill(rect, p.entry, p.entry_ring),
             PieceKind::Field => self.pill(rect, p.entry, p.entry_edge),
@@ -141,6 +147,9 @@ impl Brush<'_> {
         match (piece.piece, role) {
             (PieceKind::Entry | PieceKind::Field, _) => p.entry_hint,
             (PieceKind::Chip, _) if self.chosen == Some(piece.index) => p.chip_chosen_ink,
+            (PieceKind::Action, _) if self.loud => p.chip_chosen_ink,
+            (PieceKind::Go, _) if self.ready => p.chip_chosen_ink,
+            (PieceKind::Go, _) => p.entry_hint,
             (_, Role::LabelStruck | Role::Body | Role::Legend) => p.soft,
             (_, Role::RowSub | Role::OptionStruck | Role::Footer) => p.quiet,
             (_, Role::ChoiceTitle) => p.choice_title,
@@ -205,15 +214,12 @@ mod tests {
     /// The fill and the edge of each of the entry's shapes, and the colour of its text, for an entry with three
     /// chips of which the second is chosen.
     fn painted(theme: &Theme, lit: bool) -> Vec<(Color, Color, Color)> {
-        let entry = Entry {
-            id: "wish".into(),
-            hint: "wish".into(),
-            options: vec!["a".into(); 3],
-            most: 0,
-            action: String::new(),
-        };
+        let entry =
+            Entry { id: "wish".into(), hint: "wish".into(), options: vec!["a".into(); 3], most: 0, ..Entry::default() };
         let placed = layout_entry(&entry, theme, Viewport { w: 1440.0, h: 900.0 }, &FixedAdvance(0.5));
-        let brush = Brush { theme, scene: &Scene::default(), k: 1.0, chosen: Some(1), lit, keyed: None };
+        let scene = Scene::default();
+        let brush =
+            Brush { theme, scene: &scene, k: 1.0, chosen: Some(1), lit, keyed: None, loud: false, ready: false };
         let colours = |piece: &Placed| {
             let mut out = Vec::new();
             brush.add(piece, REST, &mut out);

@@ -5,7 +5,9 @@
 //! may be empty. `watch` looks after the asking, as the window does, until a look gives a scene. `ask` enters
 //! nothing: the wish is made as `jellymoon wish` makes one, and only its run is asked for. `name` and `folder`
 //! give the words to core as a new project's name or as a folder dropped on the window (`starting.rs`): core
-//! starts git for a new project, with what it takes of this process's variables. Anything else ends at once.
+//! starts git for a new project, with what it takes of this process's variables. `enter` gives the words as
+//! Enter in the entry whose id stands where the chip's name does gives them: a new project's name where the app
+//! says so. `unready` is `Start` tapped in that entry with nothing typed. Anything else ends at once.
 //! Each scene the window would show is one line of JSON on stdout.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -14,7 +16,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use std::{env, io, thread};
 
-use jellymoon_app::starting::Given;
+use jellymoon_app::starting::{Given, named};
 use jellymoon_app::taps::OnShow;
 use jellymoon_app::today::Today;
 use sticker_kit::Scene;
@@ -41,9 +43,13 @@ fn main() {
     };
     let (scene, page) = today.first();
     let mut shown = OnShow { today, page, scene };
+    if then == "unready" {
+        return show(&shown.unready(project));
+    }
     let given = match then.as_str() {
         "name" => Some(Given::Name(typed.clone())),
         "folder" => Some(Given::Folder(PathBuf::from(typed))),
+        "enter" => named(project, typed),
         _ => None,
     };
     if let Some(given) = given {

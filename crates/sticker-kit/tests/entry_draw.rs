@@ -18,7 +18,15 @@ type Seen<T> = Rc<RefCell<Vec<T>>>;
 
 fn entry() -> Entry {
     let options = ["garden", "kitchen", "letters"].map(String::from).to_vec();
-    Entry { id: "wish".into(), hint: "wish for something".into(), options, most: 12, action: String::new() }
+    Entry {
+        id: "wish".into(),
+        hint: "wish for something".into(),
+        options,
+        most: 12,
+        action: String::new(),
+        go: String::new(),
+        loud: false,
+    }
 }
 
 fn context() -> TestAppContext {

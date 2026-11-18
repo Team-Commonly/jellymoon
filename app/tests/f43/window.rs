@@ -56,6 +56,8 @@ fn the_window_answers_an_enter_on_a_page_with_no_day_and_the_words_stay() {
         options: vec!["alpha".into()],
         most: 200,
         action: String::new(),
+        go: String::new(),
+        loud: false,
     };
     let (page, cx) = opened(&mut cx, Showing::of(None), wish);
     assert_eq!(enters(&page, cx, "tea at four"), ("tea at four".to_string(), false), "answered, and not kept");

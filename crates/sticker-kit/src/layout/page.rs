@@ -1,7 +1,7 @@
 //! The page itself: paper, punched holes, the dated tape, the title, the
 //! big character, the legend and the footer line.
 
-use super::entry::band_bottom;
+use super::entry::{band_bottom, under_field};
 use super::{Ctx, PieceKind, line_height, piece, run};
 use crate::geom::Rect;
 use crate::scene::{Mark, Scene};
@@ -69,7 +69,8 @@ pub(crate) fn title_bottom(cx: &Ctx) -> f32 {
 }
 
 /// Places the big character and returns the top of the space left for the
-/// small ones, which is never above the band an entry stands in.
+/// small ones, which is never above the band an entry stands in. The big
+/// character stands under the entry's field, however high a theme puts it.
 pub(crate) fn hero(cx: &mut Ctx, scene: &Scene) -> f32 {
     let m = cx.theme.metrics;
     let Some(hero) = &scene.hero else {
@@ -78,7 +79,7 @@ pub(crate) fn hero(cx: &mut Ctx, scene: &Scene) -> f32 {
     let unit = cx.px(m.hero_size) / 200.0;
     let rect = Rect::new(
         cx.x(m.hero_x) - 100.0 * unit,
-        cx.y(m.hero_top) - BODY_TOP * unit,
+        (cx.y(m.hero_top) - BODY_TOP * unit).max(under_field(cx)),
         200.0 * unit,
         (BODY_TOP + BODY_BOTTOM) * unit,
     );

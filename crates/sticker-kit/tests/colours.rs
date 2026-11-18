@@ -37,10 +37,10 @@ fn contrast_is_the_ratio_of_wcag_2() {
 fn both_built_in_themes_draw_the_entry_s_texts_over_their_floors_and_through_the_door_unchanged() {
     assert_eq!((CHOSEN_INK_FLOOR, HINT_FLOOR, RING_FLOOR), (4.5, 2.5, 3.0));
     // Measured: the chosen chip's name on its chip, the hint on the field, the ring on the paper.
-    let measured = [[9.99, 5.36, 5.35], [4.57, 5.37, 15.80]];
+    let measured = [[9.99, 5.36, 4.98], [4.57, 5.37, 15.80]];
     // The field, its edge, the ring, the hint, the caret, a chip, the chosen chip and its name.
     let colours = [
-        ["#FFFFFF", "#CFC8EE", "#C2371C", "#6A6A72", "#E4573A", "#EDEBF4", "#FFD24D", "#2B2350"],
+        ["#FFFFFF", "#CFC8EE", "#6F5BD6", "#6A6A72", "#E4573A", "#EDEBF4", "#FFD24D", "#2B2350"],
         ["#FFFFFF", "#C3C9D1", "#1F2328", "#676B70", "#2F6FEB", "#ECEDEF", "#2F6FEB", "#FFFFFF"],
     ];
     for (n, theme) in [Theme::sticker(), Theme::plain()].into_iter().enumerate() {
@@ -54,6 +54,9 @@ fn both_built_in_themes_draw_the_entry_s_texts_over_their_floors_and_through_the
         let grey = Color { r: p.entry_hint.g, b: p.entry_hint.g, ..p.entry_hint };
         assert!(p.entry_hint.contrast(grey) < 1.05, "{}: {:?} is a grey", theme.name, p.entry_hint);
         assert!(p.entry_ring.luminance() < p.chip_chosen.luminance(), "{}: the ring is the darker", theme.name);
+        // The ring is calm, never the red an error would have: more blue in it than red or green.
+        let ring = p.entry_ring;
+        assert!(ring.b > ring.r && ring.b > ring.g, "{}: the ring {} is no red", theme.name, ring.hex_rgb());
         // A chip's name on its chip, what is typed on the field, and the caret on the field.
         let more = [p.soft.contrast(p.chip), p.ink.contrast(p.entry), p.caret.contrast(p.entry)];
         let floors = [CHIP_INK_FLOOR, TYPED_FLOOR, CARET_FLOOR];

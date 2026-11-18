@@ -37,7 +37,7 @@ pub const UNKEPT: &str = "That wish was not kept.";
 pub const UNSTARTED: &str = "Your wish is kept, and no run was started for it.";
 
 /// The most characters of a wish that its note names it by: the start of it, as core cleans and cuts it.
-const NAMED_MAX: usize = 40;
+pub(crate) const NAMED_MAX: usize = 40;
 
 /// A note's title and body.
 pub type Said = (&'static str, String);
@@ -252,8 +252,9 @@ impl Today {
     /// away: it goes with the next wish or tap.
     pub(crate) fn again(&self, page: Option<&Page>, drawn: &Scene) -> Scene {
         let mut shown = page.map_or_else(|| self.made_alone(), |page| self.draw(page));
-        // Two notes of a page's own come and go with what is kept: neither is carried over as the app's.
-        let own = |title: &str| [crate::scene::NOTHING, UNTOLD].contains(&title);
+        // Notes of a page's own come and go with what is kept: none is carried over as the app's.
+        let own =
+            |title: &str| [crate::scene::NOTHING, UNTOLD].contains(&title) || crate::scene::GOING.contains(&title);
         let over = |note: &&Note| {
             stopping::asks(note)
                 || working::ours(note)

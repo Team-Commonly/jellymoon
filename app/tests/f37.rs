@@ -60,7 +60,9 @@ fn a_made_wish_is_drawn_working_before_the_day_is_read_and_on_a_day_with_no_logs
     let (first, kept) = today.first();
     assert_eq!(first.footer, "1 made wish is in your own words.", "nothing was read, and nothing says so");
     let rows = vec![(Mark::Busy, MADE.to_string())];
-    assert_eq!(first.notes[1], Note::Whole { title: "wished here today".to_string(), rows });
+    // Under the note of the reading, the sentence that the wish is being worked on, then the wish itself.
+    assert!(matches!(&first.notes[1], Note::Plain { title, .. } if title == "Your wish is being worked on."));
+    assert_eq!(first.notes[2], Note::Whole { title: "wished here today".to_string(), rows });
     let drawn: Vec<_> = first.characters.iter().map(|one| (one.id.as_str(), one.label.as_str(), one.state)).collect();
     assert_eq!(drawn, [("m1", MADE, State::Busy)]);
     assert!(kept.is_none() && matches!(&first.notes[0], Note::Plain { title, .. } if title == "Reading your day…"));

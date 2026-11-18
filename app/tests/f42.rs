@@ -251,7 +251,8 @@ fn a_look_takes_away_a_note_of_the_page_s_own_that_no_longer_holds() {
     let mut empty = on_show(&quiet);
     assert_eq!(titles(&empty.scene), [Some("Nothing wished for yet today.".to_string())]);
     jellymoon_core::wish(&quiet.home, Some(DAY), SAID, "alpha").unwrap();
-    assert_eq!(titles(&looked(&mut empty)), [None], "only the note of made wishes is left");
+    let going = Some("Your wish is being worked on.".to_string());
+    assert_eq!(titles(&looked(&mut empty)), [going, None], "the sentence that it is worked on, and the made wishes");
 
     // A page whose first note says no session is told, and then the hook put in from a terminal.
     let world = world();

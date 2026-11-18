@@ -66,13 +66,14 @@ fn told(placed: &[Piece]) -> (Vec<String>, Vec<String>) {
     (own, quotes)
 }
 
-/// The pieces of the work's note, each with its place measured from the note's top, to a hundredth. A sheet's
-/// and a tape's index is the note's place in the scene, which is one on with the told note before it.
+/// The pieces of the work's note, each with its place measured from the note's top, to a tenth: a hundredth
+/// tells apart two layouts of the same note whose sums of floats round either side of it (17.33 and 17.34). A
+/// sheet's and a tape's index is the note's place in the scene, which is one on with the told note before it.
 fn work(placed: &[Piece]) -> Vec<String> {
     let top = note(placed, "work-m1").expect("the work's note").rect()[1];
     let from_top = |value: &mut Value| {
         let y = value["y"].as_f64().unwrap();
-        value["y"] = json!(((y - top) * 100.0).round() / 100.0);
+        value["y"] = json!(((y - top) * 10.0).round() / 10.0);
     };
     let moved = |piece: &&Piece| {
         let mut value = piece.0.clone();
@@ -277,6 +278,6 @@ fn a_tap_on_the_told_note_finds_nothing_and_work_that_touches_files_tools_obey_i
     assert!(["CLAUDE.md", ".claude/settings.json"].iter().all(|name| body.iter().any(|text| text == name)));
     let kept = scene(kept);
     let Some(Note::Text { title, .. }) = kept.as_ref().unwrap().notes.first() else { panic!("{kept:?}") };
-    assert_eq!(title, "That work was kept.");
+    assert_eq!(title, "The change was kept.");
     assert!(repo.join("CLAUDE.md").is_file());
 }

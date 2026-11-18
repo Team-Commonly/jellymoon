@@ -396,7 +396,10 @@ max_file_lines = 400
 # The review of F87 raised core by 8: a run that asks with a result beside its question asks (`run/asks.rs`,
 # its test), the words that name each kind's parts (`run.rs`) and the counts they quote, asserted in
 # `run/told/tests.rs`.
-"crates/jellymoon-core" = 17729
+# The plain work words raised core by 119: a page's words of work that waits, kept and tossed (`run/waits/plain.rs`,
+# 91, of which 18 are its test of a count), the folder's name on `Waits` and how a keep landed on `Kept`, and a
+# refused tap's first sentence (`run/waits.rs`, `run/keep.rs`), and that the note names no run (`tests/shapes.rs`).
+"crates/jellymoon-core" = 17848
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -929,7 +932,10 @@ max_file_lines = 400
 # is being worked on and the footer of a day with nothing read (`scene.rs`), their unit tests (the old ones moved
 # to `src/scene/tests.rs`), the test that work shows itself under that note (`tests/work_shows.rs`, 32), and the
 # tests whose pages now have it.
-"app" = 14694
+# The plain work words raised the app by 24, all tests: the first sentence and the count pinned on the work's note,
+# the kept, held and tossed sentences, and a refusal's first sentence (`tests/f47.rs`, `tests/f47/`), and why the
+# work's note is measured to a tenth with and without a result (`tests/f86.rs`).
+"app" = 14718
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

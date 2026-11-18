@@ -29,7 +29,7 @@ use support::wished::{SAID, World, wait_until, world};
 /// What the made-up agent asks when its question is a plain one.
 pub const QUESTION: &str = "Which of the two uploaders did you mean?";
 pub const NEEDS: &str = "This wish needs you.";
-pub const WORK: &str = "Work waits for this wish.";
+pub const WORK: &str = "Your folder is not changed yet.";
 pub const DONE: &str = "This wish is done.";
 pub const MORE: &str = "More like this";
 pub const ANSWER_HINT: &str = "Type your answer, then Enter";

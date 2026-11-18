@@ -6,10 +6,13 @@ use std::fs;
 
 use sticker_kit::State;
 
-use super::{CHOICES, WORK, branches, drawn, holds, lines, persons, quoted, texts, waits};
+use super::{CHOICES, IN_FOLDER, KEPT, WORK, branches, drawn, holds, lines, persons, quoted, texts, waits};
 use crate::support::day::DAY;
 use crate::support::wished::SAID;
 use crate::support::worked::finished;
+
+/// What a refused keep says first: what the person can do next.
+pub const NEXT_KEEP: &str = "Open the wish again to see where the change stands. Here is why it was not kept:";
 
 #[test]
 fn keep_it_is_carried_off_the_window_s_thread_one_tap_at_a_time_and_the_wish_stays_done_with_its_star() {
@@ -45,10 +48,10 @@ fn keep_it_is_carried_off_the_window_s_thread_one_tap_at_a_time_and_the_wish_sta
     assert!(second.is_none() && other.is_none() && poked.is_none(), "one tap of a wish is carried at a time");
 
     let kept = kept.as_ref().unwrap();
-    let run = w.kept()["run"].as_str().unwrap().to_string();
+    // The change is in the person's folder now, by its name, and no run's id is said.
     let [(id, title, body, options)] = &texts(kept)[..] else { panic!("one note: {:?}", texts(kept)) };
-    assert_eq!((*id, *title, options.len()), ("said-m1", "That work was kept.", 0));
-    assert_eq!(body, &[format!("run {run} was kept: the branch was moved forward to the run's commit.")]);
+    assert_eq!((*id, *title, options.len()), ("said-m1", KEPT, 0));
+    assert_eq!(body, &[IN_FOLDER]);
     assert_eq!(drawn(kept, "m1"), Some((State::Idle, 1)), "the wish stays done with its star");
     assert!(late.is_none(), "the choices went with the note");
     assert_eq!(
@@ -73,9 +76,8 @@ fn toss_it_removes_the_work_and_the_wish_is_drawn_let_go() {
     assert_eq!(texts(at_once.as_ref().unwrap()), [("busy-m1", "That work is being tossed.", vec![], vec![])]);
 
     let tossed = tossed.as_ref().unwrap();
-    let run = w.kept()["run"].as_str().unwrap().to_string();
-    let why = format!("the work of run {run} was tossed: its branch was deleted, and the wish is let go.");
-    assert_eq!(texts(tossed), [("said-m1", "That work was tossed.", vec![why.as_str()], vec![])]);
+    let thrown = "The change was thrown away, and your folder alpha is as it was.";
+    assert_eq!(texts(tossed), [("said-m1", "The change was thrown away.", vec![thrown], vec![])]);
     assert_eq!(drawn(tossed, "m1"), Some((State::Dimmed, 1)), "the wish is drawn let go");
     let said = quoted(SAID);
     assert_eq!(texts(stands.as_ref().unwrap()), [("wish-m1", "This wish was let go.", vec![said.as_str()], vec![])]);
@@ -96,13 +98,15 @@ fn a_keep_core_refuses_leaves_one_plain_note_with_core_s_reason_and_the_work_sti
     let refused = refused.as_ref().unwrap();
     let run = w.kept()["run"].as_str().unwrap().to_string();
     let [(id, title, body, options)] = &texts(refused)[..] else { panic!("one note: {:?}", texts(refused)) };
-    assert_eq!((*id, *title, options.len(), body.len()), ("said-m1", "That work was not kept.", 0, 1));
+    assert_eq!((*id, *title, options.len(), body.len()), ("said-m1", "The change was not kept.", 0, 2));
+    // What the person can do next comes first, and core's reason after it, as the command line has it.
+    assert_eq!(body[0], NEXT_KEEP);
     let unchanged = format!("the work of run {run} was not kept, and nothing was changed.");
-    assert!(body[0].ends_with(&unchanged) && body[0].len() > unchanged.len(), "{body:?}");
+    assert!(body[1].ends_with(&unchanged) && body[1].len() > unchanged.len(), "{body:?}");
     assert_eq!(drawn(refused, "m1"), Some((State::Idle, 1)));
 
     assert_eq!((persons(&w, &repo), branches(&w, &repo)), before, "a refused keep changed something");
-    let work = lines(&w, &repo);
+    let work = lines(&w, &repo, "1 new file, 1 changed, 1 removed.");
     let work: Vec<&str> = work.iter().map(String::as_str).collect();
     assert_eq!(texts(again.as_ref().unwrap()), [("work-m1", WORK, work, CHOICES.to_vec())], "the work still waits");
 }
@@ -129,10 +133,7 @@ fn work_that_touches_files_the_person_s_tools_obey_names_them_and_is_kept_only_a
     assert_eq!(texts(asks.as_ref().unwrap()), [note]);
     assert_eq!(texts(at_once.as_ref().unwrap()), [("busy-m1", "That work is being kept.", vec![], vec![])]);
     let kept = kept.as_ref().unwrap();
-    assert_eq!(
-        texts(kept).iter().map(|note| (note.0, note.1)).collect::<Vec<_>>(),
-        [("said-m1", "That work was kept.")]
-    );
+    assert_eq!(texts(kept).iter().map(|note| (note.0, note.1)).collect::<Vec<_>>(), [("said-m1", KEPT)]);
     assert_eq!(holds(&repo, "CLAUDE.md"), Some("rules from the run\n".into()));
     assert!(waits(&w, &repo).is_none());
 }
@@ -153,15 +154,21 @@ fn work_whose_repo_is_not_found_says_so_in_core_s_words_offers_no_choice_and_cor
         lines[..4].iter().map(|line| serde_json::from_str(line).unwrap()).collect();
     let why = format!("no folder of the name the wish gives was typed in on {DAY}; name the folder with --repo.");
     let said = quoted(SAID);
-    let unread =
-        ("work-m1", "Work waits for this wish, and it was not read.", vec![said.as_str(), why.as_str()], vec![]);
+    let first = "Your folder alpha is not changed. To keep or toss the change here, put right what is said below, then \
+                 open the wish again.";
+    let unread = ("work-m1", "This change could not be read.", vec![first, said.as_str(), why.as_str()], vec![]);
     assert_eq!(texts(scenes[0].as_ref().unwrap()), [unread]);
     assert!(scenes[1..].iter().all(Option::is_none), "a choice that is not drawn is no tap");
     // Asked all the same, core does nothing and says why: a toss here would remove the copy and leave the branch.
-    let core: Vec<Option<(String, String)>> =
+    let core: Vec<Option<(String, Vec<String>)>> =
         lines[4..].iter().map(|line| serde_json::from_str(line).unwrap()).collect();
-    let titles = ["That work was not tossed.", "That work was not kept.", "No file of that work was shown."];
-    assert_eq!(core, titles.map(|title| Some((title.to_string(), why.clone()))));
+    let titles = [
+        ("The change was not thrown away.", "it was not thrown away"),
+        ("The change was not kept.", "it was not kept"),
+        ("No file of the change was shown.", "no file was shown"),
+    ];
+    let next = |not: &str| format!("Open the wish again to see where the change stands. Here is why {not}:");
+    assert_eq!(core, titles.map(|(title, not)| Some((title.to_string(), vec![next(not), why.clone()]))));
     assert_eq!(w.everything(&repo), before, "something was changed where the repo is not found");
     assert_eq!(branches(&w, &repo).len(), 1);
 }

@@ -88,7 +88,7 @@ fn elsewhere<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T 
     .unwrap()
 }
 
-fn core(today: &Today, wish: &str, index: usize) -> Option<(String, String)> {
+fn core(today: &Today, wish: &str, index: usize) -> Option<(String, Vec<String>)> {
     let options = RunOptions {
         wish: wish.to_string(),
         day: Some(today.date.clone()),

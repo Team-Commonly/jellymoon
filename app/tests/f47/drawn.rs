@@ -11,7 +11,7 @@ use serde_json::Value;
 use sticker_kit::{Note, Scene};
 
 use super::named::{AGAIN, ASKS, TOLD, left};
-use super::{CHOICES, WORK, holds, texts};
+use super::{CHOICES, KEPT, WORK, holds, texts};
 use crate::support::Piece;
 use crate::support::day::DAY;
 use crate::support::wished::World;
@@ -85,7 +85,7 @@ fn yes_under_every_name(script: &str, crowded: bool) -> Vec<bool> {
         acts.push("run");
         let lines = w.taps("logs", &acts).ended();
         let kept: Scene = serde_json::from_str(lines.last().unwrap()).unwrap();
-        assert_eq!(texts(&kept)[0].1, "That work was kept.");
+        assert_eq!(texts(&kept)[0].1, KEPT);
         assert!(names.iter().all(|name| repo.join(name).is_file()), "{names:?}");
         true
     };
@@ -150,6 +150,9 @@ fn work_of_more_such_files_than_a_note_names_or_of_a_name_not_printed_as_it_is_h
             // The work's own note names the first six of all its files; the one that asks names none.
             assert!(said.ends_with(&bare(if first.is_empty() { OVER } else { "Nothing was changed." })), "{said}");
             assert!(said.contains(&bare(OVER)) && (first.is_empty() || !said.contains("CLAUDE.md")), "{acts:?}");
+            // The work's note says what its one choice that changes something does, and of no keep.
+            let tossed = "Itisinacopy:Tossitthrowsitaway.";
+            assert!(!first.is_empty() || (said.contains(tossed) && !said.contains("Keepitputs")), "{said}");
             assert_eq!(options, ["Show me", "Toss it"], "{acts:?}");
             // Where the keep was, in the third place, nothing is placed, and a tap there is nothing.
             assert_eq!(lines.last().map(String::as_str) == Some("null"), first.is_empty(), "{lines:?}");

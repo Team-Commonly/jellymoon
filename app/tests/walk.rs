@@ -112,8 +112,8 @@ fn whole_loop(shows: &[&str]) {
     assert!(lines[0].starts_with("open | ") && lines[1].starts_with("type (6 characters) | "), "{lines:#?}");
     assert!(lines[2].contains("\"Your new project is ready.\""), "{}", lines[2]);
     let working = first(&lines, "wishes: m1 working");
-    let waits = first(&lines, "\"Work waits for this wish.\"");
-    let kept = first(&lines, "\"That work was kept.\"");
+    let waits = first(&lines, "\"Your folder is not changed yet.\"");
+    let kept = first(&lines, "\"The change was kept.\"");
     assert!(working < waits && waits < kept, "{lines:#?}");
     assert!(lines[waits].contains("\"What it says it did\""), "the result's note is on the page: {}", lines[waits]);
     let all = lines.join("\n");

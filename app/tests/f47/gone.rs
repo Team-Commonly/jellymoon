@@ -81,7 +81,9 @@ fn a_choice_of_work_that_waits_no_more_changes_nothing_and_its_answer_goes_on_th
     on.scene.notes.push(meanwhile.clone());
     let scene = on.worked(work());
     let why = "no work of that wish waits any more, so nothing was changed.";
-    let notes = [("said-m1", "That work was not tossed.", vec![why], vec![]), ("file-3-m2", "theirs", vec![], vec![])];
+    let then = "Open the wish again to see where the change stands. Here is why it was not thrown away:";
+    let untossed = ("said-m1", "The change was not thrown away.", vec![then, why], vec![]);
+    let notes = [untossed, ("file-3-m2", "theirs", vec![], vec![])];
     assert_eq!(texts(&scene), notes);
     assert_eq!((scene.notes.last(), &scene), (Some(&meanwhile), &on.scene));
     assert_eq!(tree(&world.home), before, "something was written");

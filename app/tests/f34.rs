@@ -60,26 +60,27 @@ fn a_kept_page_is_shown_without_a_call_until_the_day_has_turns_it_did_not_see() 
     assert_eq!(other.iter().find(|piece| piece.kind() == "tape").unwrap().said(), "Mon · Mar 9");
 }
 
+/// The one note of a page that shows no page and keeps none. Its title is `lines` lines at this size: "Today
+/// could not be read." is one, "There is no page for this day yet." is two.
+fn one_note(world: &World, args: &[&str], more: &[(&str, &str)], lines: usize) -> String {
+    let out = run(world, args, more);
+    assert!(out.status.success() && out.stderr.is_empty(), "layout {args:?}");
+    let placed = String::from_utf8(out.stdout).unwrap();
+    let placed: Vec<Piece> = placed.lines().map(|line| Piece(serde_json::from_str(line).unwrap())).collect();
+    let plain: Vec<&Piece> = placed.iter().filter(|piece| piece.kind() == "note").collect();
+    assert_eq!(plain.len(), 1, "{args:?}");
+    let roles = plain[0].roles();
+    let titles = roles.iter().take_while(|role| *role == "note_title").count();
+    assert_eq!(titles, lines, "the title's lines: {roles:?}");
+    assert!(roles[titles..].iter().all(|role| role == "body"), "a plain note: {roles:?}");
+    assert!(labels(&placed).is_empty() && !kept(world).exists(), "no page is shown and none is kept");
+    plain[0].said()
+}
+
 #[test]
 fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
     let world = world();
-    // The one note of the page, whose title is `lines` lines at this size: "Today could not be read." is one,
-    // "There is no page for this day yet." is two.
-    let one_with = |world: &World, args: &[&str], more: &[(&str, &str)], lines: usize| {
-        let out = run(world, args, more);
-        assert!(out.status.success() && out.stderr.is_empty(), "layout {args:?}");
-        let placed = String::from_utf8(out.stdout).unwrap();
-        let placed: Vec<Piece> = placed.lines().map(|line| Piece(serde_json::from_str(line).unwrap())).collect();
-        let plain: Vec<&Piece> = placed.iter().filter(|piece| piece.kind() == "note").collect();
-        assert_eq!(plain.len(), 1, "{args:?}");
-        let roles = plain[0].roles();
-        let titles = roles.iter().take_while(|role| *role == "note_title").count();
-        assert_eq!(titles, lines, "the title's lines: {roles:?}");
-        assert!(roles[titles..].iter().all(|role| role == "body"), "a plain note: {roles:?}");
-        assert!(labels(&placed).is_empty() && !kept(world).exists(), "no page is shown and none is kept");
-        plain[0].said()
-    };
-    let one = |world: &World, args: &[&str], lines: usize| one_with(world, args, &[], lines);
+    let one = |world: &World, args: &[&str], lines: usize| one_note(world, args, &[], lines);
     answer(&world, "", 1);
     let failed = one(&world, &[], 1);
     assert!(
@@ -91,17 +92,13 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
     answer(&world, "not a result", 0);
     let odd = one(&world, &[], 1);
     assert!(odd.starts_with("Today could not be read. Claude Code could not do the reading."), "{odd}");
+    // A look at a call's record removes it, so the look after the next case is at that case's call alone.
+    assert!(called(&world), "the two calls before were made");
     // The harness's own result says the call was an error.
     answer(&world, &json!({"type": "result", "is_error": true, "result": "made-up trouble"}).to_string(), 0);
     let harness = one(&world, &[], 1);
     assert!(harness.starts_with("Today could not be read. Claude Code could not do the reading."), "{harness}");
     assert!(called(&world), "the call was made");
-    // A program named that is not there: nothing is started, as with no `claude` found at all.
-    let gone = world.dir.path().join("gone").join("claude");
-    let unstarted = one_with(&world, &[], &[("JELLYMOON_CLAUDE", gone.to_str().unwrap())], 2);
-    let no_start = "There is no page for this day yet. Claude Code could not be started, so nothing was read.";
-    assert!(unstarted.starts_with(no_start), "{unstarted}");
-    assert!(!called(&world), "nothing was called");
     answer(&world, &result("Sorry, I cannot help with that."), 0);
     assert_eq!(
         one(&world, &[], 1),
@@ -121,6 +118,41 @@ fn a_reading_that_cannot_run_is_one_plain_note_that_says_why() {
         "{missing}"
     );
     assert!(missing.ends_with("It was looked for in PATH, ~/.local/bin, ~/.claude/local."), "{missing}");
+}
+
+// The review of the second app notes, note 2. Core's line names what could not be made or started, and only a
+// `claude` that was found and did not start is one a terminal would show the trouble of.
+#[test]
+fn a_call_that_could_not_be_started_says_what_could_not_be_made_or_started_and_no_call_is_made() {
+    let world = world();
+    let start = "There is no page for this day yet. Claude Code could not be started, so nothing was read. ";
+    let again = "Open Jellymoon again to try once more. What happened: the reading call could not run: ";
+    // A file where the reading folder would be: the folder cannot be made, and `claude` is not the trouble.
+    fs::create_dir_all(&world.home).unwrap();
+    fs::write(world.home.join("reading"), "").unwrap();
+    let unmade = one_note(&world, &[], &[], 2);
+    let folder =
+        format!("{start}{again}the reading folder in Jellymoon's own folder could not be made or written to: ");
+    assert!(unmade.starts_with(&folder), "{unmade}");
+    fs::remove_file(world.home.join("reading")).unwrap();
+    // A program named that is not there: nothing is started, as with no `claude` found at all.
+    let gone = world.dir.path().join("gone").join("claude");
+    let unstarted = one_note(&world, &[], &[("JELLYMOON_CLAUDE", gone.to_str().unwrap())], 2);
+    let named = format!("{start}{again}JELLYMOON_CLAUDE names no program that could be started: ");
+    assert!(unstarted.starts_with(&named) && !unstarted.contains("gone"), "{unstarted}");
+    // A `claude` on `PATH` whose own program is not there cannot be started. Nothing of it runs.
+    #[cfg(unix)]
+    {
+        let broken = world.dir.path().join("broken");
+        fs::create_dir(&broken).unwrap();
+        fs::write(broken.join("claude"), "#!/no/such/program\n").unwrap();
+        fs::set_permissions(broken.join("claude"), std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+        let found = one_note(&world, &[], &[("PATH", broken.to_str().unwrap())], 2);
+        let advice = "Check that `claude` answers in a terminal. ";
+        let unstartable = format!("{start}{advice}{again}the `claude` that was found could not be started: ");
+        assert!(found.starts_with(&unstartable), "{found}");
+    }
+    assert!(!called(&world), "nothing was called");
 }
 
 #[test]

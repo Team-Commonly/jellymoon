@@ -44,7 +44,7 @@ fn today(world: &World, settings: PathBuf) -> Today {
         skip: Vec::new(),
         model: "sonnet".to_string(),
         home: world.home.clone(),
-        harness: None,
+        harness: Some(world.claude()),
         fresh: false,
         settings: Some(settings),
         bin: Some(user(world).join(".local").join("bin")),

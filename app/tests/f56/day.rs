@@ -32,7 +32,7 @@ fn own(file: &Path, text: &str) {
 impl Home {
     /// The day with these made wishes, in their order, and the record of the one run that finished.
     fn of(wishes: &[Value]) -> Home {
-        let home = Home(tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap());
+        let home = Home(crate::support::scratch());
         if !wishes.is_empty() {
             let made = json!({"day": DAY, "wishes": wishes});
             own(&home.at().join("pages").join(format!("{DAY}.wishes.json")), &format!("{made}\n"));

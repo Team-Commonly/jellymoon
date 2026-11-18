@@ -40,9 +40,8 @@ fn asking(dir: &Path) -> (Showing, Scene) {
     fs::write(&file, format!("{}\n", json!({"day": DAY, "wishes": [wish]}))).unwrap();
     // Core reads a kept file only when its owner alone can write to it, whatever this process's umask is.
     fs::set_permissions(&file, std::os::unix::fs::PermissionsExt::from_mode(0o644)).unwrap();
-    let (date, model) = (DAY.to_string(), "sonnet".to_string());
-    let today =
-        Today { date, logs, skip: Vec::new(), model, home, harness: None, fresh: false, settings: None, bin: None };
+    let (date, model, harness) = (DAY.to_string(), "sonnet".to_string(), Some(dir.join("claude")));
+    let today = Today { date, logs, skip: Vec::new(), model, home, harness, fresh: false, settings: None, bin: None };
     let (scene, page) = today.first();
     let shown = Showing::of(Some(OnShow { today, page, scene }));
     let look = shown.poked("m1").expect("a tap on the wish's character is a look");
@@ -89,7 +88,7 @@ fn enter(cx: &mut VisualTestContext) {
 
 #[test]
 fn enter_in_a_note_s_field_is_carried_by_the_window_and_core_s_refusal_leaves_the_words() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = crate::support::scratch();
     let (shown, scene) = asking(dir.path());
     let on_show = shown.clone();
     let mut cx = context();
@@ -112,7 +111,7 @@ fn enter_in_a_note_s_field_is_carried_by_the_window_and_core_s_refusal_leaves_th
 
 #[test]
 fn an_answer_that_comes_after_the_window_was_closed_is_told_to_the_field_all_the_same() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = crate::support::scratch();
     let (shown, scene) = asking(dir.path());
     let mut cx = context();
     let (page, cx) = opened(&mut cx, shown, scene);

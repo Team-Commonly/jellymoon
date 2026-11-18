@@ -82,7 +82,7 @@ fn on_a_screen_that_holds_both_windows_the_bubble_never_covers_the_jellyfish() {
 // Note 2: a theme file's text sizes are held to the edge scene's own range.
 #[test]
 fn no_text_size_of_a_theme_file_puts_a_piece_out_of_its_window_or_makes_a_window_huge() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = support::scratch();
     let file = dir.path().join("sizes.toml");
     let name = "long-project-name-".repeat(5);
     for metric in ["small_size = 60", "small_size = 10000", "body_size = 0", "body_size = 300"] {
@@ -112,7 +112,7 @@ fn no_text_size_of_a_theme_file_puts_a_piece_out_of_its_window_or_makes_a_window
 // Note 3: no path a person typed, and no word of the system's, is said of a file that cannot be read.
 #[test]
 fn a_file_that_cannot_be_read_is_refused_in_fixed_words_with_its_last_name_on_one_line() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = support::scratch();
     let missing = dir.path().join("no-such-file.json");
     let turned = dir.path().join("a\u{1b}[31m\nb\u{202e}c.json");
     let cases = [

@@ -19,11 +19,9 @@ const PICTURES: &str =
 fn within(dir: &Path, day: &str, theme: &Path) -> Option<Output> {
     fs::write(dir.join("page.json"), day).unwrap();
     let to = |name: &str| Stdio::from(fs::File::create(dir.join(name)).unwrap());
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_jellymoon-app"));
-    cmd.args(["layout", "--page"]).arg(dir.join("page.json")).arg("--theme").arg(theme).env_clear();
-    if let Some(root) = std::env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
-        cmd.env("SystemRoot", root); // a Windows program needs it to start
-    }
+    let (page, theme) = (dir.join("page.json").into_os_string(), theme.as_os_str().to_os_string());
+    let mut cmd =
+        support::door::app(support::door::BARE, &["layout".into(), "--page".into(), page, "--theme".into(), theme]);
     let mut child = cmd.stdin(Stdio::null()).stdout(to("out")).stderr(to("err")).spawn().unwrap();
     let start = Instant::now();
     let status = loop {
@@ -42,7 +40,7 @@ fn within(dir: &Path, day: &str, theme: &Path) -> Option<Output> {
 
 #[test]
 fn art_in_any_shape_naming_anything_is_not_read_and_the_file_loads_with_the_kit_s_own_art() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = support::scratch();
     let day = page(vec![wish("w1", "Login page", "working", &["form built"])], vec![]).to_string();
     let own = layout(&day, &[]);
     assert!(own.status.success() && !own.stdout.is_empty());
@@ -71,7 +69,7 @@ fn art_in_any_shape_naming_anything_is_not_read_and_the_file_loads_with_the_kit_
 
 #[test]
 fn nothing_an_art_names_is_opened_so_a_file_that_would_stall_or_fail_a_reader_does_neither() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = support::scratch();
     let day = page(vec![wish("w1", "Login page", "working", &["form built"])], vec![]).to_string();
     let own = layout(&day, &[]).stdout;
     let theme = dir.path().join("theme.toml");

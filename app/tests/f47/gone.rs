@@ -25,7 +25,7 @@ fn left_on_show() -> (World, OnShow) {
         skip: Vec::new(),
         model: "sonnet".to_string(),
         home: world.home.clone(),
-        harness: None,
+        harness: Some(world.claude()),
         fresh: false,
         settings: None,
         bin: None,

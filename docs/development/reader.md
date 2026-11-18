@@ -88,12 +88,12 @@ jellymoon day [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <name,name>]
 - **Logs that cannot be read.** A projects directory that is a file, a link that leads nowhere, or anything else
   that is no folder, is refused in one fixed line, `reading the session logs: they are looked for in a folder,
   and what is there is not one`. Only a path with nothing at all under its name is "no session logs".
-  Separators at the path's end are dropped before the link is looked at, so `link/` is refused as `link` is; a file, or a
-  link to a file, written with a separator at its end (`file/`) is refused in the system's own words, not in
-  the fixed line, as the system will not look below a file; a
-  root (`/`, a Windows drive's `C:\`) stays whole. A folder that cannot be listed is refused in the system's own
-  words, on a Mac `reading the session logs: Permission denied (os error 13)`, and so is a link that loops, or
-  one whose target cannot be reached for rights. Each is exit 1 with nothing printed and nothing written, and the line names no path.
+  Separators at the path's end are dropped before the link is looked at, so `link/` is refused as `link` is; on
+  Unix a file, or a link to a file, written with a separator at its end (`file/`) is refused in the system's own
+  words, not in the fixed line, as the system will not look below a file; a root (`/`, a Windows drive's `C:\`)
+  stays whole. A folder that cannot be listed is refused in the system's own words, on a Mac `reading the
+  session logs: Permission denied (os error 13)`, and so is a link that loops, or one whose target cannot be
+  reached for rights. Each is exit 1 with nothing printed and nothing written, and the line names no path.
   Such a day is not one with nothing typed and not one with no logs: `jellymoon page` prints no page for it,
   though the day has a made wish or a project on offer, and `jellymoon run` with no `--repo`, given such
   `--logs`, is refused in the same line and starts nothing. With `--repo` a run never reads the logs, so it

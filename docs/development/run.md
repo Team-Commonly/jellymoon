@@ -1272,7 +1272,10 @@ coordinator:
 - Second measure, with the tightened words, the same ten wishes on the same day: ten of ten runs ended
   `completed` in 8 to 14 seconds; a last word was 195 to 638 bytes; of 10 `change` pieces written, 10 passed and
   none was dropped. Nine of ten results had a before and after; the tenth wrote no `change` piece.
-- Third measure, after the words named each kind's parts: (to be filled by the coordinator)
+- Third measure, after the words named each kind's parts, the same ten wishes: ten of ten runs ended `completed`
+  in 7 to 13 seconds; a last word was 294 to 607 bytes; of 10 `change` pieces written, 10 passed. An eleventh
+  wish that only the person could answer (a phone number to add) ended `asks` with one question in 9 seconds,
+  with no result.
 
 ## Not covered
 

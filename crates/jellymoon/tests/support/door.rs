@@ -12,7 +12,7 @@ use std::process::Command;
 mod world;
 
 #[allow(unused_imports)] // each file of tests takes what it needs
-pub use world::{NO_ROOT, REFUSED, no_root, reaches, refusal, refusal_as};
+pub use world::{NO_ROOT, REFUSED, UNGUARDED, no_root, reaches, refusal, refusal_as, unguarded_installer};
 
 /// The built `jellymoon`: for a test that copies it, compares a path with it or names it to a made-up program. To
 /// start it there is [`jellymoon`].

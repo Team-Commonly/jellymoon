@@ -23,6 +23,11 @@ script before running it, open [`install.sh`](install.sh), or download it first:
 `curl -fsSL -o install.sh https://raw.githubusercontent.com/Team-Commonly/jellymoon/main/install.sh`, read it, then
 `sh install.sh`. [`docs/development/install.md`](docs/development/install.md) says what it does and what it trusts.
 
+When the install is done it opens the app. To install without opening it, set `JELLYMOON_NO_OPEN=1` for `sh`
+(`curl ... | JELLYMOON_NO_OPEN=1 sh`). The plain command installs the latest full release and skips release
+candidates; to install one, set the folder of its release for `sh`, not for `curl`:
+`curl -fsSL https://raw.githubusercontent.com/Team-Commonly/jellymoon/main/install.sh | JELLYMOON_RELEASE_URL=https://github.com/Team-Commonly/jellymoon/releases/download/<tag> sh`.
+
 ## Status: early
 
 Open the app and it shows today's page: it reads the day with one call through your own Claude Code, keeps the page

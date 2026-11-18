@@ -62,7 +62,7 @@ fn worked() -> Made {
     made
 }
 
-fn change(file: &str, before: &[&str], after: &[&str]) -> Value {
+pub fn change(file: &str, before: &[&str], after: &[&str]) -> Value {
     json!({"type": "change", "file": file, "before": before, "after": after})
 }
 
@@ -73,14 +73,14 @@ fn of(made: &Made, pieces: &Value) -> Value {
 }
 
 /// The one piece as it is printed: it passed its check, and none was dropped.
-fn passed(made: &Made, piece: &Value) -> Value {
+pub fn passed(made: &Made, piece: &Value) -> Value {
     let told = of(made, &json!([piece]));
     assert_eq!((told["pieces"].as_array().map(Vec::len), &told["dropped"]), (Some(1), &json!(0)), "{piece}: {told}");
     told["pieces"][0].clone()
 }
 
 /// Fails unless the one piece is dropped whole, and counted.
-fn dropped(made: &Made, piece: &Value) {
+pub fn dropped(made: &Made, piece: &Value) {
     assert_eq!(of(made, &json!([piece])), json!({"pieces": [], "dropped": 1}), "{piece}");
 }
 
@@ -195,6 +195,11 @@ fn a_text_passes_the_door_a_question_passes_and_is_dropped_never_cut() {
         let marked = passed(&made, &text(kind, &format!("I set \"key\" to {key}\n in  the config.")));
         assert_eq!(marked, text(kind, "I set 'key' to [redacted] in the config."));
         assert!(!shows(&marked.to_string(), &key), "no eight characters in a row of the key are printed");
+        // A credential a line break splits is one credential, as it is in a run's question.
+        for at in [4, 17, 38] {
+            let split = passed(&made, &text(kind, &format!("use {}\n{} here", &key[..at], &key[at..])));
+            assert_eq!(split, text(kind, "use [redacted] here"), "at {at}");
+        }
         for unread in [
             "",
             "  \n",

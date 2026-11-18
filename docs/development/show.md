@@ -164,9 +164,10 @@ print what they printed before.
 in: the first `did`, the first two `change`, the first three `decided`, the first three `unsure`. A piece past
 its count is left out and is not counted as dropped.
 
-**A text** (`did`, `decided`, `unsure`). Its line breaks and runs of spaces are read as one space. It then
-passes the door a question passes (`still.rs`): a credential's shape is printed as `[redacted]`, and a `"` as
-a `'`. The piece is dropped, never cut, when the text
+**A text** (`did`, `decided`, `unsure`). It passes the door a question passes (`still.rs`) as the run wrote it,
+its line breaks with it: it is made one line, each line break and run of spaces one space, a credential's shape
+is printed as `[redacted]`, one that a line break splits in two as well, and a `"` as a `'`. The piece is
+dropped, never cut, when the text
 
 - is over its length, counted in characters after the door: 280 for `did`, 160 for `decided` and `unsure`;
 - holds a character that draws as nothing or as a blank (the list under `plain`, below, in "Work that waits");
@@ -185,6 +186,9 @@ printed. The piece is dropped unless all of this holds:
   characters, holds no tab, no line break and no character that draws as nothing, does not read like a note's
   count, and is a line the cleaning of a file's text leaves exactly as it is (`still_text`): a line with a
   credential's shape in it is never printed, with the mark or without;
+- every quoted line is also a whole line of its side of the file cleaned whole, as `--file <n>` cleans the
+  file: a shape that spans lines, a private key block from its first line to its last, is the mark there, so no
+  line of it is quoted, however short the line and whether the work made the file, changed it or removed it;
 - every `before` line is a whole line of the file, ends taken off, that the file has more often before the
   work than after it; every `after` line is one it has more often after. A line that is there as often as it
   was is neither, and a part of a line is not a line. So a made file passes no `before` line and a removed

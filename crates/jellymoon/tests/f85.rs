@@ -9,6 +9,8 @@
 
 #[path = "f85/checks.rs"]
 mod checks;
+#[path = "f85/held.rs"]
+mod held;
 #[path = "f85/kept.rs"]
 mod kept;
 mod support;
@@ -210,8 +212,13 @@ fn rework(made: &Made, files: &[Typed]) {
     git(&["add", "."]);
     git(&["commit", "-q", "-m", &format!("Jellymoon run {}", made.run)]);
     git(&["checkout", "-q", "main"]);
-    let end = made.w.commit(&made.repo, "made-up");
-    git(&["update-ref", &made.branch(), &end]);
+    moved_to(made, "made-up");
+}
+
+/// Makes the run's branch and its record name the commit `branch` names.
+pub fn moved_to(made: &Made, branch: &str) {
+    let end = made.w.commit(&made.repo, branch);
+    made.w.git(&made.repo, &["update-ref", &made.branch(), &end]);
     let mut record = made.record();
     record["end"] = json!(end);
     made.write(&record);

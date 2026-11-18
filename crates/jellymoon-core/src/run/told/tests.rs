@@ -87,6 +87,16 @@ fn a_text_passes_the_door_and_is_dropped_never_cut() {
     assert_eq!(clean("  It retries\n twice \"now\".  ", 160).as_deref(), Some("It retries twice 'now'."));
     assert_eq!(clean(&format!("the key {} is set", key()), 160).as_deref(), Some("the key [redacted] is set"));
     assert_eq!(clean("a space\u{a0}of another kind", 160).as_deref(), Some("a space of another kind"));
+    // A credential a line break splits is one, and is the mark; words on two lines stay two words.
+    let (whole, mark) = (key(), Some("use [redacted] here"));
+    for split in ["\n", "\r\n", "\u{2028}"] {
+        assert_eq!(
+            clean(&format!("use {}{split}{} here", &whole[..17], &whole[17..]), 160).as_deref(),
+            mark,
+            "{split:?}"
+        );
+        assert_eq!(clean(&format!("fix the upload{split}retry"), 160).as_deref(), Some("fix the upload retry"));
+    }
     for none in [
         String::new(),
         " \n\t".to_string(),

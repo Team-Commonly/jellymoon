@@ -172,16 +172,17 @@ pub(super) fn checked(said: &Said, files: &[WorkFile]) -> Option<Told> {
     (!told.pieces.is_empty() || told.dropped > 0).then_some(told)
 }
 
-/// A text as it is printed, or None. Its line breaks and runs of spaces are read as one space each. It then
-/// passes the door a question passes (`still.rs`): a credential's shape becomes the mark and a `"` a `'`. It is
-/// dropped, never cut, when it holds a character that draws as nothing, when nothing or only marks are left of
-/// it, when it is over `most` characters, and when it reads like a note's count (`obeyed.rs`).
+/// A text as it is printed, or None. It passes the door a question passes (`still.rs`) as the run wrote it, its
+/// line breaks with it: the door makes one line of it, a credential's shape becomes the mark, one a line break
+/// splits too, and a `"` a `'`. It is dropped, never cut, when it holds a character that draws as nothing (asked
+/// of the text with every space read as a plain one, and again of what the door made), when nothing or only
+/// marks are left of it, when it is over `most` characters, and when it reads like a note's count (`obeyed.rs`).
 fn clean(raw: &str, most: usize) -> Option<String> {
     let spaced = raw.split_whitespace().collect::<Vec<_>>().join(" ");
     if holds_unseen(&spaced) {
         return None;
     }
-    let made = still(&spaced, most, false).ok()?;
+    let made = still(raw, most, false).ok()?;
     let read = !made.is_empty() && !marks_only(&made) && !holds_unseen(&made) && !counted(&made);
     read.then_some(made)
 }
@@ -228,7 +229,10 @@ fn quoted(side: &[String]) -> Option<Vec<&str>> {
 /// text, whose printed name is the name git keeps. It quotes one line at least and [`LINES`] a side at most.
 /// Each `before` line is a whole line the file has more often before the work than after, and each `after` line
 /// one it has more often after: a line that is there as often as it was is neither. So a made file passes no
-/// `before` line and a removed one no `after` line. One line that fails drops the piece.
+/// `before` line and a removed one no `after` line. Each side is also cleaned once, whole, as a look at the file
+/// cleans it (`still_text`), and a quoted line must be a whole line of its side cleaned so: a line alone can be
+/// no credential's shape and still be a part of one, as a body line of a private key block is. One line that
+/// fails drops the piece.
 fn change(file: &str, before: &[String], after: &[String], files: &[WorkFile]) -> Option<Piece> {
     let (at, work) = files.iter().enumerate().find(|(_, work)| work.path == file.as_bytes())?;
     let shown = show::entry(at + 1, work);
@@ -239,8 +243,12 @@ fn change(file: &str, before: &[String], after: &[String], files: &[WorkFile]) -
     let (was, is) = sides(work, shown.change)?;
     let (before, after) = (quoted(before)?, quoted(after)?);
     let times = |text: &str, line: &str| text.lines().filter(|held| ends_off(held) == line).count();
-    let took = before.iter().all(|line| times(was, line) > times(is, line));
-    let put = after.iter().all(|line| times(is, line) > times(was, line));
+    let cleaned = |side: &str, lines: &[&str]| {
+        let whole = |(side, _): (String, bool)| lines.iter().all(|line| times(&side, line) > 0);
+        lines.is_empty() || still_text(side, TEXT_MAX).is_ok_and(whole)
+    };
+    let took = cleaned(was, &before) && before.iter().all(|line| times(was, line) > times(is, line));
+    let put = cleaned(is, &after) && after.iter().all(|line| times(is, line) > times(was, line));
     let own = |lines: Vec<&str>| lines.into_iter().map(str::to_string).collect();
     let made = shown.change == FileChange::Made;
     (took && put).then(|| Piece::Change { n: shown.n, name: shown.name, made, before: own(before), after: own(after) })

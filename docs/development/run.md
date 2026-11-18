@@ -366,7 +366,9 @@ one it was given is stopped at once and has failed.
 in two shapes only: exactly `{"state":"done"}`, and exactly `{"state":"asks","question":<text>}`. Since F85
 `done` may have one part beside it, `result`, of any value: `{"state":"done","result":<anything>}` is `done`.
 A `result` beside `asks`, beside a question or beside any other part is a failed run as before. A `result`
-named twice is no result, whatever the two values are, and the word is `done`.
+named twice is no result, whatever the two values are, and the word is `done`. Core takes a `result` from any
+harness: until F87 only the schema a harness is given, which lets no part stand beside `state` and `question`,
+keeps a real one from sending it, and one that came through all the same is kept and printed, checked.
 Any other value (another state, `done` with a question, `asks` without one, a question that is not text, any part more, a
 part named twice, a list, a text) is a failed run, and so is none at all. A part named twice is refused whatever
 the two values are: `{"state":"asks","state":"done"}` is not `done`, and two questions are not the second one. The last word is asked only of a stream that is a success

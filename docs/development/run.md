@@ -775,8 +775,9 @@ Not closed:
   finished all the same: its record, its wish, its star and the line `jellymoon run` prints are what they are
   for `done` alone. Nothing is checked when it is kept; a look checks it. The file is written as the records are
   (`hook::put`), and a failure to write it is no failure of the run. A run that failed, was cancelled or
-  asks keeps none. A run that finished and changed nothing keeps one like any other, and no look reads it: it
-  has no work to list. The record does not name the file.
+  asks keeps none. A run that finished and changed nothing keeps one like any other, and a look prints it with
+  no file to check a `change` against, so each `change` is dropped (told alone, [show.md](show.md)). The record
+  does not name the file.
 - **One run for a wish.** The wish names its run before the harness is started, behind the day's lock, so of two
   `jellymoon run` at once one starts and the other takes its own copy back and is refused.
 

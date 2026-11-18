@@ -399,7 +399,10 @@ max_file_lines = 400
 # The plain work words raised core by 119: a page's words of work that waits, kept and tossed (`run/waits/plain.rs`,
 # 91, of which 18 are its test of a count), the folder's name on `Waits` and how a keep landed on `Kept`, and a
 # refused tap's first sentence (`run/waits.rs`, `run/keep.rs`), and that the note names no run (`tests/shapes.rs`).
-"crates/jellymoon-core" = 17848
+# Told alone raised core by 57 (72 added, 15 removed): `ended_alone` and `Alone`, the split of `found` so a look
+# knows how a run ended, the result of a run that changed nothing (`run/show.rs`), and the two sentences of a run that
+# did not finish (`run/waits.rs`). Nothing could be deleted for it.
+"crates/jellymoon-core" = 17905
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -627,7 +630,8 @@ max_file_lines = 400
 # words in `tests/f39/line.rs`.
 # An Intel Mac told a release has no build for it yet raised the binary by 58, all tests: `tests/f33/chips.rs` 54
 # (made-up `sysctl` and `uname`, a release with no Intel line), 4 in `tests/f33.rs`.
-"crates/jellymoon" = 29845
+# Told alone raised the binary by 22, all tests: a run that changed nothing prints its result (`tests/f85/kept.rs`).
+"crates/jellymoon" = 29867
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -945,7 +949,9 @@ max_file_lines = 400
 # that hold the looks and the looks held after a note in hand; `tests/work_shows.rs` 6, the looks held after a stop's
 # choice went), 3 `showing.rs` (a look made while a note is in hand holds the looks after it).
 # Typing goes to the entry raised the app by 142: its test, `tests/entry_keys.rs`, 142 lines; the source lost a net 0.
-"app" = 14907
+# Told alone raised the app by 180: 155 are its test (`tests/told_alone.rs`), 25 the told note of a run with no work
+# and its look (`src/told.rs`, `src/working.rs`).
+"app" = 15087
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

@@ -11,14 +11,14 @@
 
 use std::panic::{self, AssertUnwindSafe};
 
-use jellymoon_core::{RunOptions, Waits, Wish, WishState, WorkDone, WorkTap};
+use jellymoon_core::{Alone, RunOptions, Waits, Wish, WishState, WorkDone, WorkTap};
 use sticker_kit::{Note, Scene};
 
 use crate::answering::{with_more, with_question};
 use crate::read::Page;
 use crate::taps::OnShow;
 use crate::today::Today;
-use crate::told::{TOLD, told};
+use crate::told::{TOLD, told, told_alone};
 use crate::wishing::Seen;
 
 /// The starts of the ids of this file's notes, each followed by the wish's id: work that waits with its choices,
@@ -83,9 +83,9 @@ pub(crate) fn in_hand(scene: &Scene) -> bool {
     })
 }
 
-/// The wishes whose work that waits is on a scene.
+/// The wishes whose work that waits, or what their run says it did, is on a scene.
 pub(crate) fn shown(scene: &Scene) -> impl Iterator<Item = &str> {
-    scene.notes.iter().filter_map(|note| id_of(note)?.strip_prefix(WORK))
+    scene.notes.iter().filter_map(|note| id_of(note).and_then(|id| id.strip_prefix(WORK).or(id.strip_prefix(TOLD))))
 }
 
 /// `notes` over the scene `from`, as the notes of an opened wish go: what core is at work on stays, and every
@@ -134,9 +134,9 @@ pub(crate) fn reopen(scene: &mut Scene, wish: &str, note: Note) -> Option<Note> 
 
 /// How a wish with no work waiting stands, in core's words, with the question its run asks when the wish is a
 /// made one. Only a made wish has a run to answer: a question a kept page file gives a wish of its own is not
-/// drawn, and gets no field.
-fn standing(wish: &Wish, made: bool) -> Note {
-    let (title, body) = jellymoon_core::stands(wish);
+/// drawn, and gets no field. `alone` is how its run ended, when it left no work.
+fn standing(wish: &Wish, made: bool, alone: Option<&Alone>) -> Note {
+    let (title, body) = jellymoon_core::stands(wish, alone);
     let id = crate::scene::drawn_id(&wish.id);
     let note = text(format!("{WISH}{id}"), title, body, Vec::new());
     with_question(note, &id, wish.question.as_deref().filter(|_| made))
@@ -150,7 +150,7 @@ pub(crate) fn at_work(asked: &Note) -> Note {
     let (none, state) = (String::new, WishState::Working);
     let wish =
         Wish { id: none(), label: none(), said: none(), project: none(), state, stars: Vec::new(), question: None };
-    text(id.clone(), jellymoon_core::stands(&wish).0, body.clone(), Vec::new())
+    text(id.clone(), jellymoon_core::stands(&wish, None).0, body.clone(), Vec::new())
 }
 
 /// Whether core is at work for `wish`: one tap of a wish is carried at a time.
@@ -220,7 +220,7 @@ impl Today {
         let stands = |wish: &Wish| {
             let follows = self.follows(&wish.id);
             let typed_to = (wish.question.is_some() || follows) && !waits.iter().any(|waits| waits.wish == wish.id);
-            typed_to.then(|| with_more(standing(wish, true), &wish.id, follows))
+            typed_to.then(|| with_more(standing(wish, true, None), &wish.id, follows))
         };
         notes.extend(made.iter().filter_map(stands));
         shown.notes.splice(0..0, notes);
@@ -259,15 +259,22 @@ impl Today {
             None => (jellymoon_core::made(&self.home, &self.date), 0),
         };
         let at = wishes.iter().position(|wish| crate::scene::drawn_id(&wish.id) == id)?;
-        Some(vec![with_more(standing(&wishes[at], at >= read), id, self.follows(id))])
+        // A made wish's run that left no work says how it ended: what it says it did, over the wish's note.
+        let made = at >= read;
+        let alone = made.then(|| jellymoon_core::ended_alone(&self.home, &self.run_of(id))).flatten();
+        let told = alone.as_ref().and_then(|alone| told_alone(id, alone));
+        let note = with_more(standing(&wishes[at], made, alone.as_ref()), id, self.follows(id));
+        Some(told.into_iter().chain([note]).collect())
     }
 
-    /// The work of the made wish `id` that waits, over the scene `from`, as a tap on its character shows it
-    /// ([`Today::opened`]), but over what was said of work kept or tossed, which a tap takes away: for a look
-    /// that found the wish's run ended (`showing.rs`). The calls to core are a tap's. None when no work of the
-    /// wish waits.
-    pub(crate) fn waiting_over(&self, from: &Scene, id: &str) -> Option<Scene> {
-        self.work_notes(id).map(|notes| over(from, notes, true))
+    /// The work of the made wish `id` that waits, or what its run that changed nothing says it did, over the scene
+    /// `from`, as a tap on its character shows it ([`Today::opened`]), but over what was said of work kept or
+    /// tossed, which a tap takes away: for a look that found the wish's run ended (`showing.rs`). The calls to
+    /// core are a tap's. None when neither is.
+    pub(crate) fn waiting_over(&self, page: Option<&Page>, from: &Scene, id: &str) -> Option<Scene> {
+        let notes = self.notes_on_open(page, id)?;
+        let shows = notes.iter().filter_map(id_of).any(|one| one.starts_with(WORK) || one.starts_with(TOLD));
+        shows.then(|| over(from, notes, true))
     }
 
     /// `notes` of `wish`, its work that waits among them with the offer of a follow-up when core says one may

@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 mod plain;
 
 use super::keep::keep_named;
-use super::show::{self, FileChange, FileKind, Shown, ShownFile, show_file};
+use super::show::{self, Alone, FileChange, FileKind, Shown, ShownFile, show_file};
 use super::told::Told;
 use super::toss::toss_run;
 use super::{RunOptions, followable, refused};
@@ -260,15 +260,27 @@ impl ShownFile {
     }
 }
 
-/// What a page says of a wish that has no work waiting: how it stands, and the wish's own words.
-pub fn stands(wish: &Wish) -> (&'static str, Vec<String>) {
+/// What a page says after the wish's words of a run that did not finish (told alone): what came of it and what the
+/// person can do, and no reason of core's, which names a run and a word of the harness's.
+const UNFINISHED: [&str; 2] = [
+    "It stopped before it was done, and nothing in your folder was changed.",
+    "You can type the wish again, or type it with what should be different.",
+];
+
+/// What a page says of a wish that has no work waiting: how it stands, and the wish's own words; and of a wish
+/// that needs the person because its run did not finish, [`UNFINISHED`]. `alone` is how its run ended.
+pub fn stands(wish: &Wish, alone: Option<&Alone>) -> (&'static str, Vec<String>) {
     let stands = match wish.state {
         WishState::Working => "This wish is being worked on.",
         WishState::Done => "This wish is done.",
         WishState::NeedsYou => "This wish needs you.",
         WishState::LetGo => "This wish was let go.",
     };
-    (stands, vec![format!("“{}”", wish.said)])
+    let mut said = vec![format!("“{}”", wish.said)];
+    if wish.state == WishState::NeedsYou && alone == Some(&Alone::Unfinished) {
+        said.extend(UNFINISHED.map(str::to_string));
+    }
+    (stands, said)
 }
 
 /// The work of the wish's run when it waits, and the list `run show` gives of it when the repo could be read.

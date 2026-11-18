@@ -448,13 +448,18 @@ that fit and counts the rest in a last line, `+N more`.
   changed", "2 new files, 1 changed"), their names, and the choices `Show me`, `Keep it`, `Toss it`. No run's id is
   on it. Work that could not be read: "This change could not be read.", what the person can do next, the wish's
   words and core's reason, and no choice. Any other wish: one note, `wish-<wish>`, with how
-  it stands and its own words, and no choice. Either note can have a field under it ("A question answered, and
+  it stands and its own words, and no choice. Of a made wish whose run did not finish (its record says it
+  failed), "This wish needs you." and its words are followed by two fixed sentences of core's (`stands`): "It
+  stopped before it was done, and nothing in your folder was changed." and "You can type the wish again, or
+  type it with what should be different." No run's id and no word of core's reason are on it. Either note can have a field under it ("A question answered, and
   more like this", below). One wish is open at a time. A tap on no wish, or on a wish whose
   note is on show, shows nothing. Nothing is written by any of it.
 - **Work that waits shows itself** (`Showing::look`, `app/src/showing.rs`). A look that finds a wish's run ended
   puts the wish's work on the page with no tap: the notes a tap on its character gives (`told-<wish>` when there
   is one, and `work-<wish>` with its choices), from the calls to core a tap makes, off the window's thread, in
-  the same look that draws the star. The rules:
+  the same look that draws the star. A run that finished and changed nothing, and said something that passed,
+  shows itself the same way, by the same rules: `told-<wish>` over the wish's own note (told alone, below). The
+  rules:
   - *Whose work.* A made wish this window saw being worked on or saw made, whose run is not going now. Core is
     asked of it once for that end: a wish with no work waiting is not asked of again until it is worked on
     again, and work that was shown is not shown by itself again. A look whose scene was dropped is made again.
@@ -518,6 +523,16 @@ that fit and counts the rest in a last line, `+N more`.
   it; never room from its own work's note, which shows what it shows with no result, or the result is left out. At 1440x900 a typical result (a did of two lines, one change of a line a side, a decision) reads its
   did and its whole change; a did too long for the room draws no row: the title, the count and the sentences. It is shown when the wish is opened, with `Show me`'s file, and by `layout`, and goes with the
   work's note when the work is kept, tossed or asked about once more. No file of the work is opened or run.
+- **Told alone: a run that changed nothing** (`jellymoon_core::ended_alone`, [show.md](show.md)). A made wish
+  whose run finished and changed nothing has no work's note, so what its run says it did is `told-<wish>` over
+  the wish's own note ("This wish is done." and its words), above it and not in its place: the person reads
+  what they asked, and what the run said of it. The note is the one above, and its sentences start with "Nothing
+  in your folder was changed." (the app's). Core has no file to check a `change` against, so a `change` is
+  dropped and counted, and the note then ends with the sentence that something could not be checked. There is
+  no `work-<wish>`, no choice, and no field: core does not let a follow-up be made of such a wish. A tap on the
+  character shows both notes again; a look shows them once, as work that waits; `layout` does not print them.
+  A run that said nothing that passed, or did not finish, has no such note: core keeps no result of a run that
+  failed. `app/tests/told_alone.rs`.
 - **`layout`** has no tap, so it prints the note of every made wish whose work waits, first among the notes,
   and then the note of every made wish whose run asks or whose work was kept.
 - **A tap on a choice** (`OnShow::working`) puts `busy-<wish>` in the note's place at once, with what core says is

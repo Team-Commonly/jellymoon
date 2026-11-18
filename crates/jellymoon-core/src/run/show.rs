@@ -15,6 +15,7 @@ use super::end::{held, of_another, recorded};
 use super::obeyed::{named, plain};
 use super::record::Record;
 use super::told::{self, Said, Told};
+use super::words::unchanged_on;
 use super::{RunOptions, RunOutcome, cut, cut_late, finished, no_wish, place, record, refused};
 use crate::copy::{self, Done, Entry, LISTED, TEXT_MAX, Unread, WorkFile};
 use crate::still::still_text;
@@ -81,7 +82,8 @@ pub struct Shown {
     pub more: usize,
     pub most: usize,
     /// What the run says of its work, each piece checked against the work as it was read now (`told.rs`). Left
-    /// out when the run said nothing that is a result, and of work that is not listed.
+    /// out when the run said nothing that is a result, and of work that is not listed. A run that changed nothing
+    /// has no file, so no `change` of it passes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<Told>,
 }
@@ -166,6 +168,55 @@ pub(super) fn not_cores(run: &str) -> Error {
 /// Finds the wish's run. Refused: a wish that is not there, one with no run or another wish's, a run that is
 /// going, asks or did not complete, and a record that is not core's.
 pub(super) fn found(home: &Path, options: &RunOptions, asked: &Asked) -> Result<Found, Error> {
+    let (found, outcome) = ended(home, options, asked)?;
+    let (to, run) = (asked.to, found.run.clone());
+    let no = |why: &str| refused(format!("run {run} {why}"));
+    match outcome {
+        RunOutcome::Completed => Ok(found),
+        RunOutcome::Cancelled => Err(no(&format!("was cancelled by a stop: there is no work of it to {to}"))),
+        RunOutcome::Asks if found.record.work.is_none() => {
+            Err(no(&format!("asks a question: there is no work of it to {to}")))
+        }
+        _ if found.why == cut(&run) || found.why == cut_late(&run) => Err(no(&cut_off(to))),
+        _ => Err(no(&format!("did not finish: there is no work of it to {to}"))),
+    }
+}
+
+/// The one line of a run that was cut off: before a look has written it down, and after.
+fn cut_off(to: &str) -> String {
+    format!("was cut off before it ended: there is no work of it to {to}")
+}
+
+/// How a made wish's run ended when it left no work to wait (told alone): what a page says beside how the wish
+/// stands. Of any other wish, and of a run that asks, was stopped or is going, there is none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Alone {
+    /// It finished and changed nothing. What it says it did, as `run show` prints it: with no file of a work to
+    /// check one against, every `change` is dropped and counted. None when it said nothing that is a result.
+    Unchanged(Option<Told>),
+    /// It did not finish: its record says it failed. Core keeps no result of such a run, so none is read.
+    Unfinished,
+}
+
+/// [`Alone`] of the wish's run. Nothing of a repo is asked.
+pub fn ended_alone(home: &Path, options: &RunOptions) -> Option<Alone> {
+    let (found, outcome) = ended(home, options, &SHOWN).ok()?;
+    match outcome {
+        RunOutcome::Failed => Some(Alone::Unfinished),
+        RunOutcome::Completed if unchanged(&found) => Some(Alone::Unchanged(show_run(home, options).ok()?.result)),
+        _ => None,
+    }
+}
+
+/// Whether a run that completed changed nothing, by its record's line, and was not tossed since.
+fn unchanged(found: &Found) -> bool {
+    let (run, why) = (&found.run, &found.why);
+    let waits = found.record.work.is_none_or(|work| work == WorkState::Waits);
+    waits && (*why == finished(run, false) || *why == unchanged_on(run))
+}
+
+/// The wish's run that has ended, and how. Refused as [`found`] is, but for how it ended.
+fn ended(home: &Path, options: &RunOptions, asked: &Asked) -> Result<(Found, RunOutcome), Error> {
     let (to, done) = (asked.to, asked.done);
     let day = wish::day_of(options.day.as_deref())?;
     let id = options.wish.as_str();
@@ -174,28 +225,18 @@ pub(super) fn found(home: &Path, options: &RunOptions, asked: &Asked) -> Result<
     let Some(run) = made.run.clone() else {
         return Err(refused(format!("wish {id} has had no run, so there is no work to {to}")));
     };
-    let no = |why: &str| refused(format!("run {run} {why}"));
     let Some(record) = record::kept(home, &run) else {
         return Err(refused(format!("the record of run {run} cannot be read, so its work is not {done}")));
     };
     if of_another(home, &run, Some(&record), &day, id) {
         return Err(refused(format!("wish {id} names run {run}, which is another wish's run: its work is not {done}")));
     }
-    // The one line of a run that was cut off: before a look has written it down, and after.
-    let cut_off = format!("was cut off before it ended: there is no work of it to {to}");
     if record.outcome.is_none() {
-        return Err(no(if held(home, &run) { asked.going } else { &cut_off }));
+        let why = if held(home, &run) { asked.going.to_string() } else { cut_off(to) };
+        return Err(refused(format!("run {run} {why}")));
     }
     let (outcome, why) = recorded(home, &day, id, &run, &record).ok_or_else(|| not_cores(&run))?;
-    match outcome {
-        RunOutcome::Completed => Ok(Found { day, made, run, record, why }),
-        RunOutcome::Cancelled => Err(no(&format!("was cancelled by a stop: there is no work of it to {to}"))),
-        RunOutcome::Asks if record.work.is_none() => {
-            Err(no(&format!("asks a question: there is no work of it to {to}")))
-        }
-        _ if why == cut(&run) || why == cut_late(&run) => Err(no(&cut_off)),
-        _ => Err(no(&format!("did not finish: there is no work of it to {to}"))),
-    }
+    Ok((Found { day, made, run, record, why }, outcome))
 }
 
 /// The wish's run when its work waits for the person: it finished with its one commit, and its record names
@@ -215,7 +256,9 @@ fn work(home: &Path, options: &RunOptions, only: Option<usize>) -> Result<Work, 
     let run = found.run.clone();
     let state = found.record.work.unwrap_or(WorkState::Waits);
     if state != WorkState::Waits || found.why != finished(&run, true) {
-        return Ok(Work { run, state, files: Vec::new(), past: Vec::new(), said: None });
+        // A run that changed nothing has no file: what it said is read for the list alone, and no change passes.
+        let said = if only.is_none() && unchanged(&found) { told::kept(home, &run) } else { None };
+        return Ok(Work { run, state, files: Vec::new(), past: Vec::new(), said });
     }
     // The repo is found as a run finds it, whatever the record names: the record's folder is only compared.
     let folder = place::folder(home, &found.day, &found.made, options)?;

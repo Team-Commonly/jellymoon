@@ -245,7 +245,7 @@ impl Showing {
             Box::new(move || {
                 let mut now = today.again(page.as_ref(), &from);
                 for id in asks.whom(&now) {
-                    if let Some(over) = today.waiting_over(&now, &id) {
+                    if let Some(over) = today.waiting_over(page.as_ref(), &now, &id) {
                         now = over;
                         break;
                     }

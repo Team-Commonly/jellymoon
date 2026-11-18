@@ -89,10 +89,11 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   ("When the reading cannot run"). The same page as the one kept is drawn and not written again. The field
   counts only on a page that holds nothing a reading gives (no turn, no project, no clash, no wish of its own);
   on any other page it is not looked at, and the footer is the reading's.
-- **A day whose logs hold no turn of it** makes no call; with a made wish on its page, its footer is "Nothing
-  typed on this day was read, so there is no reading.", and with none it has no footer. It says what was read, not what was typed: turns typed in a folder switched off or in a
-  run's copy are left out, and a made wish was typed in the window. It ends at the reading and says nothing of
-  a model: a made wish on that page may have had a run, whose agent was given the wish's words.
+- **A day whose logs hold no turn of it** makes no call, and its page has no footer, with a made wish on it or
+  none: every wish on it is the person's own and there is no reading to speak of, so a footer would only say
+  so in words a new person does not need. The legend stays while a wish is on the page, for its marks. (Its
+  footer once said "Nothing typed on this day was read, so there is no reading. 1 made wish is in your own
+  words.", which read as jargon to a person who had typed one wish.)
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
   no command line. Core reads the file (`reader.md`), for the app and for `jellymoon day` and `page` alike, so the
   three leave out the same folders. A name matches exactly, and case matters, and a `--skip` name with a character
@@ -186,7 +187,10 @@ stand in one row when their names fit it and in two when they do not, and after 
 (below, "A project given in the window"). The field is the page's main thing: its row runs from the content's left
 edge to the left column's right edge, over the big character, which stands under it, and "Start" ends the row: it
 does what Enter does, and with nothing typed it enters nothing and the note "Nothing to start yet." says what to
-type first (`starting::UNREADY`); it goes before the notes standing, which stay. The hint says what the chips are: "What do you want done in the project
+type first (`starting::UNREADY`); it goes before the notes standing, which stay. While the field has the keys
+its ring is a calm colour of the theme, never the red an error would have: the sticker theme's lilac (#6F5BD6,
+of the family of the field's edge) and the plain theme's ink (#1F2328), each over 3 to 1 on the paper
+(`crates/sticker-kit/tests/colours.rs`). The hint says what the chips are: "What do you want done in the project
 below?", and with more than one chip "What do you want done? Choose its project below." (Tab still changes the
 chip). Each is whole in both themes from the smallest page (960x640) up as `layout` measures it, by the advances of
 the bundled Nunito at the size typed words are drawn (15 design pixels), which also stands in for the plain
@@ -453,7 +457,8 @@ that fit and counts the rest in a last line, `+N more`.
     option (a clash's, the one that turns delivery on, a stop's), a text note with an option or a field (work
     that waits, the same asked once more, a question, a follow-up), or a note core's answer comes in the place
     of (`busy-<wish>`, "That run is being stopped.", a wish's note that says it is being worked on), the look
-    is the plain one. The work waits its turn and is shown by the first look after that note is gone, or
+    is the plain one. The page's own first note that says a run goes ("Your wish is being worked on.") has no
+    option and no field and is none of these: work still shows itself under it. The work waits its turn and is shown by the first look after that note is gone, or
     never when the person taps its character first. So a look moves no option and no field, and takes no
     typed word; the characters stand where they stood, since the page had notes before. A page with a clash's
     choice on it therefore opens no work by itself: a tap does.
@@ -816,6 +821,7 @@ and Cmd-Q are the system's and are not run by a test.
 | a clash | a choice note `clash-<n>` with both quotes, each drawn whole; `settled` strikes the first |
 | `read` | the footer: how many things were typed, in which projects, and that the reading is unedited |
 | the day's made wishes | a character each, like any wish, and one whole list note, "wished here today", after the clashes: each made wish's own words after the mark of its state, drawn to the last word or counted in the note's last line, `+N more`, never cut. The footer adds "N made wishes are in your own words."; on a day not read yet that is all the footer says |
+| a made wish whose run goes, on a page with no clash | the first note (after "not everything is drawn"), a plain one: "Your wish is being worked on." over "“<the start of its words>”. What it did will show here when it is done." With more, one note for all: "Your wishes are being worked on." over "“<the newest's>”, the newest, and N more. What each did will show here when it is done." The wish is named as every note of a wish names it, by its first 40 characters as core cleans them. No time is promised. It goes with the last run, and a look never carries it over as the app's own. A page with a clash has none: it is a note planned before the made wishes' list, so it would move or shrink what a person rules on, which a made wish never does (F37) |
 | no wish, and nothing set aside | one plain note: "Nothing wished for yet today." |
 | more than the app draws | the first note, "not everything is drawn", with the counts (next section) |
 

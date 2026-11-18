@@ -62,7 +62,7 @@ Three things about an entry are told apart by more than a shade, and each is
 a key of the theme's `[palette]`: the hint is a grey (`entry_hint`, also the
 words of an entry that waits), the chosen chip is filled (`chip_chosen`, its
 name in `chip_chosen_ink`), and the field that has the keys has a ring, a
-line darker than that fill (`entry_ring`; `entry_edge` without the keys).
+line darker than that fill (`entry_ring`; `entry_edge` without the keys), calm and never a red that reads as an error: the sticker theme's lilac, the plain theme's ink.
 
 Every text of the entry is held to a least contrast on its ground (WCAG 2's
 ratio of relative luminance, `Color::contrast`). Each floor is what WCAG 2 asks
@@ -76,7 +76,7 @@ are dark enough to read as text:
 | what is typed, the palette's `ink` | `entry` | 4.5 (`TYPED_FLOOR`) | 14.39 | 15.80 |
 | the hint, and words that wait | `entry` | 2.5 (`HINT_FLOOR`) | 5.36 | 5.37 |
 | the caret | `entry` | 3.0 (`CARET_FLOOR`) | 3.67 | 4.57 |
-| the ring | `paper` | 3.0 (`RING_FLOOR`) | 5.35 | 15.80 |
+| the ring | `paper` | 3.0 (`RING_FLOOR`) | 4.98 | 15.80 |
 | `quoted`, someone else's words | `bubble` | 4.5 (`QUOTED_FLOOR`) | 6.14 | 6.66 |
 
 A colour one can see through is laid on what is under it before it is
@@ -87,7 +87,7 @@ way, so it is measured as it is drawn.
 
 A theme file never draws one of these pairs under its floor for a key it did
 not set (`src/theme/own.rs`). Over its floor a pair may be drawn worse than
-before: `accent_dark = "#808080"` alone moves the ring from 5.35 to 3.88. A
+before: `accent_dark = "#808080"` alone moves the ring from 4.98 to 3.88. A
 key of the entry the file lacks takes the
 file's own colour only when the file sets that colour and the pair reads with
 it: `entry` is its `option` under its `ink`, `caret` its `accent_dark`,

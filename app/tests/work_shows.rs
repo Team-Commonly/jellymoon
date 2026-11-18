@@ -181,6 +181,38 @@ fn a_look_that_finds_a_run_ended_shows_its_work_as_a_tap_does_and_once() {
     assert_eq!(w.everything(&repo), was, "a look wrote something");
 }
 
+/// The words of the notes of a `placed` line, or of pieces `layout` placed, each its title and body.
+fn said(placed: Vec<Value>) -> Vec<String> {
+    let notes = placed.into_iter().filter(|piece| piece["kind"] == "note");
+    notes.map(|piece| support::Piece(piece).said()).collect()
+}
+
+#[test]
+fn the_page_says_a_wish_is_being_worked_on_and_its_work_still_shows_itself_when_the_run_ends() {
+    let w = day();
+    assert_eq!(wish(&w), "m1");
+    let (mut lines, mut placed) = (Vec::new(), Vec::new());
+    going(&w, &["m1"], |go| {
+        placed = said(w.placed().into_iter().map(|piece| piece.0).collect());
+        let mut window = w.taps("logs", &["placed", &hold(&w, "ended"), "look", "placed", "look"]);
+        window.printed(1);
+        go();
+        release(&w, "ended");
+        lines = window.ended();
+    });
+    let going = format!("Your wish is being worked on. “{SAID}”. What it did will show here when it is done.");
+    // `layout` has no tap, so it prints the choice to stop the run first; the page's own notes start with this.
+    assert_eq!(placed.get(1), Some(&going), "the first of the page's own notes at layout: {placed:?}");
+    let [before, ended, after, again] = &lines[..] else { panic!("four lines: {lines:#?}") };
+    assert!(said(serde_json::from_str(before).unwrap()).contains(&going), "{before}");
+    // The sentence is no note in the person's hand: the look after the run's end shows the work, and it is gone.
+    let shown = scene(ended).expect("the look after the run's end shows a scene");
+    assert_eq!((ids(&shown), options(&shown, "work-m1")), (vec!["work-m1"], CHOICES.map(String::from).to_vec()));
+    let words = said(serde_json::from_str(after).unwrap());
+    assert!(words.iter().all(|note| !note.contains("being worked on")), "{words:?}");
+    assert_eq!(again, "null");
+}
+
 #[test]
 fn work_that_waited_when_the_window_opened_is_shown_once_and_only_the_newest_wishs() {
     let w = day();

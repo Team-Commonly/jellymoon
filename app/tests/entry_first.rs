@@ -35,8 +35,6 @@ const HINT_TAB: &str = "What do you want done? Choose its project below.";
 const FOLDER: &str = "choose the folder you want to work in";
 const NAME: &str = "type a name for a new project";
 const UNREADY: &str = "Nothing to start yet.";
-const READ_NO_TURN: &str = "Nothing typed on this day was read, so there is no reading.";
-const OWN: &str = "1 made wish is in your own words.";
 const MARKS: [&str; 4] = ["★ finished", "working on it", "needs you", "let go"];
 
 fn of<'a>(placed: &'a [Piece], kind: &str) -> Vec<&'a Piece> {
@@ -175,12 +173,13 @@ fn projects_on_offer_with_nothing_read_and_no_wish_have_no_legend_and_no_footer(
 }
 
 #[test]
-fn a_made_wish_with_no_turn_read_keeps_the_legend_and_the_footer_words() {
+fn a_made_wish_with_no_turn_read_keeps_the_legend_and_says_nothing_of_a_reading() {
     let w = first_run(true);
     add(&w, "alpha");
     w.jellymoon(&["wish", "--date", DAY, "--say", "tidy the uploader", "--project", "alpha"]);
     let placed = w.placed();
-    assert_eq!(words(&placed, "footer"), [format!("{READ_NO_TURN} {OWN}")]);
+    // Every wish on the page is the person's own, and nothing was read: a footer would have nothing to say.
+    assert_eq!(words(&placed, "footer"), Vec::<String>::new());
     assert_eq!(words(&placed, "legend"), MARKS);
 }
 

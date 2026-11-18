@@ -59,7 +59,7 @@ impl Default for Palette {
             option_edge: Color::rgba(0xE4573A59),
             entry: Color::rgb(0xFFFFFF),
             entry_edge: Color::rgb(0xCFC8EE),
-            entry_ring: Color::rgb(0xC2371C),
+            entry_ring: Color::rgb(0x6F5BD6),
             entry_hint: Color::rgb(0x6A6A72),
             caret: Color::rgb(0xE4573A),
             chip: Color::rgb(0xEDEBF4),

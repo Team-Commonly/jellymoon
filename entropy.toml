@@ -780,7 +780,8 @@ max_file_lines = 400
 # layout without told notes, kept where any other note differs; the count reserved only on account of other
 # notes; no note drawn under its planned height), a file's name kept off the label's line unless the two are one
 # line, and the sweep that proves the first (`tests/told_sweep.rs`).
-"crates/sticker-kit" = 11024
+# The page says it is working raised the kit by 3: the test that the entry's ring is no red (`tests/colours.rs`).
+"crates/sticker-kit" = 11027
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -924,7 +925,11 @@ max_file_lines = 400
 # wish, and with one), 4 the made-up window's `look` act.
 # The hold after a choice raised the app by 112: 84 are its tests (`src/showing/tests.rs` 62, `tests/work_shows.rs`
 # 22), 28 `showing.rs` (the looks held back after a tap on an option, and only the wishes the page had).
-"app" = 14584
+# The page says it is working raised the app by 110 (113 added, 3 of the slack before): the note that a made wish
+# is being worked on and the footer of a day with nothing read (`scene.rs`), their unit tests (the old ones moved
+# to `src/scene/tests.rs`), the test that work shows itself under that note (`tests/work_shows.rs`, 32), and the
+# tests whose pages now have it.
+"app" = 14694
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

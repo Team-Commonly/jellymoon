@@ -23,10 +23,9 @@ pub const MADE: &str = "wished here today";
 /// The footer of a day with no session logs at all.
 const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
-/// The footer of a day whose session logs gave no turn of it. It says what was read, not what was typed: a turn
-/// typed in a folder switched off or in a run's copy is left out, and a made wish was typed in the window. It
-/// ends at the reading and names no model: a made wish on the page may have had a run.
-const READ_NO_TURN: &str = "Nothing typed on this day was read, so there is no reading.";
+/// The titles of the note that says the person's made wishes are being worked on: of one, and of more. Core's
+/// words for a wish at work are "is being worked on" too.
+pub(crate) const GOING: [&str; 2] = ["Your wish is being worked on.", "Your wishes are being worked on."];
 
 /// The title of the one note of a page with no wish on it, and its body when a project is on offer. With none,
 /// the body says to choose a folder first (`Today::draw`).
@@ -47,10 +46,13 @@ pub fn scene(page: &Page) -> Scene {
 /// A clash core says is no choice (its statements are the same once cleaned, or one is empty) is a plain note.
 /// The page's last `made` wishes are the person's made wishes. A reading's wish has a title the model wrote; a made
 /// wish has only the person's words, so one note after the clashes lists them, each whole or counted, never cut.
+/// While a run of the made wishes goes, the first note says so ([`going`]), on a page with no clash.
 pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let data = &page.data;
     let made = &data.wishes[data.wishes.len().saturating_sub(made)..];
-    let mut notes: Vec<Note> = left_out(page.left_out).into_iter().collect();
+    // A page with a clash has none: a made wish moves and shrinks nothing a person rules on (F37).
+    let says = going(made).filter(|_| data.clashes.is_empty());
+    let mut notes: Vec<Note> = left_out(page.left_out).into_iter().chain(says).collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
         notes.push(Note::Plain { title: NOTHING.to_string(), body: NOTHING_HERE.to_string() });
     }
@@ -80,10 +82,12 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     // Nothing read and no wish, projects on offer or not: the legend has nothing to explain, and there is no
     // reading to speak of.
     let blank = data.read.turns == 0 && data.clashes.is_empty() && data.wishes.is_empty();
-    let read = [footer(data, made.len()), own(made.len())].join(" ");
+    let read = footer(data, made.len());
+    // A footer that says nothing of a reading says nothing at all: every wish on the page is the person's own.
+    let read = if read.is_empty() { read } else { [read, own(made.len())].join(" ").trim_end().to_string() };
     Scene {
         characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
-        footer: if blank { String::new() } else { read.trim_end().to_string() },
+        footer: if blank { String::new() } else { read },
         legend: if blank { Vec::new() } else { legend() },
         ..bare(&data.day, notes)
     }
@@ -133,6 +137,24 @@ pub fn own(made: usize) -> String {
         1 => "1 made wish is in your own words.".to_string(),
         n => format!("{n} made wishes are in your own words."),
     }
+}
+
+/// The note that says the made wishes whose run goes are being worked on, one for all of them: the newest named
+/// by the start of its words, as every note of a wish names it, and the rest counted. It has no option and no
+/// field, so it is never in the person's hand (`working::in_hand`), and it goes with the last run. None when no
+/// run goes.
+fn going(made: &[Wish]) -> Option<Note> {
+    let working: Vec<&Wish> = made.iter().filter(|wish| wish.state == WishState::Working).collect();
+    let newest = working.last()?;
+    let named = format!("“{}”", jellymoon_core::wish_start(&newest.said, crate::wishing::NAMED_MAX));
+    let (title, body) = match working.len() {
+        1 => (GOING[0], format!("{named}. What it did will show here when it is done.")),
+        n => (
+            GOING[1],
+            format!("{named}, the newest, and {} more. What each did will show here when it is done.", n - 1),
+        ),
+    };
+    Some(Note::Plain { title: title.to_string(), body })
 }
 
 /// The legend's mark for a wish's state.
@@ -211,11 +233,12 @@ pub(crate) fn read_nothing(data: &PageData, made: usize) -> bool {
 }
 
 /// What the page was made from, and whose reading it is. A page that holds nothing a reading gives names no
-/// model: it says that no session logs were found (`jellymoon_core::page_with_no_logs`), or that no turn was read.
+/// model: it says that no session logs were found (`jellymoon_core::page_with_no_logs`), or, when the logs gave
+/// no turn of the day, nothing.
 fn footer(data: &PageData, made: usize) -> String {
     let read = &data.read;
     if read_nothing(data, made) {
-        return if read.no_logs { FOUND_NO_LOGS } else { READ_NO_TURN }.to_string();
+        return if read.no_logs { FOUND_NO_LOGS.to_string() } else { String::new() };
     }
     let count = |n: usize, one: &str| format!("{n} {one}{}", if n == 1 { "" } else { "s" });
     let projects = match read.projects.len() {
@@ -226,162 +249,4 @@ fn footer(data: &PageData, made: usize) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use jellymoon_core::PageRead;
-
-    use super::*;
-    use crate::read::Unknown;
-
-    fn wish(id: &str, state: WishState, stars: &[&str]) -> Wish {
-        Wish {
-            id: id.to_string(),
-            label: format!("Label of {id}"),
-            said: format!("please do {id}"),
-            project: "alpha".to_string(),
-            state,
-            stars: stars.iter().map(|star| star.to_string()).collect(),
-            question: None,
-        }
-    }
-
-    fn page(wishes: Vec<Wish>, clashes: Vec<Clash>) -> Page {
-        let read = PageRead { turns: 5, projects: vec!["alpha".to_string(), "beta".to_string()], no_logs: false };
-        let data = PageData { day: "2026-03-10".to_string(), wishes, clashes, read };
-        Page { data, unknown: Vec::new(), left_out: LeftOut::default() }
-    }
-
-    fn clash(settled: bool) -> Clash {
-        Clash {
-            a: "w1".to_string(),
-            b: "w2".to_string(),
-            quote_a: "add a retry".to_string(),
-            quote_b: "never retry".to_string(),
-            settled,
-        }
-    }
-
-    #[test]
-    fn one_character_per_wish_in_page_order_with_its_state_and_stars() {
-        let scene = scene(&page(
-            vec![
-                wish("w1", WishState::Working, &["a"]),
-                wish("w2", WishState::Done, &["b", "c"]),
-                wish("w3", WishState::NeedsYou, &[]),
-                wish("w4", WishState::LetGo, &["d", "e", "f", "g", "h"]),
-            ],
-            vec![],
-        ));
-        let seen: Vec<(&str, &str, State, u8)> =
-            scene.characters.iter().map(|c| (c.id.as_str(), c.label.as_str(), c.state, c.stars)).collect();
-        assert_eq!(
-            seen,
-            [
-                ("w1", "Label of w1", State::Busy, 1),
-                ("w2", "Label of w2", State::Idle, 2),
-                ("w3", "Label of w3", State::NeedsYou, 0),
-                ("w4", "Label of w4", State::Dimmed, 5),
-            ]
-        );
-        assert_eq!(scene.characters.iter().map(|c| c.hue).collect::<Vec<_>>(), [1, 2, 3, 4]);
-        assert_eq!(little_one(4, &wish("w5", WishState::Done, &[])).hue, 1, "the hues take turns; the hero keeps 0");
-        assert_eq!(scene.hero.map(|hero| (hero.id, hero.hue)), Some(("me".to_string(), 0)));
-        assert_eq!(scene.title, "what I wished for today");
-        assert_eq!(scene.date_label, "Tue · Mar 10");
-        assert_eq!(scene.legend.len(), 4);
-    }
-
-    #[test]
-    fn the_first_note_lists_every_star_with_its_wish() {
-        let scene =
-            scene(&page(vec![wish("w1", WishState::Done, &["a", "b"]), wish("w2", WishState::Done, &["c"])], vec![]));
-        let rows = [("a", "Label of w1"), ("b", "Label of w1"), ("c", "Label of w2")];
-        let rows = rows.map(|(star, label)| (star.to_string(), label.to_string())).to_vec();
-        assert_eq!(scene.notes, [Note::List { title: "came true today".to_string(), rows }]);
-        let none = super::scene(&page(vec![wish("w1", WishState::Working, &[])], vec![]));
-        assert_eq!(none.notes, [], "no star, no list");
-    }
-
-    #[test]
-    fn a_clash_is_a_choice_of_both_quotes_and_only_a_settled_one_is_struck() {
-        let scene = scene(&page(vec![wish("w1", WishState::LetGo, &[])], vec![clash(true), clash(false)]));
-        let choices: Vec<(&str, &[String], bool)> = scene
-            .notes
-            .iter()
-            .filter_map(|note| match note {
-                Note::Choice { id, options, struck_first, .. } => {
-                    Some((id.as_str(), options.as_slice(), *struck_first))
-                }
-                _ => None,
-            })
-            .collect();
-        let quotes = ["“add a retry”".to_string(), "“never retry”".to_string()];
-        assert_eq!(choices, [("clash-1", &quotes[..], true), ("clash-2", &quotes[..], false)]);
-    }
-
-    #[test]
-    fn what_the_app_has_no_piece_for_becomes_a_plain_note_after_the_rest() {
-        let mut page = page(vec![wish("w1", WishState::Done, &["a"])], vec![clash(false)]);
-        page.unknown = vec![Unknown { title: "reminders".to_string(), body: "Water the plants".to_string() }];
-        let scene = scene(&page);
-        assert_eq!(scene.notes.len(), 3);
-        let plain = Note::Plain { title: "reminders".to_string(), body: "Water the plants".to_string() };
-        assert_eq!(scene.notes.last(), Some(&plain));
-    }
-
-    #[test]
-    fn what_was_left_out_is_the_first_note_and_names_only_what_went() {
-        let mut page = page(vec![wish("w1", WishState::Done, &["a"])], vec![clash(false)]);
-        page.left_out = LeftOut { wishes: 3, stars: 1, ..LeftOut::default() };
-        let first = Note::Plain {
-            title: "not everything is drawn".to_string(),
-            body: "Left out of this page: 3 wishes, 1 star.".to_string(),
-        };
-        let notes = scene(&page).notes;
-        assert_eq!((notes.len(), notes.first()), (3, Some(&first)));
-    }
-
-    #[test]
-    fn a_page_with_nothing_on_it_says_so() {
-        let mut empty = page(vec![], vec![]);
-        empty.data.read = PageRead { turns: 0, projects: vec![], no_logs: false };
-        let scene = scene(&empty);
-        assert!(matches!(&scene.notes[..], [Note::Plain { title, .. }] if title == "Nothing wished for yet today."));
-        assert_eq!(scene.characters, []);
-        assert_eq!((scene.footer.as_str(), scene.legend.len()), ("", 0), "nothing to explain, no reading");
-    }
-
-    #[test]
-    fn the_footer_counts_in_words_that_agree() {
-        let read = |turns, projects: &[&str], no_logs| {
-            let mut page = page(vec![], vec![]);
-            page.data.read = PageRead { turns, projects: projects.iter().map(|p| p.to_string()).collect(), no_logs };
-            page.data
-        };
-        // No logs to read is said, and nothing of a reading or of things typed.
-        let found_none = "No Claude Code session logs were found, so nothing was read.";
-        assert_eq!(footer(&read(0, &[], true), 0), found_none);
-        assert_eq!(
-            footer(&read(75, &["alpha", "beta"], false), 0),
-            "Read from 75 things you typed in 2 projects (alpha, beta). This is the model's reading, unedited."
-        );
-        let one = "Read from 1 thing you typed in 1 project (alpha). This is the model's reading, unedited.";
-        assert_eq!(footer(&read(1, &["alpha"], false), 0), one);
-        // A page that says no logs were found and holds a turn, or a wish of its own, is a reading's page.
-        assert_eq!(footer(&read(1, &["alpha"], true), 0), one);
-        let typed = "Read from 1 thing you typed. This is the model's reading, unedited.";
-        assert_eq!(footer(&read(1, &[], true), 0), typed);
-        let mut own = read(0, &[], true);
-        own.wishes = vec![wish("w1", WishState::Working, &[])];
-        assert_eq!(footer(&own, 0), "Read from 0 things you typed. This is the model's reading, unedited.");
-        assert_eq!(footer(&own, 1), found_none);
-    }
-
-    #[test]
-    fn a_day_that_is_not_a_date_and_an_id_with_odd_characters_stay_text() {
-        let mut odd = page(vec![wish("w\u{7}1\n<b>", WishState::Done, &[])], vec![]);
-        odd.data.day = "someday".to_string();
-        let scene = scene(&odd);
-        assert_eq!(scene.date_label, "someday");
-        assert_eq!(scene.characters[0].id, "w1 <b>");
-    }
-}
+mod tests;

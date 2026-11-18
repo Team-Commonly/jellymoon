@@ -4,22 +4,157 @@
 //! make the same calls in the same order (`tests/f43/showing.rs`). No GPUI.
 
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
-use sticker_kit::{Scene, Theme};
+use sticker_kit::{Character, Note, Scene, State, Theme};
 
 use crate::starting::{Given, Listed, Listing, Shown};
 use crate::stopping::{Chosen, Stopped, Stopping};
 use crate::taps::OnShow;
 use crate::today::{Later, Next};
 use crate::wishing::{Answer, Asking, Look, Offering, Reading, Said, Seen, Wishing};
-use crate::working::{Worked, Working};
+use crate::working::{self, Worked, Working};
 
 /// The day's page on show, shared by the window's handlers, which all run on its thread. A page-data file has no
 /// day: every act on it is nothing. With it, the project core listed while no entry offered it (F64): a folder
-/// dropped or a name entered while the day is still being read.
+/// dropped or a name entered while the day is still being read. And whose work a look may show by itself.
 #[derive(Clone, Default)]
-pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>);
+pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>, Rc<RefCell<Turns>>);
+
+/// Whose work that waits a look may show with no tap. Kept on the window's thread.
+#[derive(Default)]
+struct Turns {
+    /// The work that waited when the window opened is looked for by one look that is shown, and by no other.
+    first: First,
+    /// The made wishes of the last look. None before the first: a wish there then is not new to this window.
+    known: Option<BTreeSet<String>>,
+    /// The wishes this window saw made or working, whose work was not shown since and is not known to be none.
+    turn: BTreeSet<String>,
+    /// The wishes a look asked core of that have no work waiting, told from the look's thread.
+    none: Arc<Mutex<Vec<String>>>,
+    /// The looks still to be made before one may show work: [`HOLD`] after a tap on an option, an Enter in a
+    /// field, and core's answer to either.
+    hold: usize,
+}
+
+/// The looks that show no work after a tap on an option or core's answer to it. A look is made once a second, so
+/// work comes three to four seconds after the answer is on the page: past a slow second tap, or a tap made again
+/// by someone not sure the first was taken, on options that would stand where the tapped ones stood.
+const HOLD: usize = 3;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+enum First {
+    #[default]
+    Due,
+    Asked,
+    Done,
+}
+
+/// What one look may ask core of.
+struct Asks {
+    first: bool,
+    turn: BTreeSet<String>,
+    /// The made wishes of the scene the look was made of: no other wish's work is put on it.
+    made: BTreeSet<String>,
+    none: Arc<Mutex<Vec<String>>>,
+}
+
+/// The characters of the day's made wishes: the last of the page's, one for each row of the note of them.
+fn made(scene: &Scene) -> &[Character] {
+    let rows = |note: &Note| match note {
+        Note::Whole { title, rows } if title == crate::scene::MADE => Some(rows.len()),
+        _ => None,
+    };
+    let count = scene.notes.iter().find_map(rows).unwrap_or(0);
+    &scene.characters[scene.characters.len().saturating_sub(count)..]
+}
+
+impl Turns {
+    /// A look is about to be made of `scene`: what it may ask core of, or none while a note on the page is in
+    /// the person's hand ([`working::in_hand`]). Then the look is the plain one, and every turn is kept.
+    fn asks(&mut self, scene: &Scene) -> Option<Asks> {
+        let made = made(scene);
+        let ids = |of: &dyn Fn(&Character) -> bool| -> Vec<String> {
+            made.iter().filter(|wish| of(wish)).map(|wish| wish.id.clone()).collect()
+        };
+        if let Some(known) = &self.known {
+            self.turn.extend(ids(&|wish| !known.contains(&wish.id)));
+        }
+        let all: BTreeSet<String> = ids(&|_| true).into_iter().collect();
+        self.known = Some(all.clone());
+        if let Ok(mut none) = self.none.lock() {
+            for id in none.drain(..) {
+                self.turn.remove(&id);
+            }
+        }
+        for id in working::shown(scene) {
+            self.turn.remove(id);
+        }
+        self.turn.extend(ids(&|wish| wish.state == State::Busy));
+        if self.first == First::Asked {
+            self.first = First::Done;
+        }
+        if self.hold > 0 {
+            self.hold -= 1;
+            return None;
+        }
+        if working::in_hand(scene) {
+            return None;
+        }
+        let first = self.first == First::Due;
+        if first {
+            self.first = First::Asked;
+        }
+        Some(Asks { first, turn: self.turn.clone(), made: all, none: self.none.clone() })
+    }
+
+    /// The person tapped an option or pressed Enter in a field, or core answered one: no look shows work until
+    /// [`HOLD`] more have been made. Every turn is kept. A look in flight then is dropped by `OnShow::seen`, as
+    /// the act changed the scene it was made of.
+    fn acted(&mut self) {
+        self.hold = HOLD;
+    }
+
+    /// What a look or a tap gave was shown as `scene`, or dropped. Work on show has had its turn. A dropped
+    /// look that `carried` work is made again: the first look is owed still.
+    fn saw(&mut self, scene: Option<&Scene>, carried: bool) {
+        match scene {
+            Some(scene) => {
+                for id in working::shown(scene) {
+                    self.turn.remove(id);
+                }
+            }
+            None if carried && self.first == First::Asked => self.first = First::Due,
+            None => {}
+        }
+    }
+}
+
+impl Asks {
+    /// The wishes to ask core of, in the order asked, on the page as the look drew it: none whose run goes. The
+    /// first look asks the wishes that are done, the newest first; then each wish whose turn it is, in core's order.
+    fn whom(&self, now: &Scene) -> Vec<String> {
+        let made = made(now);
+        let done = made.iter().rev().filter(|wish| self.first && wish.state == State::Idle);
+        let ended = made.iter().filter(|wish| wish.state != State::Busy && self.turn.contains(&wish.id));
+        let mut whom: Vec<String> = Vec::new();
+        for wish in done.chain(ended) {
+            if self.made.contains(&wish.id) && !whom.contains(&wish.id) {
+                whom.push(wish.id.clone());
+            }
+        }
+        whom
+    }
+
+    /// The wish `id` has no work waiting: it is not asked of again for this end of its run.
+    fn none(&self, id: String) {
+        if let Ok(mut none) = self.none.lock() {
+            none.push(id);
+        }
+    }
+}
 
 /// What the window does once core has answered an Enter.
 pub struct Entered {
@@ -56,7 +191,7 @@ impl After {
 
 impl Showing {
     pub fn of(day: Option<OnShow>) -> Self {
-        Showing(Rc::new(RefCell::new(day)), Rc::default())
+        Showing(Rc::new(RefCell::new(day)), Rc::default(), Rc::default())
     }
 
     /// The project whose chip is chosen as soon as an entry offers it, or none.
@@ -94,14 +229,37 @@ impl Showing {
         self.with(|on| on.show(next))
     }
 
-    /// One look at the day, as work for another thread.
+    /// One look at the day, as work for another thread. A look that finds a wish's run ended shows the work of
+    /// it that waits, as a tap on its character does ([`Showing::poked`]), by the calls to core a tap makes, each
+    /// wish asked of once. Not while a note on the page is in the person's hand, and not in the [`HOLD`] looks
+    /// after the person chose or typed or core answered them: then the work waits its turn. Of several, the
+    /// first in core's order is shown. The first look shown also finds the work that waited when the window
+    /// opened, the newest wish's.
     pub fn look(&self) -> Option<Look> {
-        self.with(|on| on.look())
+        self.with(|on| {
+            let Some(asks) = self.2.borrow_mut().asks(&on.scene) else { return on.look() };
+            let (today, page, from) = (on.today.clone(), on.page.clone(), on.scene.clone());
+            Box::new(move || {
+                let mut now = today.again(page.as_ref(), &from);
+                for id in asks.whom(&now) {
+                    if let Some(over) = today.waiting_over(&now, &id) {
+                        now = over;
+                        break;
+                    }
+                    asks.none(id);
+                }
+                (now != from).then_some(Seen { from, now })
+            }) as Look
+        })
     }
 
     /// What a look, or a tap on a character, gave: the scene to show. None when the scene on show has changed since.
     pub fn seen(&self, seen: Seen) -> Option<Scene> {
-        self.with(|on| on.seen(seen)).flatten()
+        let was: Vec<&str> = working::shown(&seen.from).collect();
+        let carried = working::shown(&seen.now).any(|id| !was.contains(&id));
+        let scene = self.with(|on| on.seen(seen)).flatten();
+        self.2.borrow_mut().saw(scene.as_ref(), carried);
+        scene
     }
 
     /// Enter in the entry, as work for another thread.
@@ -113,7 +271,8 @@ impl Showing {
     /// follow-up. With an answer comes the scene to show at once, in which the wish is at work. None when that
     /// note has no field on show, and then nothing is asked of core.
     pub fn typing(&self, note: &str, typed: &str) -> Option<(Option<Scene>, Wishing)> {
-        self.with(|on| on.typing(note, typed)).flatten()
+        let typing = self.with(|on| on.typing(note, typed)).flatten();
+        typing.inspect(|_| self.2.borrow_mut().acted())
     }
 
     /// Core's answer to an Enter, or none when there was no day to ask. The entry, or the field, is always
@@ -121,6 +280,7 @@ impl Showing {
     pub fn answered(&self, answer: Option<Answer>) -> Entered {
         let kept = answer.as_ref().is_some_and(Answer::kept);
         let (scene, asking) = answer.and_then(|answer| self.with(|on| on.answered(answer))).unzip();
+        self.2.borrow_mut().acted();
         Entered { kept, scene, asking: asking.flatten() }
     }
 
@@ -152,16 +312,19 @@ impl Showing {
     /// A tap on an option: the scene to show at once, and, when it was the choice to stop a run or a choice of
     /// work that waits, core's part of it as work for another thread. None for a tap that is nothing.
     pub fn chose(&self, note: &str, index: usize) -> Option<(Scene, Option<After>)> {
-        match self.with(|on| on.chose(note, index))? {
+        let chosen = match self.with(|on| on.chose(note, index))? {
             Chosen::Stop(scene, stop) => Some((scene, Some(After::Stop(stop)))),
             Chosen::Work(scene, work) => Some((scene, Some(After::Work(work)))),
             Chosen::Tapped(scene) => Some((scene, None)),
             Chosen::Nothing => None,
-        }
+        };
+        chosen.inspect(|_| self.2.borrow_mut().acted())
     }
 
-    /// What the work a tap left gave: the scene to show.
+    /// What the work a tap left gave: the scene to show. The looks held back are counted from here again, so an
+    /// answer that was long in coming is on the page as long as a quick one before work is shown under it.
     pub fn ended(&self, ended: Ended) -> Option<Scene> {
+        self.2.borrow_mut().acted();
         self.with(|on| match ended {
             Ended::Stopped(stopped) => on.stopped(stopped),
             Ended::Worked(worked) => on.worked(worked),
@@ -188,3 +351,6 @@ pub fn tap_line(id: &str, option: Option<usize>) -> String {
 pub fn entry_line(id: &str, typed: &str) -> String {
     format!("entry id={id} characters={}", typed.chars().count())
 }
+
+#[cfg(test)]
+mod tests;

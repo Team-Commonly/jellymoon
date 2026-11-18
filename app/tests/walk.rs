@@ -1,5 +1,5 @@
 //! The walk example (`examples/walk.rs`) on a made-up home: a new project named, a wish typed and entered, looked at
-//! until its work waits, and `Keep it` tapped, with the made-up agent of F39's tests in place of Claude Code, which
+//! until its work shows itself, and `Keep it` tapped, with the made-up agent of F39's tests in place of Claude Code, which
 //! ends with a result. It is started through the door, and core starts the `jellymoon` command put where
 //! `install.sh` puts it. The example needs the kit's windowless drawing, which is the Mac's: `cargo test` builds it
 //! with `--features sticker-kit/headless`, and `cargo build --example walk` with the same features does too.
@@ -97,13 +97,13 @@ fn first(lines: &[String], said: &str) -> usize {
     lines.iter().position(|line| line.contains(said)).unwrap_or_else(|| panic!("no line holds {said}: {lines:#?}"))
 }
 
-#[test]
-fn a_whole_loop_walks_from_a_new_project_to_kept_work_and_says_titles_and_states_only() {
+/// A whole loop: a new project named, a wish entered, `shows` until its work is on the page, and `Keep it`.
+fn whole_loop(shows: &[&str]) {
     let w = quiet();
     w.install();
     told(&w);
     let typed = format!("type:{SAID}");
-    let steps = ["type:garden", "enter", "picture:named", typed.as_str(), "enter", "until:done:30", "poke:m1"];
+    let steps = [&["type:garden", "enter", "picture:named", typed.as_str(), "enter"][..], shows].concat();
     let steps = [&steps[..], &["picture:waits", "tap:work-m1:Keep it", "picture:kept"][..]].concat();
     let (code, lines, said) = walk(&w, &steps, 120);
     println!("{}", lines.join("\n"));
@@ -124,6 +124,18 @@ fn a_whole_loop_walks_from_a_new_project_to_kept_work_and_says_titles_and_states
     let pictures = ["named", "waits", "kept"].map(picture);
     assert!(pictures.iter().all(|png| png.starts_with(b"\x89PNG")), "every picture step wrote a picture");
     assert!(pictures[0] != pictures[1] && pictures[1] != pictures[2], "each picture is the page as it is then");
+}
+
+/// No step taps the wish's character: the look that finds its run ended shows its work, with what the run says.
+#[test]
+fn a_whole_loop_walks_from_a_new_project_to_kept_work_with_no_tap_on_the_wish() {
+    whole_loop(&["until:Work waits for this wish.:30"]);
+}
+
+/// A tap on the character after the run's end, as a person may still make it: the loop is the same.
+#[test]
+fn a_whole_loop_with_a_tap_on_the_wish_says_titles_and_states_only() {
+    whole_loop(&["until:done:30", "poke:m1"]);
 }
 
 #[test]

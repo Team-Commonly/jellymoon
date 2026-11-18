@@ -4,6 +4,7 @@
 //! prints one line of JSON on stdout: the scene the window would show, or `null` when it would show nothing.
 //!
 //! - `poke:<id>`: a tap on a character. The look is made on another thread, as the window makes it.
+//! - `look`: the look the window makes once a second, made on another thread too.
 //! - `choose:<note>:<index>`: a tap on an option. The window is given a tap by the kit's view, which finds one
 //!   only among the pieces it placed: so the scene on show is laid out here as `layout` lays it out, at the
 //!   window's size, and a tap on an option that is not placed is no tap, and prints `null`. The line is the
@@ -39,11 +40,16 @@ use std::{env, fs, io, thread};
 use jellymoon_app::showing::{After, Entered, Showing};
 use jellymoon_app::taps::OnShow;
 use jellymoon_app::today::Today;
-use jellymoon_app::wishing::{Asking, Wishing};
+use jellymoon_app::wishing::{Asking, Look, Wishing};
 use jellymoon_core::{RunOptions, WorkDone, WorkTap};
 use serde::Serialize;
 use serde_json::{Value, json};
 use sticker_kit::{Scene, Theme, Viewport};
+
+/// A look or a tap on a character, made on another thread, and what the window then shows.
+fn looked(showing: &Showing, now: &mut Scene, look: Look) {
+    shown(now, elsewhere(look).and_then(|seen| showing.seen(seen)));
+}
 
 /// The pieces `layout` places of a scene: what `jellymoon-app layout` prints of it, a piece a line.
 fn placed(scene: &Scene, size: Viewport) -> Vec<Value> {
@@ -181,10 +187,8 @@ fn main() {
             _ => act.split(':').collect(),
         };
         match parts[..] {
-            ["poke", id] => {
-                let look = showing.poked(id).unwrap();
-                shown(&mut now, elsewhere(look).and_then(|seen| showing.seen(seen)));
-            }
+            ["poke", id] => looked(&showing, &mut now, showing.poked(id).unwrap()),
+            ["look"] => looked(&showing, &mut now, showing.look().unwrap()),
             ["choose", note, index] => {
                 let index = index.parse().unwrap();
                 let tapped = tappable(&now, size, note, index).then(|| showing.chose(note, index)).flatten();

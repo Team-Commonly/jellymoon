@@ -13,10 +13,12 @@ mod window;
 
 use std::fs;
 
+use jellymoon_app::starting::UNMADE;
+use serde_json::json;
 use sticker_kit::{Note, Scene};
-use support::Piece;
 use support::day::{DAY, called, notes};
 use support::wished::{SAID, World, quiet, showed};
+use support::{Piece, pieces};
 
 /// The two sizes a first-run page is looked at: the design's, and the smallest the window opens at.
 const SIZES: [&str; 2] = ["1440x900", "960x640"];
@@ -28,11 +30,14 @@ const SHARE: f64 = 0.4;
 const TALL: f64 = 40.0;
 
 const START: &str = "Start";
-const NEW_HINT: &str = "Type a name for a new project";
+const NEW_HINT: &str = "Choose a folder below, or type a name for a new project";
 const HINT_TAB: &str = "What do you want done? Choose its project below.";
 const FOLDER: &str = "choose the folder you want to work in";
 const NAME: &str = "type a name for a new project";
 const UNREADY: &str = "Nothing to start yet.";
+const READ_NO_TURN: &str = "Nothing typed on this day was read, so there is no reading.";
+const OWN: &str = "1 made wish is in your own words.";
+const MARKS: [&str; 4] = ["★ finished", "working on it", "needs you", "let go"];
 
 fn of<'a>(placed: &'a [Piece], kind: &str) -> Vec<&'a Piece> {
     placed.iter().filter(|piece| piece.kind() == kind).collect()
@@ -91,6 +96,9 @@ fn with_no_project_the_page_says_to_choose_a_folder_first_and_the_field_is_the_m
             assert!(folder.is_some() && folder < name, "logs {logs} at {size}: the folder first: {said}");
             assert!(!said.contains("type what you want done"), "logs {logs} at {size}: no wish is asked for: {said}");
             assert_eq!(words(&placed, "entry"), [NEW_HINT], "logs {logs} at {size}: the field takes a name");
+            // The hint says what the note says, in the same order: the folder, then the name.
+            let hint = NEW_HINT.to_lowercase();
+            assert!(hint.find("folder") < hint.find("name") && said.find("folder") < said.find("name"));
             the_field_comes_first(&placed, size);
             // Nothing read and nothing made: no legend and no line about a reading.
             assert!(of(&placed, "legend").is_empty() && of(&placed, "footer").is_empty(), "logs {logs} at {size}");
@@ -152,4 +160,41 @@ fn start_with_nothing_typed_starts_nothing_and_says_what_to_type_first() {
     let list = w.jellymoon(&["project", "list"]);
     assert_eq!(list["projects"].as_array().unwrap().len(), 1, "only the project added: {list}");
     assert!(!wished(&w), "a wish was kept, or a run asked for");
+}
+
+/// A page of projects on offer, with nothing read and no wish made, in the page data a reading would keep.
+fn nothing_read() -> serde_json::Value {
+    let read = json!({"turns": 0, "projects": ["alpha", "beta"]});
+    json!({"day": DAY, "wishes": [], "clashes": [], "read": read})
+}
+
+#[test]
+fn projects_on_offer_with_nothing_read_and_no_wish_have_no_legend_and_no_footer() {
+    let placed = pieces(&nothing_read(), &[]);
+    assert!(of(&placed, "legend").is_empty() && of(&placed, "footer").is_empty(), "{placed:?}");
+}
+
+#[test]
+fn a_made_wish_with_no_turn_read_keeps_the_legend_and_the_footer_words() {
+    let w = first_run(true);
+    add(&w, "alpha");
+    w.jellymoon(&["wish", "--date", DAY, "--say", "tidy the uploader", "--project", "alpha"]);
+    let placed = w.placed();
+    assert_eq!(words(&placed, "footer"), [format!("{READ_NO_TURN} {OWN}")]);
+    assert_eq!(words(&placed, "legend"), MARKS);
+}
+
+#[test]
+fn start_with_nothing_typed_keeps_the_notes_standing_and_puts_its_own_first() {
+    let w = first_run(false);
+    let mut on_show = w.on_show();
+    let standing = Note::Plain { title: UNMADE.to_string(), body: "That name is taken.".to_string() };
+    on_show.scene.notes.insert(0, standing.clone());
+    for id in ["new", "wish", "new"] {
+        let scene = on_show.unready(id);
+        assert_eq!(first(&scene).map(|(title, _)| title), Some(UNREADY), "{id}: first");
+        let kept = scene.notes.iter().filter(|note| **note == standing).count();
+        let nothing = scene.notes.iter().filter(|note| matches!(note, Note::Plain { title, .. } if title == UNREADY));
+        assert_eq!((kept, nothing.count()), (1, 1), "{id}: the standing note stays, and one of ours");
+    }
 }

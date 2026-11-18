@@ -148,11 +148,13 @@ fn a_page_that_says_no_logs_and_holds_a_reading_is_drawn_as_the_reading() {
     }
 
     // A page that says no logs and holds only a clash, or only a project read, is no page of a day with no logs.
-    for (clashes, projects) in
-        [(json!([crate::support::clash("a", "b", "do it", "do not", false)]), json!([])), (json!([]), json!(["alpha"]))]
-    {
+    // The clash is a reading's page, with its footer; a project read with nothing else is a page with nothing read.
+    let clash = json!([crate::support::clash("a", "b", "do it", "do not", false)]);
+    for (clashes, projects, said) in [(clash, json!([]), 1), (json!([]), json!(["alpha"]), 0)] {
         let read = json!({"turns": 0, "projects": projects, "no_logs": true});
         let placed = pieces(&json!({"day": DAY, "wishes": [], "clashes": clashes, "read": read}), &[]);
-        assert!(words(&placed, "footer").iter().all(|footer| footer.starts_with("Read from 0 things")), "{placed:?}");
+        let footers = words(&placed, "footer");
+        assert_eq!(footers.len(), said, "{placed:?}");
+        assert!(footers.iter().all(|footer| footer.starts_with("Read from 0 things")), "{placed:?}");
     }
 }

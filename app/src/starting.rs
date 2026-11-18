@@ -7,8 +7,9 @@
 
 use std::path::PathBuf;
 
-use sticker_kit::{Entry, Scene};
+use sticker_kit::{Entry, Note, Scene};
 
+use crate::scene;
 use crate::taps::OnShow;
 use crate::today::Next;
 use crate::wishing::{Said, Seen, newest};
@@ -26,8 +27,8 @@ pub const GO: &str = "Start";
 /// What the entry offers besides its chips: the system's folder picker.
 pub const CHOOSE: &str = "Choose a folder";
 
-/// The hint of the entry a new project is named in: what it takes is a name.
-pub const NEW_HINT: &str = "Type a name for a new project";
+/// The hint of the entry a new project is named in: the folder first, as the page's note says it, then a name.
+pub const NEW_HINT: &str = "Choose a folder below, or type a name for a new project";
 
 /// The note of `Start` tapped while the entry holds no words: nothing was started, and what to do first.
 pub const UNREADY: &str = "Nothing to start yet.";
@@ -84,6 +85,18 @@ pub fn named(id: &str, typed: &str) -> Option<Given> {
     (id == NEW).then(|| Given::Name(typed.to_string()))
 }
 
+/// The empty page of a day with no project on offer: its one note says to choose a folder first, or to name a new
+/// project, in the order the entry's hint does (`starting::NEW_HINT`). The window and the picture share this.
+pub fn no_project(shown: &mut Scene) {
+    for note in &mut shown.notes {
+        if let Note::Plain { title, body } = note
+            && title == scene::NOTHING
+        {
+            *body = scene::NO_PROJECT.to_string();
+        }
+    }
+}
+
 /// Core's refusal in the app's words: what core says of `--repo` is said of the folder, and nothing else changes.
 fn refusal(why: &str) -> String {
     let why = why.strip_prefix("--repo ").map_or(why.to_string(), |rest| format!("that folder {rest}"));
@@ -107,10 +120,13 @@ fn said(given: &Given, answer: Result<(String, Option<&str>), String>) -> (Said,
 
 impl OnShow {
     /// `Start` tapped while the entry `id` held no words: the scene on show with one note that says what to do
-    /// first, in place of the note of the wish before.
+    /// first, before the others. The notes standing stay (a wish not kept, a run not started, a question
+    /// unanswered); only an earlier "Nothing to start yet." goes, so a second tap adds no second.
     pub fn unready(&mut self, id: &str) -> Scene {
         let body = if id == NEW { UNREADY_NEW } else { UNREADY_WISH };
-        newest(&mut self.scene, Some((UNREADY, body.to_string())));
+        let notes = &mut self.scene.notes;
+        notes.retain(|note| !matches!(note, Note::Plain { title, .. } if title == UNREADY));
+        notes.insert(0, Note::Plain { title: UNREADY.to_string(), body: body.to_string() });
         self.scene.clone()
     }
 
@@ -152,5 +168,27 @@ impl OnShow {
             newest(&mut self.scene, Some(listed.said));
         }
         Shown { scene: self.scene.clone(), entry: listed.entry, name: listed.name }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use jellymoon_core::{PageData, PageRead};
+    use sticker_kit::Note;
+
+    use super::*;
+    use crate::read::{LeftOut, Page};
+
+    #[test]
+    fn the_empty_page_of_a_day_with_no_project_says_the_folder_first() {
+        let read = PageRead { turns: 0, projects: vec![], no_logs: false };
+        let data = PageData { day: "2026-03-10".to_string(), wishes: vec![], clashes: vec![], read };
+        let mut shown = scene::scene(&Page { data, unknown: vec![], left_out: LeftOut::default() });
+        assert!(matches!(&shown.notes[..], [Note::Plain { body, .. }] if body == scene::NOTHING_HERE));
+        no_project(&mut shown);
+        assert!(matches!(&shown.notes[..], [Note::Plain { body, .. }] if body == scene::NO_PROJECT));
+        let said = scene::NO_PROJECT.to_lowercase();
+        let hint = NEW_HINT.to_lowercase();
+        assert!(said.find("folder") < said.find("name") && hint.find("folder") < hint.find("name"));
     }
 }

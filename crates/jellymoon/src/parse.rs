@@ -56,6 +56,7 @@ pub enum Command {
     RemoveHook,
     HookStatus,
     Uninstall,
+    Harness,
     MakeCopy {
         repo: PathBuf,
         run: Option<String>,
@@ -81,8 +82,9 @@ pub fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let command = match parser.next().map_err(usage)? {
         Some(Value(command)) if command == "day" || command == "page" || command == "help" => command,
-        Some(Value(command)) if command == "uninstall" => {
+        Some(Value(command)) if command == "uninstall" || command == "harness" => {
             return match parser.next().map_err(usage)? {
+                None if command == "harness" => Ok(Command::Harness),
                 None => Ok(Command::Uninstall),
                 Some(Long("help") | Short('h')) => Ok(Command::Help),
                 Some(other) => Err(usage(other.unexpected())),

@@ -51,6 +51,7 @@ run's id, by a third run that had opened the old lock file before it was unlinke
 | `day` | `jellymoon day` reads them: 3 turns in 2 projects |
 | `page` | `jellymoon page`, through `fake-claude`, prints page data with the 3 wishes, one of them done, and the clash |
 | `found-off-path` | as in an app opened from the Finder: with an empty `PATH` and no harness named, `jellymoon page` finds `fake-claude` in the temporary home's `.local/bin` and runs it |
+| `harness` | `jellymoon harness` in the same world prints one line: the harness is found in a fixed place, and with `JELLYMOON_CLAUDE` set it is named and not looked for; no harness is started and no folder is named. No login shell is asked: the chain sets `JELLYMOON_SHELL` to nothing |
 | `layout-sticker`, `layout-plain` | `jellymoon-app layout` on that page, in each built-in theme: every wish is a character and the clash is a choice note |
 | `today` | `jellymoon-app layout` with no `--page` reads the made-up day itself, through `fake-claude`: every wish is drawn, and the page is kept in the temporary home |
 | `today-again` | the same run again prints the same pieces from the kept page, and `fake-claude` is not called |
@@ -96,7 +97,7 @@ that `PATH` is looked for.
 - **`--window`** adds the window step. It needs a display, so that step alone sees the caller's variables. CI runs
   it on macOS, where a failure fails the job: the hosted runner opens the GPUI window and closes it.
 - **`--real`**, for a maintainer on their own machine, never in CI or by an agent. The same steps over today's real
-  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `today`, `today-again`, `empty-day`,
+  logs and the real Claude Code on `PATH`: one real reading call. `logs`, `found-off-path`, `harness`, `today`, `today-again`, `empty-day`,
   `no-logs`, the delivery steps, `wish`, `copy`, `show`, `keep`, `stop`, `toss`, `asks`, `answer`, `follow`, `wish-run`, `hear`, `jelly`, `project`, `new` and `uninstall` are
   left out;
   `--skip` is the reader's `--skip`. What Jellymoon writes still goes to the temporary home. It prints counts, states

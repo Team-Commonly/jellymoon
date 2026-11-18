@@ -125,6 +125,16 @@ finds a way that needs none (a file of the system, or a system program started b
 `run/dead.rs`), or adds a note here for a package. Whether safe code can give the login shell a session of its
 own is not known either; a process group of its own, as a run's child has, is what the cap needs.
 
+**As built (F78).** The record of the user is read with no `unsafe` and no package: core starts the system's own
+program for it by its full path, with no variable of its own, as `ps` is started in `run/dead.rs`. That is
+`/usr/bin/id -P` on a Mac and `/usr/bin/getent passwd <uid>` elsewhere, two seconds and 4,096 bytes at most; the login
+shell is the last field of the one line printed, when its third field is this user's number. A file of the system
+was not taken: on a Mac `/etc/passwd` does not hold a person's account. The list is `zsh` and `bash`. The mark is
+`__jellymoon_path__`, the stated size is 65,536 bytes, and the login shell gets a process group of its own and no
+session of its own. The words of each refusal are in [page.md](../development/page.md), "The login shell". A test's
+made-up login shell meets the checks as a person's does: it is a program of the test's, under the name `zsh` or
+`bash`, in a folder of the door's world that only the test's user can write to. There is no seam for tests.
+
 **Also here: the harness's own variables.** `call::harness_of` clears the environment and passes a short list
 (`call.rs`, `ENVIRONMENT`), which names no `CLAUDE_CODE_*` variable. So a harness started from inside a Claude
 Code session is not told it is that session's child. This already holds, by the code. What tests hold is

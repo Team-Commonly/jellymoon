@@ -76,16 +76,65 @@ An app opened from Finder is given a `PATH` of four system folders (`/usr/bin:/b
 4. `~/.claude/local`: the local install older versions of Claude Code made.
 5. `/opt/homebrew/bin`: Homebrew on a Mac with an Apple chip.
 6. `/usr/local/bin`: Homebrew on a Mac with an Intel chip, and what an administrator installed by hand.
+7. On a Mac and on Linux, each folder the person's login shell names in its `PATH` ("The login shell", below). It is
+   asked only when 2 to 6 hold no harness.
 
 Places 3 and 4 are the two fixed paths Claude Code's own pages name
 ([setup](https://code.claude.com/docs/en/setup), [troubleshoot installation](https://code.claude.com/docs/en/troubleshoot-install#check-for-conflicting-installations));
 5 and 6 are where `brew install --cask claude-code` links it. On Windows only 3 and 4 are looked in, under the user's
-profile. The list is fixed: no folder is listed, no shell is asked for its `PATH`, and the disk is not searched. An npm
-install made under a version manager (nvm and the like) sits in a folder named after a Node version, so it is found
-only through `PATH` or `JELLYMOON_CLAUDE`.
+profile, and no login shell is asked. No folder is listed and the disk is not searched. An npm install made under a
+version manager (nvm and the like) sits in a folder named after a Node version, so it is found through `PATH`,
+`JELLYMOON_CLAUDE` or the login shell's `PATH`.
 
 A candidate counts when it is a file, or a link to one, that can be run. When none does, the one-line error names
 every place looked in.
+
+### The login shell
+
+ADR 0021, decision 1; the code is `find/shell.rs` and `find/shell/ask.rs` in core.
+
+- **Which.** The program `JELLYMOON_SHELL` names. Set to nothing, no login shell is asked. Not set, it is the one the
+  system's record of the user names, never the `SHELL` variable. The record is read by starting the system's own
+  program for it, by its full path and with no variable: `/usr/bin/id -P` on a Mac, `/usr/bin/getent passwd <uid>` on
+  Linux. The login shell is the last field of the one line it prints, when the third field is this user's number.
+- **Checked before it is started.** It is named by a full path; it is a file that can be run; neither the group nor
+  everyone can write to it; not everyone can write to its folder, or to the folder its link-resolved file is in; its
+  last name is `zsh` or `bash`.
+- **Started** as `<login shell> -l -i -c <command>`, where the command is the constant
+  `printf '%s%s%s%s%s\n' __jellymoon _path__ "$PATH" __jellymoon _path__`. It prints the mark `__jellymoon_path__`, the
+  `PATH`, the mark again and a line's end. The mark is in two pieces in the command, so a login shell that prints
+  its command back prints no mark. Nothing is on its input, its errors go nowhere, it runs in `/`, in a process group
+  of its own, with the variables a harness is started with and no other.
+- **Read.** At most 65,536 bytes, for at most 5 seconds, until both marks are there. Then the whole group is killed
+  and waited for, answered or not. Only what stands between the marks counts, when there is exactly one pair and no
+  line's end between them; of that, only folders named by a full path.
+- **A harness in one of those folders** is held to the checks of a fixed place, and one more: the folder its
+  link-resolved file is in must not be one everyone can write to. One that fails is passed over for the next. It is
+  started with this process's `PATH`, then the folder it was found in, then the fixed places.
+- **Remembered.** The folders of an answer, in the process's memory, for as long as the process lives. Nothing is
+  written. An ask that failed is not remembered, and the next look asks again.
+
+A login shell that is refused, or that does not answer, changes nothing but the error's list of places. It gains
+`the login shell's PATH` when it answered, or `the login shell (<why>)`, with one of these:
+
+| Why | When |
+|---|---|
+| `the system's record of the user named none` | the system's program is not there, failed, or printed no record of this user |
+| `it is not named by a full path` | |
+| `it is not a file that can be run` | also when it is not there |
+| `others can write to it, or everyone can write to a folder it is in` | |
+| `it is not zsh or bash` | |
+| `it could not be started` | |
+| `it did not answer in 5 seconds` | |
+| `it answered with no pair of marks on one line` | also when more than 65,536 bytes came before the pair |
+| `it answered with more than one pair of marks` | |
+
+A harness of the login shell's that was passed over is named without its folder: ``a `claude` in a folder of the login
+shell's PATH``, and why.
+
+`jellymoon harness` makes the same look, starts no harness, and prints one line: `{"found":…,"how":…,"says":…}`.
+`how` is one of `named`, `path`, `fixed_place`, `login_shell` and `none`. `says` is a fixed sentence for each end,
+and holds no folder. On Windows it says the login shell is not asked.
 
 The home is `HOME` (`USERPROFILE` on Windows) and nothing else, and only when it names a full path. The system's own
 record of the account is not asked. With no such home, places 3 and 4 are not looked in, and the error says so. Core

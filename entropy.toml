@@ -375,7 +375,11 @@ max_file_lines = 400
 # The third notes on F65 raised core by 25: `project/new.rs` 7 (`projects` taken back by `made_still` too, and
 # what a mark says without a time of making) and `project/new/tests.rs` 18 (every pair of what two marks hold,
 # and the folder of projects by the same question).
-"crates/jellymoon-core" = 16408
+# F78 raised core by 556: the login shell asked for its `PATH` (`find/shell.rs` 105, `find/shell/ask.rs` 194 and
+# the record of the user in `find/shell/ask/record.rs` 75, tests among them), the line of `jellymoon harness`
+# (`find/said.rs`, 113), the look in those folders and its one more check in `find.rs` (62), and 7 in `call.rs`,
+# `lib.rs` and `hear/day.rs`.
+"crates/jellymoon-core" = 16964
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -578,7 +582,9 @@ max_file_lines = 400
 # The third notes on F65 raised it by 11, all tests: `tests/f65/alone.rs` 9 (the sentence `mark.rs` held, and
 # whether the system says a time of making, asked of the system), `tests/f65/half.rs` 4 (an empty `projects`
 # left where it does not); `tests/f65/mark.rs` lost 2.
-"crates/jellymoon" = 27706
+# F78 raised the binary by 597: its tests (`tests/f78.rs` and `tests/f78/`, 513), the made-up login shell they
+# start (`tests/support/fake_shell.rs`, 78), and the `harness` command in `main.rs` and `parse.rs` (6).
+"crates/jellymoon" = 28303
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -623,7 +629,8 @@ max_file_lines = 400
 # `rules.rs`, and 14 in the smoke chain, whose made-up world sets `JELLYMOON_SHELL` to nothing (`smoke.rs`).
 # F75 and the door's review raised it by 104: the rule holds the app's tests too and its two wrong shapes are set
 # right (`rules/door.rs` lost 57, its tests moved out), and its tests are `rules/door_tests.rs` (161).
-"crates/xtask" = 2767
+# F78 raised xtask by 31: the smoke chain's `harness` step (`smoke/off_path.rs`, `smoke/steps.rs`).
+"crates/xtask" = 2798
 # F32 raised the next two: the kit by 291 (the F32 test, the edge tests of the theme door's limits, two draw tests;
 # 265 of the lines are tests) and the app by 89 (`--theme <file>`, and its case at the binary, 60 lines).
 # The art's counted cost raised the kit by 247 (the two counts at the door, their edge tests in `tests/cost.rs`).

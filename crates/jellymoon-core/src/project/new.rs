@@ -206,7 +206,9 @@ fn look(home: &Path, name: &str, day: &str) -> Result<bool, Error> {
 /// made and nothing changed: a name that is no folder's name, one that is listed, one something is at already,
 /// a list that is full or is not used, no git on `PATH`, a home a project could not be listed in, and a lock
 /// that is held, which is waited for. Behind the lock every look is taken again and the folder is made;
-/// whatever fails then (git, a list written over meanwhile) takes it back.
+/// whatever fails then (git, a list written over meanwhile) takes it back. A refusal said behind the lock
+/// (something at the name, and whatever fails then) leaves `take-over.lock` in Jellymoon's folder, as every
+/// hold of the lock does, and that folder when it was made to hold the lock.
 pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<Known, Error> {
     let day = day_of(day)?;
     if !makeable(name) {
@@ -217,7 +219,6 @@ pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<Known, 
     if !matches!(&first, Err(Error::Project(why)) if why == THERE) {
         first?;
     }
-    let fresh = !home.exists();
     let lock = hold(home)?;
     let (folder, mut made) = (home.join("projects"), Made::new());
     let project = folder.join(name);
@@ -226,11 +227,8 @@ pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<Known, 
             Some(back) => after(e, back),
             None => e,
         });
+    // Jellymoon's folder, made to hold the lock, stays: `take-over.lock` in it is never removed (`lock.rs`).
     drop(lock);
-    // Jellymoon's folder, made to hold the lock, goes too when the making left nothing in it.
-    if done.is_err() && fresh {
-        let _ = fs::remove_dir(home);
-    }
     done
 }
 

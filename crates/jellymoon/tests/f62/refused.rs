@@ -150,3 +150,32 @@ fn changes_made_at_once_are_all_kept_and_a_lock_that_stays_refuses_the_change() 
     // Reading waits for no lock.
     assert_eq!(w.listed().as_array().unwrap().len(), 8);
 }
+
+// A killed command's lock, where the lock a take-over is done behind cannot be had: the change is told which
+// two files to remove, and not that another change is at work.
+#[test]
+fn a_lock_of_the_list_left_behind_that_cannot_be_taken_over_is_refused_with_the_names_of_the_files_to_remove() {
+    let w = heard_world();
+    assert_eq!(printed(&w.add(&w.repo("alpha")))["name"], "alpha");
+    let (lock, over) = (w.jm("projects.lock"), w.jm("take-over.lock"));
+    // The first change left the take-over's file there; a folder at its name can never be locked.
+    let _ = fs::remove_file(&over);
+    fs::create_dir(&over).unwrap();
+    fs::write(&lock, "").unwrap();
+    let a_minute_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+    fs::File::options().write(true).open(&lock).unwrap().set_modified(a_minute_ago).unwrap();
+    let beta = w.repo("beta");
+    let before = w.all();
+    let ran = w.add(&beta);
+    let stuck = "jellymoon: jellymoon's own files: projects.lock is a lock that was left behind, and it could not be \
+                 taken over, as take-over.lock beside it could not be locked; remove both, then try again\n";
+    assert_eq!(refused(&ran), stuck);
+    names_no_path(&w, &ran);
+    assert_eq!(refused(&w.run(&["project", "forget", "alpha"])), stuck);
+    assert!(w.all() == before, "a refusal wrote something");
+    // The way out the line gives.
+    fs::remove_file(&lock).unwrap();
+    fs::remove_dir(&over).unwrap();
+    assert_eq!(printed(&w.add(&beta))["name"], "beta");
+    assert!(!lock.exists(), "the change's own lock was left");
+}

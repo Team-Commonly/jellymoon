@@ -6,7 +6,7 @@
 use std::fs;
 use std::time::{Duration, SystemTime};
 
-use super::alone::{MOVED, but_the_lock, inside};
+use super::alone::{MOVED, and_the_take_over, but_the_lock, inside};
 use super::half::held_before_the_list;
 use super::*;
 
@@ -24,7 +24,9 @@ fn a_making_whose_file_a_hand_removed_lists_nothing_and_leaves_the_folder_as_it_
     let before = but_the_lock(&w);
     fs::write(&go, "").unwrap();
     assert_eq!(refused(&ended(going)), format!("jellymoon: {MOVED}\n"));
-    assert!(w.all() == before && inside(&w, "alpha") == [".git"], "a folder that was changed was touched");
+    // Letting go of the lock left `take-over.lock`, empty, and nothing else differs.
+    let after = and_the_take_over(&w, before);
+    assert!(w.all() == after && inside(&w, "alpha") == [".git"], "a folder that was changed was touched");
     assert_eq!(w.listed(), serde_json::json!([]));
 }
 

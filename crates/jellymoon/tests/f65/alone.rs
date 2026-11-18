@@ -52,10 +52,23 @@ fn closed(w: &World, closed: bool) -> bool {
     !closed || fs::write(w.jm("probe"), "").is_err()
 }
 
-/// The whole test folder but the list's lock, which a making under way holds, and the file a take-over is behind.
+/// The whole test folder but the list's lock, which a making under way holds.
 pub fn but_the_lock(w: &World) -> Vec<(PathBuf, Vec<u8>)> {
-    let locks = [w.jm("projects.lock"), w.jm("take-over.lock")]; // the second is made by a take-over and stays
-    w.all().into_iter().filter(|(path, _)| !locks.contains(path)).collect()
+    let lock = w.jm("projects.lock");
+    w.all().into_iter().filter(|(path, _)| *path != lock).collect()
+}
+
+/// What a command that held the list's lock leaves, beside what was there before it: `take-over.lock` in
+/// Jellymoon's folder, empty, which no command removes, and that folder when it was made to hold the lock.
+/// Nothing else is added, so a comparison with this is of the whole test folder still.
+pub fn and_the_take_over(w: &World, mut before: Vec<(PathBuf, Vec<u8>)>) -> Vec<(PathBuf, Vec<u8>)> {
+    for left in [w.at("jm"), w.jm("take-over.lock")] {
+        if !before.iter().any(|(path, _)| *path == left) {
+            before.push((left, Vec::new()));
+        }
+    }
+    before.sort();
+    before
 }
 
 #[test]
@@ -193,7 +206,8 @@ fn a_making_that_is_killed_is_waited_for_half_a_minute_and_then_its_folder_is_sa
     let before = but_the_lock(&w);
     let ran = w.new_project("alpha");
     assert_eq!(refused(&ran), format!("jellymoon: {THERE}\n"));
-    assert!(but_the_lock(&w) == before, "a refusal changed something but the lock nobody held");
+    // The lock nobody held is gone, and the take-over left its own file, empty: nothing else is changed.
+    assert!(w.all() == and_the_take_over(&w, before), "a refusal changed something but the lock nobody held");
     assert_eq!(printed(&w.new_project("beta"))["name"], "beta");
 }
 
@@ -221,6 +235,9 @@ fn something_at_the_name_is_said_before_git_is_looked_for() {
     let before = w.all();
     let ran = w.run_with(&[("PATH", w.at("bin").into())], &["project", "new", "Alpha", "--date", DAY]);
     assert_eq!(refused(&ran), format!("jellymoon: {THERE}\n"));
+    // That one is said behind the lock, which leaves `take-over.lock`; no git is said before it, and leaves nothing.
+    let before = and_the_take_over(&w, before);
+    assert!(w.all() == before);
     let ran = w.run_with(&[("PATH", w.at("bin").into())], &["project", "new", "beta", "--date", DAY]);
     assert_eq!(refused(&ran), format!("jellymoon: {NO_GIT}\n"));
     assert!(w.all() == before);
@@ -283,14 +300,18 @@ fn a_home_a_project_could_not_be_listed_in_is_refused_before_anything_is_made() 
         assert_eq!(refused(&ran), format!("jellymoon: {NOT_OWN}\n"), "there: {there}");
         assert!(w.all() == before, "a refusal made something (there: {there})");
     }
-    // The person's own folder is someone else's, and Jellymoon's is not there: it is made to hold the lock,
-    // found not to be the person's, and taken back.
+    // The person's own folder is someone else's, and Jellymoon's is not there: it is made to hold the lock and
+    // found not to be the person's. It stays, holding `take-over.lock`, empty, and nothing else.
     fs::remove_dir(w.at("jm")).unwrap();
     if let Some(theirs) = crate::support::door::not_ours() {
         let before = w.all();
         let ran = w.run_with(&[("HOME", theirs.into())], &["project", "new", "alpha", "--date", DAY]);
         assert_eq!(refused(&ran), format!("jellymoon: {NOT_OWN}\n"));
-        assert!(w.all() == before && !w.at("jm").exists(), "a refusal left Jellymoon's folder");
+        let left = crate::support::tree(&w.at("jm"));
+        assert_eq!(left, [(w.jm("take-over.lock"), Vec::new())], "a refusal behind the lock left more");
+        assert!(w.all() == and_the_take_over(&w, before), "a refusal behind the lock changed something else");
+        fs::remove_file(w.jm("take-over.lock")).unwrap();
+        fs::remove_dir(w.at("jm")).unwrap();
     }
     // A home whose path is not text.
     let mut odd = w.at("tmp").into_os_string();

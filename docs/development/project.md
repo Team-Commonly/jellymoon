@@ -84,8 +84,10 @@ run there, with no `--repo` and no session log.
   one a project can be listed in (the person's own, by a path that is text and short enough) are looked at
   first; a refusal there has written nothing, not even Jellymoon's folder. Something at the name is the one
   refusal that is asked again behind the lock, as it may be a making under way. Jellymoon's folder, when it
-  was not there, is made to hold the lock; a refusal behind the lock that leaves it empty removes it again,
-  so "nothing was made" is true of it too.
+  was not there, is made to hold the lock, and a refusal behind the lock leaves it there, holding
+  `take-over.lock`, empty, which no command removes ([delivery.md](delivery.md), "The lock"), and what the
+  making had already left (`runs/no-hooks` after a git step): "nothing was made" is said of the project, the
+  list and every other file.
 - **One making at a time.** The whole of a making is behind the list's lock (`projects.lock`): every look
   again, the folder, made by a call that fails when anything is at its name, the repo, and the line on the
   list. So no `project new`, `add` or `forget` meets a making under way: it waits its 3 seconds and is told
@@ -218,6 +220,7 @@ is exit 2 with the usage.
 | `forget` is given no project's name | ``project forget takes a project's name, as `jellymoon project list` prints it`` |
 | the name is not listed | `no project of that name is on the list, so nothing was changed` |
 | the lock stays for 3 seconds | `another change to the list of projects, or the making of a new project, has not finished, so nothing was changed; if it was cut off, ask again in half a minute` |
+| the lock was left behind and cannot be taken over ([delivery.md](delivery.md), "The lock") | `jellymoon's own files: projects.lock is a lock that was left behind, and it could not be taken over, as take-over.lock beside it could not be locked; remove both, then try again` |
 | the list cannot be used | `the list of projects (projects.json in Jellymoon's folder) is not used: <why>; move the file away and add your projects again` |
 
 What a run says, where `<way out>` is ``name one with --repo, or let it go with `jellymoon project forget` ``:
@@ -241,7 +244,7 @@ What a run says, where `<way out>` is ``name one with --repo, or let it go with 
   there is left as it is; the file is 0600 either way.
 - **The write.** Whole, into a new file beside its place that is then moved there, 0600, behind
   `projects.lock` in the same folder: a file only one command can make, removed when the change is done, waited
-  for 3 seconds, and taken over when it was left behind, which can leave `take-over.lock` beside it (the tap's
+  for 3 seconds, and taken over when it was left behind; a change leaves `take-over.lock` beside it (the tap's
   lock, [delivery.md](delivery.md), "The lock"). A change
   is tried on the list before the lock is asked for, so a refusal makes no folder and no file, and again
   behind the lock. A making (`project new`) holds the lock from its second look to its line on the list. Reading takes no lock: a reader sees the old file or the new one.
@@ -328,9 +331,6 @@ Whoever can write Jellymoon's folder can write a line, as they can write a rulin
 - **A typed-in folder whose last name holds an unseen character** (an emoji written with U+FE0F, say) is not
   offered, and a new wish for it is refused as no project's name, unless the list holds the name already
   ("A name that comes in, and a name that was kept").
-- **Jellymoon's folder is removed after the lock is let go.** Another command that has just made the folder
-  for its own lock, and has not yet put the lock in it, can have it removed underneath. Only an empty folder
-  goes, so nothing is lost; that command fails with `jellymoon's own files: …` and is asked again.
 - **A sentence that says "what was made was taken back"** (git failed, the name was kept in other letters)
   and the folder could not be removed: the words that it was left are added after it, and the two stand
   together.

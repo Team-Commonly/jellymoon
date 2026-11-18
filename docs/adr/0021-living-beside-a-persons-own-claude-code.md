@@ -584,3 +584,25 @@ The amendment was read before it merged and failed on one fault, with nine notes
    typing, and a project with headless sessions only that is not on the list of projects is not found.
 10. **Small text.** The commit this was read at; the glossary's **login shell**; no lock file for the log, with
     the race at the cap under "Not covered".
+
+### Amended after the door's review
+
+The door for `jellymoon`'s tests (F74) was reviewed after it merged and failed on two faults, with ten notes. All
+twelve are taken in F75, which gives the app's tests the same door: the two share one rule.
+
+1. **Decision 7, what it refuses.** `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` join the folders the door
+   checks: `jellymoon uninstall` removes under them. A `--logs` or `CLAUDE_CONFIG_DIR` that is no full path is
+   refused when it climbs with `..` or is rooted with no drive, since both are read as given from the folder the
+   program is started in. On Windows a variable's name is the same name in any case.
+2. **Decision 7, the temporary folders.** "Both count, and nothing else does" was short by one: on Unix `/tmp`
+   counts for the binary's tests, as the one folder a test can name that is another owner's. The app's door has
+   the two and no third. A temporary folder that is a file system's root, or that is or holds the home of the
+   person running the tests, is taken for none, and the door then starts nothing. A path through more links than
+   the door reads is refused.
+3. **Decision 7, the login shell.** The door also sets `JELLYMOON_SYSTEM_BIN` to nothing unless a test names
+   folders of its own, so no world looks for a harness in a folder of the machine.
+4. **Decision 7, inside core.** "A test hands the look its variables" was wrong: core's look takes none and
+   reads the process's. What holds is that no test of core or of the app has the look made with the process's
+   own environment, and `cargo xtask check` refuses one that does.
+5. **Held by a check.** In each program's tests `support/door.rs` alone may name a built program; the rest of
+   `support/` may make a temporary folder and nothing more.

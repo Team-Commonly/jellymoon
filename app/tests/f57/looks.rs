@@ -42,7 +42,7 @@ fn page_of(home: &Path, date: &str) -> Today {
         skip: Vec::new(),
         model: "sonnet".to_string(),
         home: home.to_path_buf(),
-        harness: None,
+        harness: Some(home.join("claude")),
         fresh: false,
         settings: None,
         bin: None,
@@ -153,7 +153,7 @@ fn asks() -> Seen {
 
 /// A home of the test's own, and the folder that holds it.
 fn home() -> (tempfile::TempDir, std::path::PathBuf) {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = crate::support::scratch();
     let home = dir.path().join("jm");
     (dir, home)
 }

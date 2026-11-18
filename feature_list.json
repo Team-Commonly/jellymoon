@@ -772,7 +772,7 @@
         "on macOS, Linux and Windows; with F74 this row replaces F73"
       ],
       "test": "cargo test -p jellymoon-app --test f75",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F74"
       ]
@@ -885,6 +885,146 @@
       "passes": false,
       "blockedBy": [
         "a session log line that marks a moved session, to type the fixture from"
+      ]
+    },
+    {
+      "id": "F83",
+      "category": "journal",
+      "description": "A run of a later day is read as going only while it is held, by a question in core that writes nothing",
+      "steps": [
+        "core says, for a home and a day, how many of the day's made wishes say working, name a run and have that run held by a living command; the whole home is byte for byte as it was after the call, and a day that cannot be read gives none",
+        "past midnight on GPUI's test platform, with the test's clock: a wish of the later day that says working and whose run nothing holds is not drawn, so the page's day's work that waits is; the same run held swims",
+        "of two wishes of the later day that say working, one held and one not, the count drawn is one; `jellymoon hear` and `layout --jelly --date` say of one day what they say today",
+        "a later day that asks and works at once shows the page's day alone, and the same later day with its question removed swims, with no count",
+        "`app.md` says of the days past midnight what is so: work that waits on the page's day is not shown while a run of the new day goes, one bullet for a run of a day between, no bullet for a cut-off run that still swims, and no line over 120 characters",
+        "on macOS, where GPUI's test platform opens the windows; core's question on macOS, Linux and Windows"
+      ],
+      "test": "cargo test -p jellymoon-app --test f83",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F84",
+      "category": "journal",
+      "description": "Past midnight the page says a new day has begun, and moves on to it by a tap and never by itself",
+      "steps": [
+        "on GPUI's test platform with the test's clock and no day named: while the clock gives the page's day there is no note; at a later day with the page's day quiet the first note is the choice `new-day`, `a new day has begun`, with the one option `Open today's page`, and however many looks pass the made-up harness is not started and the page's day stays; an earlier day gives no note, and a day named with `--date` gives none at any clock",
+        "while the page's day has a question, a run at work or work that waits, the note is plain, says which in one fixed sentence, the first in core's order, and has no option; the look after the day goes quiet offers the move; an Enter whose run is still being asked for holds the offer back",
+        "a tap on the option shows what opening the app on today shows, the kept page or `Reading your day…`, in the same window, and starts today's reading; a wish entered then is filed under today, and the jellyfish looks at today as the page's day",
+        "after the move nothing of the earlier day is on show: no note of it, an empty entry, and an empty field under today's `m1` where the earlier day's `m1` held typed words; the theme `t` chose stays; the earlier day's files are byte for byte as they were",
+        "a tap on the option when the day is quiet no longer moves nothing and starts no reading, and the next look draws the plain note; work of the earlier day that answers after the move changes nothing on show",
+        "on macOS, where GPUI's test platform opens the windows; the calls with no window (`showing.rs`) on macOS, Linux and Windows"
+      ],
+      "test": "cargo test -p jellymoon-app --test f84",
+      "passes": false,
+      "blockedBy": [
+        "F83"
+      ]
+    },
+    {
+      "id": "F85",
+      "category": "journal",
+      "description": "What a finished run says of its own work is kept, checked against the work and printed as data",
+      "steps": [
+        "a made-up harness ends a run with `done` and a result of pieces: `jellymoon run show --wish <id>` prints `result` with each piece that passed, a `change` under the file's number and core's own name for it, and the list of files as before",
+        "a `change` is printed only when its file is a text file of the work and every quoted line is a whole line the work took from the file or put in it; a piece that names a file the work does not have, quotes a line that is not there, is over its length or holds a character that draws as nothing is not printed, and `dropped` counts it",
+        "a text with a credential's shape is printed with the mark in its place, and no text of a result is in `app.log`",
+        "a run that ends with `done` alone, with a `result` that is not the shape, or with one over its size has finished as before and `run show` prints no `result`; a `result.json` written by hand is checked the same and never trusted",
+        "`jellymoon run waiting` prints the same `result` with the work that waits, and every refusal of `run show` is as it was",
+        "on macOS, Linux and Windows; a line or a name of the work is never an argument to git"
+      ],
+      "test": "cargo test -p jellymoon --test f85",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F86",
+      "category": "journal",
+      "description": "A person sees what a run says it did over the choice to keep it or toss it, and the run's words are never Jellymoon's",
+      "steps": [
+        "`jellymoon-app layout` on a day with work that waits and a result prints a note `told-<wish>` before `work-<wish>`: Jellymoon's title and labels, and every text of the run as a quote piece and as nothing else",
+        "`work-<wish>` is byte for byte the note it is without a result, with `Show me`, `Keep it` and `Toss it` placed, at 1440x900 and at 960x640; rows of the result that do not fit are left out and counted, and none is cut",
+        "a tap on any text of `told-<wish>` in the made-up window finds no option; work that touches files the person's tools obey still asks once more, names each whole and keeps only on that yes",
+        "a result with a dropped piece ends with the sentence that something the run said could not be checked; work with no result, or with every piece dropped, shows no `told-<wish>`",
+        "every result note says that nothing was run; no file of the work is opened or run by the app"
+      ],
+      "test": "cargo test -p jellymoon-app --test f86",
+      "passes": false,
+      "blockedBy": [
+        "F85"
+      ]
+    },
+    {
+      "id": "F87",
+      "category": "journal",
+      "description": "A run is asked to end with its result, so a real run has one",
+      "steps": [
+        "a made-up harness that prints its command line shows the schema of the last word with `result` and its four kinds, and the fixed words that ask for it; nothing of the wish or the repo is in either",
+        "a made-up harness that answers under that schema ends a run whose `run show` prints the result; one that answers `done` alone finishes as before",
+        "a run that asks, one that is answered and a follow-up are started with the same schema, and an answered run that ends `done` with a result has it printed",
+        "a harness too old for the schema is refused in the words it is refused in today",
+        "`run.md` says what was measured by hand on a real Claude Code before this row closes: that the schema is taken, the size of a last word, and how many `change` pieces of ten real runs passed their check"
+      ],
+      "test": "cargo test -p jellymoon --test f87",
+      "passes": false,
+      "blockedBy": [
+        "F85"
+      ]
+    },
+    {
+      "id": "F88",
+      "category": "journal",
+      "description": "A person names, sees and removes the one try command of a known project",
+      "steps": [
+        "`jellymoon project try <name> --with <program> [<argument>...]` on a listed project whose folder stands prints the project's line with `try` on stdout and, on stderr, the fixed words of ADR 0024 that say what naming it lets in; `project try <name>` and `project list` print it, and a project with none prints no `try`",
+        "naming again puts the new command in the old one's place; `project try <name> --never` removes it; `project forget` takes it with the line, and the same folder added again has none; a list with no command is byte for byte what it was",
+        "a command of more than 16 words or 200 characters, with a character outside the letters, digits and `_ - . / : = + , @`, with a full path, a `..` or an empty word is refused in one fixed line that says nothing back, and so is a name that is not on the list; nothing is changed",
+        "a list written by hand whose `try` is not what `project try` would write is not used at all, as a line with a wrong folder is not",
+        "naming a command starts no program: a made-up program of that name on `PATH` leaves no mark; `project.md` says what a line written by hand can now do",
+        "on macOS, Linux and Windows"
+      ],
+      "test": "cargo test -p jellymoon --test f88",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F89",
+      "category": "journal",
+      "description": "Core tries a run's work with the project's try command when the run ends, and keeps and prints how it came out",
+      "steps": [
+        "a made-up harness ends a run with work on a project whose try command names a made-up program that exits 0: `jellymoon run show --wish <id>` and `run waiting` print `tried` with the command as named, `passed` and the seconds; the program left a mark that it ran once, in the copy's folder, with nothing on its input, and its variables are the harness's list without `CLAUDE_CONFIG_DIR`",
+        "one that exits 3 is `failed` with code 3 and its last lines; one that prints for longer than the limit a test sets is `too_long`, and it and a child it started in its group are gone; a name no folder of `PATH` has is `not_started`; a `run stop` meanwhile is `stopped` and the run has still finished; the work waits and can be kept after each",
+        "a file the try wrote in the copy is not in the work: the work's commit and its list of files are what they are with no command named, and the copy's folder is gone",
+        "while the try goes the wish is `working` with the fixed line that its work is being tried; a `jellymoon run` killed then is a run cut off, whose try's child the next look ends, and whose work can be tossed",
+        "of what the try printed no more than 12 lines of 160 characters are kept; a credential's shape is printed with the mark in its place, a character that draws as nothing is not printed, and no line of it is in `app.log`; a `tried` written by hand into a record is cleaned the same, and one that is not the shape is not printed",
+        "a run that changed nothing, asks, failed or was cancelled, and any run on a project with no command, starts no program and prints no `tried`; an answered run and a follow-up that end with work are each tried",
+        "nothing of the wish, of the run's last word or of a file of the work is in the program's command line or variables; a program of the command's name inside the copy is not the one started; a `./` command starts the file of that path in the copy",
+        "on macOS, Linux and Windows; `run.md` says what a try leaves going on each"
+      ],
+      "test": "cargo test -p jellymoon --test f89",
+      "passes": false,
+      "blockedBy": [
+        "F88",
+        "F85"
+      ]
+    },
+    {
+      "id": "F90",
+      "category": "journal",
+      "description": "The window says in Jellymoon's own words how the try of a run's work came out, before the person keeps it",
+      "steps": [
+        "work that waits with a `tried` is drawn with a note `tried-<wish>` over the result's note and the work's note: its title and labels are the sentences of ADR 0024 for `passed`, `failed`, `too_long`, `not_started` and `stopped`, word for word, and the command stands between `“` and `”`",
+        "after `failed` and `too_long` the last lines are drawn as quoted pieces only, never as a title, a label or a choice; lines that do not fit are counted, and the note takes no tap",
+        "with a `tried`, the result's note has no line that nothing was run; with none, every note is as F86 draws it",
+        "the work's note has `Show me`, `Keep it` and `Toss it` after every end of a try; after `failed` or `too_long` a tap on `Keep it` changes nothing and shows the note that asks once more, in ADR 0024's words, with `Keep it anyway`; a tap on that keeps the work, or asks of the files the person's tools obey as before",
+        "after `passed`, `not_started` or `stopped` a tap on `Keep it` is what it was",
+        "a tap starts no program and no run, and the follow-up's field is empty after a failed try; proved on the GPUI test platform with records made up by hand"
+      ],
+      "test": "cargo test -p jellymoon-app --test f90",
+      "passes": false,
+      "blockedBy": [
+        "F89",
+        "F86"
       ]
     }
   ],

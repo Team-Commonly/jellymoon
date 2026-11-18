@@ -68,7 +68,8 @@ pub struct Answer {
     /// Whether core took what was typed: the field it was typed in is emptied only then.
     kept: bool,
     /// After an answer (`answering.rs`): the wish, and its note. As core says the wish stands then, when the
-    /// answer was given; the note it was typed under, with its field, when it was not.
+    /// answer was given, and when it was not given and the run is known to wait on that question no more; else
+    /// the note it was typed under, with its field.
     opened: Option<(String, Note)>,
 }
 
@@ -103,6 +104,11 @@ pub(crate) fn of(words: &str, why: &str) -> String {
 
 fn of_a_wish(note: &Note) -> bool {
     matches!(note, Note::Plain { title, .. } if [UNKEPT, UNSTARTED, UNANSWERED, UNSETTLED].contains(&&**title))
+}
+
+/// How many notes of wishes a scene begins with: a note put on it later goes under them.
+fn under(scene: &Scene) -> usize {
+    scene.notes.iter().take_while(|note| of_a_wish(note)).count()
 }
 
 /// The note of the wish just entered, when it left one, in place of the notes of the wishes before.
@@ -146,16 +152,19 @@ impl OnShow {
     /// What a [`Wishing`] gave: the scene to show, and the asking for the wish's run when core kept the wish. With
     /// none the words were not kept, and the entry keeps them. When the scene on show changed while core was asked,
     /// only the note is put on it here, and the next look draws the wish. The same for what [`OnShow::typing`]
-    /// gave, the words typed under a made wish; the note of an answer that was not given is put first when no
-    /// note of its wish is on show any more, so its field and the words in it are.
+    /// gave, the words typed under a made wish. When no note of its wish is on show any more, the note of an
+    /// answer that was not given is put directly under what core said of it, and only when it has the field
+    /// to answer in, so the field and the words in it are on show. A note with nothing to answer in is left to
+    /// the next tap: a wish the person closed is not opened again.
     pub fn answered(&mut self, answer: Answer) -> (Scene, Option<Asking>) {
         if self.scene == answer.seen.from {
             self.scene = answer.seen.now;
         } else {
             newest(&mut self.scene, answer.said);
             let unplaced = answer.opened.and_then(|(wish, note)| working::reopen(&mut self.scene, &wish, note));
-            if let Some(note) = unplaced.filter(|_| !answer.kept) {
-                self.scene.notes.insert(0, note);
+            if let Some(note) = unplaced.filter(|note| !answer.kept && crate::answering::asks(note)) {
+                let under = under(&self.scene);
+                self.scene.notes.insert(under, note);
             }
         }
         (self.scene.clone(), answer.asking)
@@ -171,7 +180,7 @@ impl OnShow {
     /// of wishes entered since, and takes none away.
     pub fn asked(&mut self, said: Option<Said>) -> Option<Scene> {
         let (title, body) = said?;
-        let under = self.scene.notes.iter().take_while(|note| of_a_wish(note)).count();
+        let under = under(&self.scene);
         self.scene.notes.insert(under, Note::Plain { title: title.to_string(), body });
         Some(self.scene.clone())
     }

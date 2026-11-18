@@ -25,24 +25,42 @@ One long-running builder session builds Jellymoon, with subagents for parallel p
 - **`HOME` is never empty or unset in a probe or a test.** The platform then finds the real account's home another
   way, and the run reads a real person's files. Ours reads the variable only, and only a full path
   (`jellymoon_core::user_home`); a run still gets a scratch home, `PATH` and `JELLYMOON_SYSTEM_BIN`.
-- **A test starts `jellymoon` through the door, and only there.** `crates/jellymoon/tests/support/door.rs` is the
-  one place that names the built program. It refuses, in one fixed sentence and before anything is started, a
-  world whose home (`HOME`, `USERPROFILE`), `JELLYMOON_HOME`, `CLAUDE_CONFIG_DIR`, or value of `--logs`,
-  `--settings` or `--repo` is a full path outside the system's temporary folder and the one Cargo gives tests,
-  with links resolved on both sides as far as the path is there. No home, an empty one and one that is not a full
-  path still start. It sets `JELLYMOON_SHELL` to nothing in every world, and a test may name only a made-up login
-  shell under a temporary folder. A program that starts `jellymoon` itself (the hook's entry, the installer, a
-  made-up asker) is started through `door::command`, with the same check. A test's folder comes from the support
-  too (`scratch`, `system_scratch`, `kept_scratch`).
+- **A test starts `jellymoon` or `jellymoon-app` through the door, and only there.** Each program's tests have
+  one: `crates/jellymoon/tests/support/door.rs` and `app/tests/support/door.rs`, the one file of each that names a
+  built program. Their rule is one file, `crates/jellymoon/tests/support/door/world.rs`, which the app's door
+  takes as a module of its own, since the two are different crates. It refuses, in one fixed sentence and before
+  anything is started, a world whose home (`HOME`, `USERPROFILE`), `JELLYMOON_HOME`, `JELLYMOON_APP_DIR`,
+  `JELLYMOON_BIN_DIR`, `CLAUDE_CONFIG_DIR`, or value of `--logs`, `--settings` or `--repo` is a full path outside
+  the temporary folders, with links resolved on both sides as far as the path is there; a path through more than
+  32 links whose end is not there is refused. The temporary folders are the one the system gives the process and
+  the one Cargo gives tests, and for the binary's tests `/tmp` on Unix too; the app's door has no third. No home,
+  an empty one and one that is not a full path still start, but a `--logs` or `CLAUDE_CONFIG_DIR` that is no full
+  path is refused when it climbs with `..` or is rooted with no drive: the program reads it from the folder it is
+  started in. On Windows a variable is the same variable in any case. The door sets `JELLYMOON_SHELL` and
+  `JELLYMOON_SYSTEM_BIN` to nothing in every world; a test may name a made-up login shell under a temporary
+  folder, and folders of its own to look for a harness in. A temporary folder that is a file system's root, or
+  that is or holds the home of the person running the tests, is taken for none: the door then says so and starts
+  nothing. A program that starts `jellymoon` itself (the hook's entry, the installer, a made-up asker, the app's
+  made-up windows, git) is started through `door::command`, with the same check. A test's folder comes from the
+  support too (`scratch`, `system_scratch`, `kept_scratch`).
+- **A home of another owner is `door::not_ours()`**, which is `/tmp` where that is not the tests' own. Where it is
+  (a sandbox with a `/tmp` of its own, or tests run as root) there is none, and the cases that need one say so
+  and are left out (`f35/delivery.rs`, `f41/refused.rs`, `f62/refused.rs`); before the door they ran against the
+  root folder. A world that takes it as the home names Jellymoon's folder, the harness's folder and a harness.
+- **A test of the app that holds the day in its own process names its harness** (`support::day::World::claude`):
+  no `PATH` is the world's there, so a look would be made with the variables of the person running the tests.
 - **`cargo xtask check` holds tests to the door** (`crates/xtask/src/rules/door.rs`). It reads lines, not Rust. In a
-  file under `crates/jellymoon/tests` outside `support/` it refuses a line that names the built program
-  (`CARGO_BIN_EXE_jellymoon`) or makes a temporary folder (`tempdir`, `TempDir::new`, `temp_dir(`). In core's tests
-  (a file under `tests/`, a `tests.rs`, and what follows `#[cfg(test)]` in a file) it refuses the harness looked
-  for with the process's own environment (`harness()`, `named_or_found(None`, `harness: None`). It cannot see a
-  program started from a path a test read out of a file or took from `door::built()`, a home put in a variable by
-  hand and given to another program with `Command::new`, options built with `..Default::default()`, or the same
-  thing written across two lines. The ignored test of F29 that runs the real Claude Code starts it with the
-  person's own variables, by design, and is not covered.
+  file under `crates/jellymoon/tests` or `app/tests` other than that program's `support/door.rs` it refuses a line
+  that names a built program of the door (`CARGO_BIN_EXE_jellymoon`, and for the app also `f42-jellymoon`,
+  `f42-wisher` and `f47-tapper`), and outside `support/` a line that makes a temporary folder (`tempdir`,
+  `TempDir::new`, `temp_dir(`). In the tests of core and of the app (a file under `tests/`, a `tests.rs`, and what
+  `mod tests` holds under `#[cfg(test)]` in a file) it refuses the harness looked for with the process's own
+  environment (`harness()` called by that name, `named_or_found(None`, `harness: None`). It cannot see a program
+  started from a path a test read out of a file or took from `door::built()`, an argument or a variable added to
+  a command after the door made it, a home put in a variable by hand and given to another program with
+  `Command::new`, options built with `..Default::default()`, or the same thing written across two lines. The
+  ignored test of F29 that runs the real Claude Code starts it with the person's own variables, by design, and is
+  not covered.
 - **Builders on different trees never share one `CARGO_TARGET_DIR`.** The programs Cargo lifts to the folder's top,
   `xtask` among them, overwrite each other, and a test runs another tree's program. Take a copy-on-write copy of a
   warm folder and clear the workspace crates' builds in it.

@@ -55,6 +55,12 @@ pub(crate) fn with_question(note: Note, wish: &str, question: Option<&str>) -> N
     fielded(note, question, Field { offer: String::new(), hint: ANSWER_HINT.to_string(), most: 0, key })
 }
 
+/// Whether a note has a field to answer in: a field under no offer (`with_question`). The field under the
+/// offer of a follow-up is not one.
+pub(crate) fn asks(note: &Note) -> bool {
+    matches!(note, Note::Text { field: Some(field), .. } if field.offer.is_empty())
+}
+
 /// A note of the wish `wish` with the offer of a follow-up and its field, when core says one may be made of the
 /// wish. The field's key is the wish's, not the note's: what is typed in it is the kit's to keep while another
 /// note of the wish stands in this one's place, and is there under the next note that offers the same.

@@ -9,7 +9,7 @@ use support::{Piece, layout, page, pieces, wish};
 
 #[test]
 fn a_theme_file_changes_the_look_and_a_refused_one_stops_the_run_with_one_line() {
-    let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+    let dir = support::scratch();
     let file = |name: &str, text: &str| {
         fs::write(dir.path().join(name), text).unwrap();
         dir.path().join(name).to_str().unwrap().to_string()

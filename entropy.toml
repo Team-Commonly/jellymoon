@@ -913,7 +913,10 @@ max_file_lines = 400
 # (`working.rs`), the picture example's `--work` and `--told`, and tests (`tests/f86.rs`, one arm in `tests/f37.rs`).
 # The F86 follow-up raised the app by 23: the test of a typical result at 1440x900 and a did too long at 960x640.
 # The F86 gate fix raised the app by 2: a change's row carries the file's name apart from its label.
-"app" = 13372
+# The walk raised the app by 425: the window's loop with no window, step by step with pictures (`examples/walk.rs`,
+# 283), and its test of a whole loop and of a bound that passes (`tests/walk.rs`, 142).
+# The walk's `--logs` raised the app by 3: a walk with a real harness reads a folder of its own, not the person's logs.
+"app" = 13800
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

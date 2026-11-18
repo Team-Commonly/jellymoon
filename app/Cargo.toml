@@ -77,3 +77,9 @@ workspace = true
 [[example]]
 name = "snapshot"
 required-features = ["headless"]
+
+# The window's loop with no window (`docs/development/app.md`). It needs the kit's windowless drawing only, so the
+# test run that has it (`--features sticker-kit/headless`, as CI's on the Mac) builds it for `tests/walk.rs`.
+[[example]]
+name = "walk"
+required-features = ["sticker-kit/headless"]

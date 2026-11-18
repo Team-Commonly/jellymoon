@@ -33,7 +33,7 @@ mod wish;
 pub use command::{installed_command, turn_on_delivery};
 pub use copy::{Outcome, RunCopy, clean_copy, make_copy};
 pub use error::Error;
-pub use find::{own_folder, user_home};
+pub use find::{HarnessFound, How, harness_found, own_folder, user_home};
 pub use hear::{
     CANNOT_MS, EAR_MS, EarCannot, HEAR_LINE_MAX, HOLD_MS, HearEvent, HearOptions, Hearing, Jelly, JellyDrawn,
     JellyState, JellyText, KeyMove, LOOK_MS, SAID_SO_FAR_MAX, SLIP_MS, Said, Voice, WINDOW_MS, Whose, hear, jellyfish,

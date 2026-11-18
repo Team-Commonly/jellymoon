@@ -147,6 +147,12 @@ pub(crate) fn harness_of(harness: Found) -> io::Result<Command> {
     Ok(command)
 }
 
+/// The variables a harness is started with, for the login shell that is asked where the harness is (`find/shell.rs`).
+#[cfg(unix)]
+pub(crate) fn environment() -> Vec<(&'static str, OsString)> {
+    passed_on(ENVIRONMENT)
+}
+
 /// The folders of a `PATH` that are named by a full path, in their order.
 pub(crate) fn full_folders(path: &OsStr) -> Vec<PathBuf> {
     env::split_paths(path).filter(|folder| folder.is_absolute()).collect()

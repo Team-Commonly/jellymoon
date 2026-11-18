@@ -37,7 +37,8 @@ that is: cleaned, on one line, 300 characters at most ("A run that asks"). Every
 ## The order
 
 1. **The wish.** A made wish of that day with that id, which has had no run.
-2. **The harness.** Found as the reading call finds it ([page.md](page.md)), or named with `JELLYMOON_CLAUDE`. With
+2. **The harness.** Found as the reading call finds it ([page.md](page.md)), in a folder the login shell names when
+   no listed place holds one, or named with `JELLYMOON_CLAUDE`. With
    none, nothing is made, the wish stays as it was, and `why` names the places looked in: `not_started`. A `PATH`
    with no folder named by its full path is refused here, before any copy ("What the harness is started with").
 3. **The repo.** `--repo`, a full path whose last name is the wish's project. Without it, the one folder of that

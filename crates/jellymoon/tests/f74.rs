@@ -120,7 +120,7 @@ fn a_world_under_either_temporary_folder_passes_and_so_does_no_home_an_empty_one
     assert_eq!(refused(&[], NONE), None, "no variable at all");
     // The system's temporary folder is also the one every user shares, where there is one.
     let shared = [("HOME", Path::new("/tmp")), ("JELLYMOON_HOME", Path::new("/tmp/jellymoon-f74/jm"))];
-    assert_eq!(refused(&shared, NO_COMMAND), None);
+    assert_eq!(refused(&shared, NO_COMMAND).is_none(), cfg!(unix), "Windows reads these as rooted with no drive");
     // And such a world is started, as before: `jellymoon` answers with its usage.
     for vars in [&[][..], &[("HOME", OsStr::new(""))], &[("HOME", OsStr::new("user"))]] {
         let ran = jellymoon(vars, NO_COMMAND);

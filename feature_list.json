@@ -966,7 +966,7 @@
         "`run.md` says what was measured by hand on a real Claude Code before this row closes: that the schema is taken, the size of a last word, and how many `change` pieces of ten real runs passed their check"
       ],
       "test": "cargo test -p jellymoon --test f87",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F85"
       ]

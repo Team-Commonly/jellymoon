@@ -1260,7 +1260,9 @@ The words were then tightened ("What the harness is started with": quote only li
 unchanged line for context, an empty side for lines only added or only removed) and measured again by the
 coordinator:
 
-- Second measure, with the tightened words: (to be filled by the coordinator)
+- Second measure, with the tightened words, the same ten wishes on the same day: ten of ten runs ended
+  `completed` in 8 to 14 seconds; a last word was 195 to 638 bytes; of 10 `change` pieces written, 10 passed and
+  none was dropped. Nine of ten results had a before and after; the tenth wrote no `change` piece.
 
 ## Not covered
 

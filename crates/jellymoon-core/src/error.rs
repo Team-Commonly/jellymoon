@@ -21,8 +21,17 @@ pub enum Error {
     Model,
     /// No `claude` program is on `PATH` or in a well-known place. It holds the places looked in, as a person names them.
     NoHarness(String),
-    /// The reading call could not be started, or its folder could not be made.
+    /// The reading call could not be started, for a reason of `PATH` or of the harness's place: no folder of `PATH`
+    /// is named by its full path, or the place cannot be made a full path. Also a program one of git's steps names
+    /// that could not be started (`copy/git.rs`).
     Call(io::Error),
+    /// The folder the reading call runs in could not be made or written to. Nothing was started.
+    Folder(io::Error),
+    /// The harness could not be started. `named` says a caller named it, as `JELLYMOON_CLAUDE` does; with it false
+    /// the program is a `claude` that was found.
+    Unstarted { named: bool, why: io::Error },
+    /// A command was started and the wait for its end failed. It was stopped; how far it had got is not known.
+    Wait(io::Error),
     /// The reading call ran past its time limit and was stopped.
     TooLong(Duration),
     /// The harness exited with a failure; `said` is the start of what it printed on stderr.
@@ -74,6 +83,13 @@ pub enum Error {
     Project(String),
 }
 
+/// What could not be made or started for the reading call, each said after "the reading call could not run: ", and
+/// the line of a started command that could not be waited for. The system's reason follows each.
+const NO_FOLDER: &str = "the reading folder in Jellymoon's own folder could not be made or written to";
+const NOT_NAMED: &str = "JELLYMOON_CLAUDE names no program that could be started";
+const NOT_FOUND: &str = "the `claude` that was found could not be started";
+const NO_WAIT: &str = "the reading call was started, the wait for its end failed, and it was stopped";
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -92,6 +108,10 @@ impl fmt::Display for Error {
                 "finding Claude Code: no `claude` program in {looked}; install Claude Code, or name the program with JELLYMOON_CLAUDE"
             ),
             Error::Call(e) => write!(f, "the reading call could not run: {e}"),
+            Error::Folder(e) => write!(f, "the reading call could not run: {NO_FOLDER}: {e}"),
+            Error::Unstarted { named: true, why } => write!(f, "the reading call could not run: {NOT_NAMED}: {why}"),
+            Error::Unstarted { named: false, why } => write!(f, "the reading call could not run: {NOT_FOUND}: {why}"),
+            Error::Wait(e) => write!(f, "{NO_WAIT}: {e}"),
             Error::TooLong(limit) => write!(f, "the reading call took longer than {} seconds", limit.as_secs_f32()),
             Error::Failed { status, said } => {
                 write!(f, "the reading call failed: {status}: {said}")
@@ -132,6 +152,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Logs(e) | Error::Call(e) | Error::Uninstall(e) | Error::Store(e) | Error::Settings(e) => Some(e),
+            Error::Folder(e) | Error::Wait(e) | Error::Unstarted { why: e, .. } => Some(e),
             _ => None,
         }
     }

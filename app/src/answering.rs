@@ -77,10 +77,10 @@ fn more_key(wish: &str) -> String {
 }
 
 /// The field of the note `note` on a scene: where the note is, whose wish it is under, and whether the field
-/// is a follow-up's.
+/// is a follow-up's. One rule says which: an answer is sent only from a field to answer in ([`asks`]).
 fn field_of(scene: &Scene, note: &str) -> Option<(usize, String, bool)> {
     let more = |one: &Note| match one {
-        Note::Text { id, field: Some(field), .. } if id == note => Some(field.offer == MORE),
+        Note::Text { id, field: Some(_), .. } if id == note => Some(!asks(one)),
         _ => None,
     };
     let (at, more) = scene.notes.iter().enumerate().find_map(|(at, one)| Some((at, more(one)?)))?;
@@ -115,7 +115,7 @@ impl Today {
     /// looked at: the run waited on the note's question before the call and does not after it. Then it was
     /// handed over, and what core says failed came after. A look that cannot tell is no proof, and the answer
     /// is then held not to have been given. An answer that was not given leaves `asked` as it was, with its
-    /// field, under core's reason ([`OnShow::answered`] puts it first when the wish's note went meanwhile). But
+    /// field, under core's reason ([`OnShow::answered`] puts it there when the wish's note went meanwhile). But
     /// where the run is known to wait on that question no more, the wish's note is as core says the wish
     /// stands, since `asked` would show a question nobody asks.
     fn answering(&self, page: Option<&Page>, from: Scene, typed: &str, (wish, asked): (&str, Note)) -> Answer {
@@ -141,7 +141,7 @@ impl Today {
 
 impl OnShow {
     /// Enter in the field of the note `note`: `typed` carried to core, as work for another thread. Which call it
-    /// is, the field drawn says: the one under the offer of a follow-up is a follow-up, and any other an answer.
+    /// is, the field drawn says: one to answer in, under no offer, is an answer, and any other a follow-up.
     /// What it gives goes to [`OnShow::answered`], as a typed wish's does. None for a note with no field on show.
     ///
     /// An answer changes the scene on show at once, and that scene is given with the work: the wish's note says
@@ -159,5 +159,27 @@ impl OnShow {
         let from = self.scene.clone();
         let work = move || today.answering(page.as_ref(), from, &typed, (&wish, asked));
         Some((Some(self.scene.clone()), Box::new(work)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The review of the third notes on F54, note 5. Only two offers are drawn today, so the third is made up: under
+    // it Enter was an answer, from a field that `asks` would never put back.
+    #[test]
+    fn an_answer_is_sent_only_from_a_field_to_answer_in() {
+        let field = |offer: &str| Field { offer: offer.to_string(), hint: String::new(), most: 0, key: String::new() };
+        let note = |offer: &str| Note::Text {
+            id: "wish-m1".to_string(),
+            title: String::new(),
+            body: Vec::new(),
+            options: Vec::new(),
+            quoted: String::new(),
+            field: Some(field(offer)),
+        };
+        let more = |offer: &str| field_of(&crate::scene::bare("2026-03-10", vec![note(offer)]), "wish-m1").unwrap().2;
+        assert_eq!((more(""), more(MORE), more("Another offer")), (false, true, true));
     }
 }

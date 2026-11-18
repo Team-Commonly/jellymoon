@@ -61,9 +61,11 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   page that says no logs were found is not drawn first: it may be stale by now, so the waiting page is shown, and
   the count step draws it again when there are still no logs. That is asked in one place, where the first page
   is chosen (`Today::first`): the steps after it are handed what it chose, so they are never handed such a page.
-  On a day with no logs the kept file is read a second time, to see that core's page is the one kept. Otherwise
+  On a day with no logs the kept file is read a second time only when no earlier page was handed on and core
+  has a page for the day: to see that core's page is the one kept. Otherwise
   a waiting page: the date, the hero and one note, "Reading your day…". The window opens on it at once, before a
-  log is opened: reading the logs alone can take seconds. The rest runs off the window's thread in two steps, each of which may give the next page to show
+  log is opened: reading the logs alone can take seconds. The rest runs off the window's thread in two steps,
+  each of which may give the next page to show
   (`today::Next`): the count of the day's turns, then the reading call. While a kept page is read again it stays on
   show under one note, "Reading your day again…", and never gives way to the waiting page. `layout --waiting` prints
   the waiting page; `layout` alone runs the same steps and prints what the window ends on.
@@ -101,14 +103,29 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
 - **When the reading cannot run** the page is one plain note that says why. Where no reading call was made its
   title is "There is no page for this day yet.": Claude Code was not found, no session logs (the note names the
   folder looked for, as the command's line does), logs or a `skip.txt` that could not be read, a `--model` that
-  is no name, or a call that could not be started (a `JELLYMOON_CLAUDE` that names no program, a folder for the
-  call that could not be made; core's own line follows). Where a call was made and gave no page it is "Today
-  could not be read.": the call failed, its result says it was an error or is no result, it took too long
-  (core's own line follows), or the model's answer was not a page. One case is on the wrong side: core gives a
-  wait on a started call that itself fails the same error as a call never started, so it is said as not
-  started. With a kept page that read something, that page stays and the note is its first, "This page is from
+  is no name, or a call that could not be started. Where a call was made and gave no page it is "Today
+  could not be read.": the call failed, its result says it was an error or is no result (core's own line
+  follows), it took too long, the model's answer was not a page, or the call was started and the wait for its
+  end failed. With a kept page that read something, that page stays and the note is its first, "This page is from
   an earlier reading." A page that could not be written to its file is shown with a first note that says so.
   `layout` prints these pages and exits 0: they are what the window shows.
+  - **A call that could not be started.** The body is "Claude Code could not be started, so nothing was read.
+    Open Jellymoon again to try once more. What happened: " and core's own line, which ends it and names what
+    could not be made or started:
+    - the reading folder: "the reading call could not run: the reading folder in Jellymoon's own folder could
+      not be made or written to: " and the system's reason;
+    - the program `JELLYMOON_CLAUDE` names: "the reading call could not run: JELLYMOON_CLAUDE names no program
+      that could be started: " and the system's reason. The path the variable holds is not printed;
+    - a `PATH` with no folder named by its full path, or a harness's place that cannot be made a full path:
+      "the reading call could not run: " and the reason ([page.md](page.md), "The call");
+    - a `claude` that was found: "the reading call could not run: the `claude` that was found could not be
+      started: " and the system's reason. Here, and in no other case, the body says "Check that `claude` answers
+      in a terminal." before "Open Jellymoon again": only this trouble is one a terminal would show.
+  - **A started call that could not be waited for.** The body is "Claude Code was started, but Jellymoon could
+    not wait for it to end and stopped it, so nothing from it is shown. Open Jellymoon again to try once more.
+    What happened: " and core's line, "the reading call was started, the wait for its end failed, and it was
+    stopped: " and the system's reason. Core stops the call and waits for it before the call's folder is removed
+    (`crates/jellymoon-core/src/call/wait.rs`). Whether the call had read the day is not known.
 
 The window makes no second reading while it is open, and closing it while a call runs leaves that call to end by
 itself. It does look again at what core keeps of the day's made wishes ("A wish in the window").
@@ -425,7 +442,10 @@ where core says, carries what is typed to core off the window's thread, and draw
   it is put directly under that first note when no note of the wish is on show any more, as after a tap on
   another little one during the wait. Only where the run is known not to wait on that question any more is
   the question not put back: the wish's note is then as core says the wish stands, and when no note of the
-  wish is on show any more none is put back, so a wish the person closed is not opened again.
+  wish is on show any more none is put back, so a wish the person closed is not opened again, unless the wish
+  asks another question by then, whose note is put there with an empty field. Where the words typed are not
+  back under a note, they are not emptied either: the kit keeps them apart, undrawn, under the field's key, and
+  they are on show again only if the same wish asks the same words again.
 - **More like this.** Core says which made wishes a follow-up may be made of
   (`jellymoon_core::followable`, printed as `follows` by `jellymoon run waiting`: work that waits, and work
   that was kept). Under the note of such a wish, and of no other, is the offer `More like this` over a field
@@ -442,9 +462,9 @@ where core says, carries what is typed to core off the window's thread, and draw
   start of the words and core's reason: the page has its 8 made wishes, the words are not a wish, the work was
   tossed meanwhile. The field keeps what was typed.
 - **Which call an Enter is.** The kit gives the note's id with the words. The field on show under that note
-  says the rest: one under the offer is a follow-up, any other an answer. An Enter for a note with no field on
-  show is nothing. A field's words go when its offer changes: what was typed as an answer is never there to be
-  sent as a follow-up under the same note.
+  says the rest: one to answer in, under no offer, is an answer, any other a follow-up. An Enter for a note
+  with no field on show is nothing. A field's words go when its offer changes: what was typed as an answer is
+  never there to be sent as a follow-up under the same note.
 - **A page closed and shown again.** The page's view outlives its window (F57), and a field's words are the
   view's: they are there when the page is shown again. A field answered while the window is closed is answered
   all the same (`window.rs`, `answer_entry`; the kit's `answer_field_closed`), so it does not wait for ever.
@@ -469,8 +489,12 @@ Not done, and not tested at a real window:
 - Whether an answer was given is told by the question's words. A run that asks the very same words again
   after an answer that then failed reads as not given: "That answer was not taken.", and the words stay.
 - Not known may be an answer the run did get. The person is then told "That answer was not taken." of an
-  answer that was given. A second Enter is refused by core in its own words, so nothing is sent twice. The
-  note stays until the next tap or Enter.
+  answer that was given. Where the run ended, a second Enter is refused by core in its own words; where it
+  asks again, the limits above hold. The note stays until the next tap or Enter.
+- "Directly under" what core said holds when the asking note is put, not after. When a second answer's
+  refusal takes the first one's place, the asking note stands under a refusal of another answer, or under none
+  when that answer was taken; a run that could not be started puts its note between the two. A refusal's body
+  names no wish.
 - Two cases only core can tell apart read as given, with the field emptied, though no harness got the answer:
   another answer (from a terminal) took the run between the app's first look and core's own lock, and core
   cleared the wish's question and then failed to write the run's record. Until core says whether it started

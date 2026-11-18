@@ -229,7 +229,7 @@ fn first_two(printed: &serde_json::Value) -> (&str, &str) {
 // The review of F54's notes, note 1: during the wait another little one is tapped, which takes the wish's note
 // off the page. A refusal then has no note to put the question back into, and puts it under what core said.
 #[test]
-fn a_refused_answer_whose_wish_is_no_longer_open_is_put_first_with_its_question_and_its_field() {
+fn a_refused_answer_whose_wish_is_no_longer_open_is_put_under_the_refusal_with_its_question_and_its_field() {
     let w = ready();
     let wish = w.ran("asks", 0, "asks");
     let other = w.wishes();
@@ -258,8 +258,9 @@ fn a_refused_answer_whose_wish_is_no_longer_open_is_put_first_with_its_question_
     assert!(kept && text(&shown, &note).is_none() && text(&shown, &format!("work-{wish}")).is_none(), "{}", printed[3]);
 }
 
-// The second review of F54's notes, note 4: only a note with a field is put first. Here the run ended, so
-// the wish's note is its work, with nothing to answer in: a wish the person closed is not opened again.
+// The second review of F54's notes, note 4: only a note with a field to answer in is put under the refusal.
+// Here the run ended, so the wish's note is its work, with nothing to answer in: a wish the person closed is
+// not opened again.
 #[test]
 fn a_refused_answer_whose_run_asks_no_more_does_not_open_again_a_wish_that_went_off_the_page() {
     let w = ready();

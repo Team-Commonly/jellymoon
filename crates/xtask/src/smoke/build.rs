@@ -260,12 +260,15 @@ mod tests {
     }
 
     // A stale home and a living one never share a name, so whoever holds the lock beside a name may remove it.
+    // A run names its home once, so the name promises nothing of two made in one process: this asked that two
+    // made one after the other differ, and they were once the same to the nanosecond, on a clock that steps in
+    // longer ticks than that.
     #[test]
-    fn a_home_is_named_for_its_process_and_its_start_and_no_two_runs_share_a_name() {
-        let (first, second) = (home_name(), home_name());
-        let pid = format!("smoke-home-{}-", std::process::id());
-        assert!(first.starts_with(&pid) && second.starts_with(&pid) && first != second, "{first} {second}");
-        assert!(!first.contains('.'), "the sweep takes a name with no extension for a home");
+    fn a_home_is_named_for_its_process_and_for_when_it_started() {
+        let name = home_name();
+        let started = name.strip_prefix(&format!("smoke-home-{}-", std::process::id())).expect(&name);
+        assert!(started.parse::<u128>().is_ok_and(|nanoseconds| nanoseconds > 0), "{name}");
+        assert!(!name.contains('.'), "the sweep takes a name with no extension for a home");
     }
 
     #[test]

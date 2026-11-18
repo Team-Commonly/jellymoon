@@ -797,7 +797,10 @@ max_file_lines = 400
 # started, played at `layout`, and the title's lines stated case by case), `scene.rs` 1 (the footer's comment);
 # `today.rs` lost 2 (the unit test of a tried reading cut to the one kind that cannot be played, less the words
 # of a call not started and the comments).
-"app" = 11415
+# The jellyfish notes 2 raised the app by 134: `tests/f57/looks.rs` holds each of the sixteen pairs of what the
+# page's day and a later day hold, the later day's question beside its run at work, the count of two days, a day
+# before the page's, and waiting work read from a run's record; `shell.rs` says why only a run at work is taken.
+"app" = 11549
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

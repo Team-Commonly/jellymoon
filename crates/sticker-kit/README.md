@@ -325,6 +325,7 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | notes in a scene | the first 12 are laid out, the rest only counted | `MAX_NOTES` |
 | options of a choice note | the first 4 | |
 | rows of a whole list | the first 12 are laid out, the rest only counted | |
+| rows of a told note | the first 12 are laid out, the rest only counted | |
 | any text | 400 characters, a label `labels.max_chars`; cut with an ellipsis | `layout::MAX_TEXT_CHARS` |
 | pieces a layout returns | 5000; what would come after is dropped | `MAX_PIECES` |
 | options of an entry | the first 6 are offered; the rest are counted, `+N more` | `entry::MAX_ENTRY_OPTIONS` |
@@ -371,6 +372,23 @@ is drawn, nothing is drawn for the list: it is the one note that can go
 without a word, since a word for it would move another note. A scene's maker
 that must have its rows counted says the count elsewhere, as in the footer.
 `layout` returns one `mark` piece a row drawn.
+A `Told` note is someone else's words under the note's own labels
+(`layout/told.rs`): each row is a label in `row_main` and the other's texts
+under it, each a `quote` piece in `Role::Quoted`, never a run of the sheet; a
+row with an empty label starts with its first quote. Rows are drawn in their
+order, each to its last character, up to the first that does not fit; it and
+every row after it are counted, `+N more`, and no later row is drawn in its
+place. A text that cleaning would cut is a row that does not fit. A row
+`with_last` is one unit with the row before it: both are drawn or neither,
+counted as two. The note's own
+sentences, `end`, come last and are drawn whole, or the note is left out. It
+has no option, field or mark. It is planned just after the note that follows
+it in the scene, with the rows that fit the room that note leaves (at least
+its title, the count and its own sentences), so that note is placed and drawn
+as it is without it, and only the notes after that one give way to it. It is drawn in its own place, over that note, as long
+as the room the notes after it leave, as a list is; that note is then drawn
+lower and is otherwise the same, but for its sheet's `index`, its place in the
+scene.
 That can go under the theme's `min_font_size`, which holds for every other
 text: 9.35 pixels at 960x640 where the smallest is 11. Each text run carries
 the `size` it was measured at, and the drawing paints it at that size, so a

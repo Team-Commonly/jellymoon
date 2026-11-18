@@ -7,6 +7,7 @@ mod grid;
 mod notes;
 mod page;
 mod text_note;
+mod told;
 mod typed;
 
 use serde::{Deserialize, Serialize};

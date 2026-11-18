@@ -116,6 +116,29 @@ pub enum Note {
         title: String,
         rows: Vec<(Mark, String)>,
     },
+    /// What someone else says of a thing, under the note's own title: each row is a label in the note's own words
+    /// and the other's texts under it, each a `Quote` piece on a ground of its own and never anything but text. A
+    /// row is drawn to its last character or left out, and a last line, `+N more`, counts the rows left out. `end`
+    /// is the note's own sentences after the rows, each drawn whole, or the note is left out. It has no option
+    /// and no field. It is planned after the note that follows it, in the room that note leaves, so that note is
+    /// drawn as it is without it, lower, and the notes after them give way; it is drawn in its place over that note.
+    Told {
+        id: String,
+        title: String,
+        rows: Vec<ToldRow>,
+        #[serde(default)]
+        end: Vec<String>,
+    },
+}
+
+/// One row of a told note: the note's own label, which may be empty, and someone else's texts under it. A row
+/// `with_last` is drawn with the row before it or not at all: the two are one unit, counted as two rows.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToldRow {
+    pub label: String,
+    pub quotes: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub with_last: bool,
 }
 
 /// One line a person types in under a text note. `offer` is the few words over it that say what it is for, and

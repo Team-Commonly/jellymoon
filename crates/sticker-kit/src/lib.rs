@@ -35,6 +35,6 @@ pub use layout::{
     MAX_QUOTED_LINES, MAX_TEXT_LINES, MORE_NOTES_ID, PieceKind, Placed, TextRun, edge_windows, layout, layout_edge,
     layout_entry,
 };
-pub use scene::{Character, Entry, Field, LegendItem, Mark, Mood, Note, Scene, State};
+pub use scene::{Character, Entry, Field, LegendItem, Mark, Mood, Note, Scene, State, ToldRow};
 pub use text::{FixedAdvance, Measure, Role};
 pub use theme::{Loaded, Theme, ThemeError};

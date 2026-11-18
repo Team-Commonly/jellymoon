@@ -949,7 +949,7 @@
         "every result note says that nothing was run; no file of the work is opened or run by the app"
       ],
       "test": "cargo test -p jellymoon-app --test f86",
-      "passes": false,
+      "passes": true,
       "blockedBy": [
         "F85"
       ]

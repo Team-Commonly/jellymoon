@@ -129,7 +129,7 @@ fn whole_loop(shows: &[&str]) {
 /// No step taps the wish's character: the look that finds its run ended shows its work, with what the run says.
 #[test]
 fn a_whole_loop_walks_from_a_new_project_to_kept_work_with_no_tap_on_the_wish() {
-    whole_loop(&["until:Work waits for this wish.:30"]);
+    whole_loop(&["until:Your folder is not changed yet.:30"]);
 }
 
 /// A tap on the character after the run's end, as a person may still make it: the loop is the same.

@@ -384,7 +384,7 @@ made-up home. It opens no window and starts no program; core starts what the app
 
 ```
 cargo run -p jellymoon-app --example walk --features sticker-kit/headless -- <folder> 1440x900 \
-  type:garden enter "type:<a wish>" enter "until:Work waits for this wish.:30" picture:waits \
+  type:garden enter "type:<a wish>" enter "until:Your folder is not changed yet.:30" picture:waits \
   "tap:work-m1:Keep it" picture:kept
 ```
 

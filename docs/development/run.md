@@ -108,13 +108,15 @@ The arguments, in this order, and nothing else:
 a follow-up's fork. Since F87 it lets a `result` stand beside `state` (ADR 0023, "The shape"):
 
 ```json
-{"type":"object","properties":{"state":{"type":"string","enum":["done","asks"]},"question":{"type":"string"},"result":{"type":"object","properties":{"pieces":{"type":"array","maxItems":12,"items":{"type":"object","properties":{"type":{"type":"string","enum":["did","change","decided","unsure"]},"text":{"type":"string","maxLength":280},"file":{"type":"string"},"before":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":100}},"after":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":100}}},"required":["type"],"additionalProperties":false}}},"required":["pieces"],"additionalProperties":false}},"required":["state"],"additionalProperties":false}
+{"type":"object","properties":{"state":{"type":"string","enum":["done","asks"],"description":"done: the work is finished, or the wish was a question and the result answers it. asks: the work cannot go on without an answer that only the person can give."},"question":{"type":"string","description":"Only with the state asks: the one question the person must answer before the work can go on, in plain words. Never the words or the question of the person who made the wish. With done, leave it out."},"result":{"type":"object","properties":{"pieces":{"type":"array","maxItems":12,"items":{"type":"object","properties":{"type":{"type":"string","enum":["did","change","decided","unsure"]},"text":{"type":"string","maxLength":280},"file":{"type":"string"},"before":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":100}},"after":{"type":"array","maxItems":3,"items":{"type":"string","maxLength":100}}},"required":["type"],"additionalProperties":false}}},"required":["pieces"],"additionalProperties":false}},"required":["state"],"additionalProperties":false}
 ```
 
 **The schema is one file, `crates/jellymoon-core/formats/last-word.v1.json`**, read by core when it is built
 (`include_str!`, in `run/asks.rs`) and passed as it is, its last line break aside. It stands in a folder of its own,
 apart from the code, and its version is in its name: it is a format, which another program can write to or read
 without Jellymoon, and a shape that changes is a new file beside it (`last-word.v2.json`), never an edit of this one.
+A `description` lets through no word it did not, so it is an edit of this one: since "done with a question" `state`
+and `question` each have one, which tell the model when to write a question (with `asks` only).
 It holds only what a schema can say: the four kinds, which parts a piece may have, and the bounds core holds a
 result to (twelve pieces, three lines a side of 100 characters each, and 280 characters of a text, the most of any
 kind). Which parts go with which kind, how many of each kind are looked at and each kind's own length are core's
@@ -283,7 +285,7 @@ The first row that fits is the one said:
 | With a skipped line after its result | a line that could not be read came after its result |
 | With a success, and an exit that is not 0 | Claude Code exited with a failure after its result |
 | With a success, exit 0, and no `structured_output` or a null one | its result did not say whether it is done or asks |
-| With a last word that is not `{"state":"done"}`, alone or with a `result` beside it (F85), or exactly `{"state":"asks","question":<text>}` | its last word was not `done` alone, or `asks` with one question |
+| With a last word that is not `{"state":"done"}`, alone or with a `result` or a `question` beside it (F85, "done with a question"), or exactly `{"state":"asks","question":<text>}` | its last word was not `done` alone, or `asks` with one question |
 | Asking, with a question of more than 4096 bytes | its question was longer than Jellymoon reads |
 | Asking, with a question of which cleaning leaves nothing | nothing was left of its question once it was cleaned |
 | Asking, with a question that eight cleanings still change | its question could not be cleaned |
@@ -403,12 +405,17 @@ one it was given is stopped at once and has failed.
 in two shapes only: exactly `{"state":"done"}`, and exactly `{"state":"asks","question":<text>}`. Since F85
 `done` may have one part beside it, `result`, of any value: `{"state":"done","result":<anything>}` is `done`.
 A `result` beside `asks` and its question is left out: the run asks, with its question held to the same checks,
-and nothing of the result is kept or printed. A `result` beside a question of `done`, beside `asks` with no question
-or beside any other part is a failed run as before. A `result` named twice beside `done` is no result, whatever the
+and nothing of the result is kept or printed. A `result` beside `asks` with no question or beside any other part is
+a failed run as before. Since "done with a question" (2026-11-18) a `question` beside `done` is not read either: the
+state is the run's own claim, and a run that needs an answer says `asks`. Of any shape and written any number of
+times, it is not kept, not printed, not asked and not counted, and the `result` beside it is read as beside any
+`done`. A model asked a plain question as a wish copied the person's question there and answered it in `result`;
+before, that run failed and its answer was lost. The reason of an unfit word still says "`done` alone": it is a
+record's word, which records of older builds hold (`end::recorded`), and since "told alone" the app shows none of it. A `result` named twice beside `done` is no result, whatever the
 two values are, and the word is `done`. Since F87 the schema a harness
 is given has room for a `result`, and the fixed words ask for one ("What the harness is started with"). A result
 never fails a run: `done` alone finishes as it did before F87, and so does a `result` that is not the shape.
-Any other value (another state, `done` with a question, `asks` without one, a question that is not text, any part more, a
+Any other value (another state, `asks` without a question, a question that is not text, any part more, a
 part named twice, a list, a text) is a failed run, and so is none at all. A part named twice is refused whatever
 the two values are: `{"state":"asks","state":"done"}` is not `done`, and two questions are not the second one. The last word is asked only of a stream that is a success
 in every other part, from a harness that exited with 0: a question in a result that is not a success, that came

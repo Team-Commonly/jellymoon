@@ -87,7 +87,8 @@ const WORDS: [&str; 13] = [
     "",
     "null",
     r#"{"state":"paused"}"#,
-    r#"{"state":"done","question":"Which of the two uploaders did you mean?"}"#,
+    // `done` with a question is done since "done with a question" (`f87.rs`): this is `asks` with none.
+    r#"{"state":"asks","said":"Which of the two uploaders did you mean?"}"#,
     r#"{"state":"asks"}"#,
     r#""done""#,
     r#"{"state":"asks","question":"Which of the two uploaders did you mean?","more":1}"#,

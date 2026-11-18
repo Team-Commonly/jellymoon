@@ -19,17 +19,20 @@ const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits fi
 /// Said last when core dropped a piece that failed its check.
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 
-fn row(label: String, quotes: &[String]) -> ToldRow {
-    ToldRow { label, quotes: quotes.to_vec(), marks: Vec::new() }
+fn row(label: &str, quotes: &[String]) -> ToldRow {
+    ToldRow { label: label.to_string(), quotes: quotes.to_vec(), ..ToldRow::default() }
 }
 
-/// The row of a change, one block drawn whole or not at all: a label that names the file, then the lines as they
-/// were and as they are, the first of each side marked "before" or "after". Of a made file, its lines.
+/// The row of a change, one block drawn whole or not at all: Jellymoon's words and the file's name, which the
+/// kit puts on their line only when the two are one line and the name holds no blank (else the name is the
+/// row's first quote); then the lines as they were and as they are, the first of each side marked "before" or
+/// "after". Of a made file, its lines.
 fn changed(name: &str, made: bool, before: &[String], after: &[String]) -> ToldRow {
+    let named = |label: &str, quotes: &[String]| ToldRow { name: name.to_string(), ..row(label, quotes) };
     if made {
-        return row(format!("New file {name}"), after);
+        return named("New file", after);
     }
-    let mut block = row(format!("Changed in {name}"), &[before, after].concat());
+    let mut block = named("Changed in", &[before, after].concat());
     for (side, lines) in [("before", before), ("after", after)] {
         block.marks.extend((0..lines.len()).map(|at| if at == 0 { side.to_string() } else { String::new() }));
     }
@@ -44,16 +47,14 @@ pub(crate) fn told(waits: &Waits) -> Option<Note> {
     for piece in &told.pieces {
         match piece {
             // What it did has no label: the title is its label, and it is read first.
-            Piece::Did { text } => rows.push(row(String::new(), std::slice::from_ref(text))),
+            Piece::Did { text } => rows.push(row("", std::slice::from_ref(text))),
             Piece::Change { name, made, before, after, .. } => rows.push(changed(name, *made, before, after)),
             Piece::Decided { text } => decided.push(text.clone()),
             Piece::Unsure { text } => unsure.push(text.clone()),
         }
     }
     let grouped = [(DECIDED, decided), (UNSURE, unsure)];
-    rows.extend(
-        grouped.into_iter().filter(|(_, texts)| !texts.is_empty()).map(|(label, texts)| row(label.to_string(), &texts)),
-    );
+    rows.extend(grouped.into_iter().filter(|(_, texts)| !texts.is_empty()).map(|(label, texts)| row(label, &texts)));
     let mut end = vec![NOTHING_RUN.to_string()];
     end.extend((told.dropped > 0).then(|| UNCHECKED.to_string()));
     Some(Note::Told { id: format!("{TOLD}{}", waits.wish), title: TITLE.to_string(), rows, end })

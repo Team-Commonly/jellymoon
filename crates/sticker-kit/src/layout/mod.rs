@@ -41,7 +41,8 @@ pub enum PieceKind {
     /// An option of an entry: `id` is the entry's, `index` the option.
     Chip,
     /// What stands for the options of an entry past the ones offered, `+N more`: `id` is the entry's, `index`
-    /// how many they are. It is words and no option: nothing chooses it.
+    /// how many they are. It is words and no option: nothing chooses it. It is also the count of the notes left
+    /// out while a told note is among them: one plain line, `id` [`MORE_NOTES_ID`], `index` the number of notes.
     More,
     /// An entry's one thing to do that is no option, after its chips: `id` is the entry's. A tap acts on it.
     Action,

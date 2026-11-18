@@ -98,7 +98,7 @@ pub(crate) fn is_unseen(c: char) -> bool {
 
 /// What is a character and is drawn as nothing: every kind of space, the two joiners, the variation selectors, the
 /// combining grapheme joiner, the Hangul fillers and the blank braille pattern.
-fn is_blank(c: char) -> bool {
+pub(crate) fn is_blank(c: char) -> bool {
     c.is_whitespace()
         || matches!(
             c as u32,

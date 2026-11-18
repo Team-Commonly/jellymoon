@@ -134,9 +134,15 @@ pub enum Note {
 /// One row of a told note: the note's own label, which may be empty, and someone else's texts under it. `marks`
 /// are the note's own small words, each beside the quote of its place (an empty one beside none); a row with one
 /// sets its quotes close together. A row is drawn whole or not at all.
+///
+/// `name` is someone else's word the label names, such as a file's: it shares the label's line only when the
+/// label and it lay out as that one line and it holds no blank, unseen or control character; else the label
+/// stands alone and the name is the row's first quote. So no word of it is ever a line of the note's own.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToldRow {
     pub label: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
     pub quotes: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub marks: Vec<String>,

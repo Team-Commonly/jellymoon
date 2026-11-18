@@ -412,6 +412,24 @@ that fit and counts the rest in a last line, `+N more`.
   it stands and its own words, and no choice. Either note can have a field under it ("A question answered, and
   more like this", below). One wish is open at a time. A tap on no wish, or on a wish whose
   note is on show, shows nothing. Nothing is written by any of it.
+- **What the run says it did** (F86, ADR 0023, `app/src/told.rs`): when core prints a `result` with a piece
+  that passed, the work's note has one more note before it, `told-<wish>`, the kit's `Note::Told`. Its title is
+  "What it says it did", which is also the label of what the run did: that text is the first thing under it.
+  Then, in this order, each change as one block drawn whole or not at all, `Changed in <name>` (the name on the
+  label's line only when the two are one line and the name holds no blank; else the name is the block's first
+  quote) over its lines as they were and as they are, set close, with the small words "before" and "after" beside the first of each side
+  (of a made file `New file <name>`), then `Decided` and `Not sure about`, each over the run's texts,
+  every one a quote piece and nothing else; `<name>` is core's cleaned name. It ends with "Nothing was run to
+  try this. A run reads and edits files, and no more.", and, when core dropped a piece, "Something the run said
+  could not be checked, so it is not here." No result, or every piece dropped: no such note. It has no option
+  and no field, so a tap on it finds nothing. The kit plans the work's note first, as it is without a result,
+  and the result next, taking room from the notes after them: the work's note is drawn whole, lower, with its
+  three choices, and the rows are drawn in their order up to the first that does not fit, which with every
+  row after it is counted. While it is on the page the count of the notes left out is one plain line, not a
+  sheet. With several works waiting, a result's note takes room the later notes give way to, as `layout` prints
+  it; never room from its own work's note, which shows what it shows with no result, or the result is left out. At 1440x900 a typical result (a did of two lines, one change of a line a side, a decision) reads its
+  did and its whole change; a did too long for the room draws no row: the title, the count and the sentences. It is shown when the wish is opened, with `Show me`'s file, and by `layout`, and goes with the
+  work's note when the work is kept, tossed or asked about once more. No file of the work is opened or run.
 - **`layout`** has no tap, so it prints the note of every made wish whose work waits, first among the notes,
   and then the note of every made wish whose run asks or whose work was kept.
 - **A tap on a choice** (`OnShow::working`) puts `busy-<wish>` in the note's place at once, with what core says is
@@ -819,5 +837,11 @@ each of the file's first six projects (a picture reads no logs) and its hint in 
 them, with the caret after them, and the chip of place `<option>` (from 0; 0 when left out) is the chosen one. With `<theme file>` a third picture is
 written, named after that theme, and the file's warnings are said on stderr, each as one line of text, cleaned as the app's are
 (`jellymoon_app::one_line`).
+
+`--work <waiting file>` before the page file puts the notes of the work that waits, as `jellymoon run waiting`
+prints it, over the page's notes, and `--told <shown file>` gives the first work the `result` of what
+`jellymoon run show` printed, so a page with work that waits and what its run says can be looked at from core's
+examples (`crates/jellymoon-core/tests/fixtures/waiting.json`; `shown-told.json`, a result with a dropped piece; and
+`shown-told-typical.json`, a typical one: a did, one change, a decision, nothing dropped).
 
 Linux needs the packages the CI job installs. The dependencies and GPUI's pin are in `docs/adr/0013-the-shell-dependencies.md`.

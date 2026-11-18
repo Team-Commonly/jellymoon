@@ -116,6 +116,36 @@ pub enum Note {
         title: String,
         rows: Vec<(Mark, String)>,
     },
+    /// What someone else says of a thing, under the note's own title: each row is a label in the note's own words
+    /// and the other's texts under it, each a `Quote` piece on a ground of its own and never anything but text. A
+    /// row is drawn to its last character or left out, and a last line, `+N more`, counts the rows left out. `end`
+    /// is the note's own sentences after the rows, each drawn whole, or the note is left out. It has no option
+    /// and no field. It is planned after the note that follows it, in the room that note leaves, so that note is
+    /// drawn as it is without it, lower, and the notes after them give way; it is drawn in its place over that note.
+    Told {
+        id: String,
+        title: String,
+        rows: Vec<ToldRow>,
+        #[serde(default)]
+        end: Vec<String>,
+    },
+}
+
+/// One row of a told note: the note's own label, which may be empty, and someone else's texts under it. `marks`
+/// are the note's own small words, each beside the quote of its place (an empty one beside none); a row with one
+/// sets its quotes close together. A row is drawn whole or not at all.
+///
+/// `name` is someone else's word the label names, such as a file's: it shares the label's line only when the
+/// label and it lay out as that one line and it holds no blank, unseen or control character; else the label
+/// stands alone and the name is the row's first quote. So no word of it is ever a line of the note's own.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToldRow {
+    pub label: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    pub quotes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub marks: Vec<String>,
 }
 
 /// One line a person types in under a text note. `offer` is the few words over it that say what it is for, and

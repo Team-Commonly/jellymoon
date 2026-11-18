@@ -772,7 +772,15 @@ max_file_lines = 400
 # The entry first raised the kit by 138: an entry's `go` and `loud`, the field's row over the big character with
 # the big character under it, `go` drawn ready or not and tapped as Enter or as `Tap::Go`, and the tests' entries
 # (`tests/entry_layout.rs`, 37 of them: the chips' row end and `go`'s place).
-"crates/sticker-kit" = 10284
+# F86 raised the kit by 400: `Note::Told` and its row (`scene.rs`), its layout (`layout/told.rs`: rows drawn in order
+# whole up to the first that does not fit, a change one unit, every text a quote, planned after the note it is over) and its tests (`tests/told.rs`).
+# The F86 follow-up raised the kit by 58: a change as one block with the note's small words beside its quotes, and
+# the count of the notes left out as one plain line while a told note is on the page, and their tests.
+# The F86 gate fix raised the kit by 282: a told note costs no other note anything (`told::guarded`: a second
+# layout without told notes, kept where any other note differs; the count reserved only on account of other
+# notes; no note drawn under its planned height), a file's name kept off the label's line unless the two are one
+# line, and the sweep that proves the first (`tests/told_sweep.rs`).
+"crates/sticker-kit" = 11024
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -901,7 +909,11 @@ max_file_lines = 400
 # The entry first raised the app by 263: `Start` beside the field and its note with nothing typed, the words of
 # a day with no project, no legend or footer on a page with nothing read and no wish, and tests
 # (`tests/entry_first.rs` and its window test, 192; the made-up window's `enter` and `unready`, 18).
-"app" = 12977
+# F86 raised the app by 370: what a run says it did as a told note (`told.rs`), put before the work's note
+# (`working.rs`), the picture example's `--work` and `--told`, and tests (`tests/f86.rs`, one arm in `tests/f37.rs`).
+# The F86 follow-up raised the app by 23: the test of a typical result at 1440x900 and a did too long at 960x640.
+# The F86 gate fix raised the app by 2: a change's row carries the file's name apart from its label.
+"app" = 13372
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

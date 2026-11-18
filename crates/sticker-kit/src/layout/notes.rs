@@ -2,8 +2,10 @@
 //! the notes after it. When the notes do not all fit, the first that does not and every one after it are left out,
 //! and a last small sheet says how many: no note goes without a word. A whole list is the one exception to the
 //! order: it comes below every other note and takes only the room they leave, so it never moves or shrinks one.
+//! A told note is planned after the note that follows it, and drawn in its place (`told.rs`).
 
 use super::text_note::{LEAST_TEXT_LINES, MAX_TEXT_LINES, Parts, text};
+use super::told;
 use super::{Ctx, PieceKind, Placed, TextRun, line_height, piece, run};
 use crate::geom::Rect;
 use crate::scene::{Mark, Note, Scene};
@@ -15,10 +17,10 @@ pub(super) const MAX_OPTIONS: usize = 4;
 /// a note in design units, and how large the options of a `whole` choice are written. A list gives up rows before any
 /// of them is tried. The scene keeps the whole text. A choice that is `whole` gives up no line: its sheet is as wide
 /// as the column, its options are written smaller when that places more notes, and it is drawn in full or left out.
-const TIGHTER: [Way; 5] = [(3, 48.0, 1.0), (2, 48.0, 1.0), (2, 32.0, 1.0), (2, 32.0, 0.85), (2, 32.0, 0.72)];
+pub(super) const TIGHTER: [Way; 5] = [(3, 48.0, 1.0), (2, 48.0, 1.0), (2, 32.0, 1.0), (2, 32.0, 0.85), (2, 32.0, 0.72)];
 
 /// One way to make room: an option's lines, the gap under a note, the size of a whole choice's options.
-type Way = (usize, f32, f32);
+pub(super) type Way = (usize, f32, f32);
 
 /// How many notes are laid out at most. The ones after are only counted, so a scene of any length costs the same.
 pub const MAX_NOTES: usize = 12;
@@ -47,39 +49,51 @@ pub(super) struct Sheet {
     pub options: Vec<Placed>,
 }
 
+/// The scene's notes; with a told note among them, never at another note's cost (`told::guarded`).
 pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
+    told::guarded(cx, scene, laid);
+}
+
+/// The scene's notes, with or without its `told` notes.
+fn laid(cx: &mut Ctx, scene: &Scene, told: bool) {
     let bottom = cx.paper().bottom() - cx.px(26.0);
     let mut top = cx.y(cx.theme.metrics.note_top);
     let all = scene.notes.len();
     let is_whole = |(_, note): &At| matches!(note, Note::Whole { .. });
     let (wholes, seen): (Vec<At>, Vec<At>) = scene.notes.iter().enumerate().take(MAX_NOTES).partition(is_whole);
-    // The other notes are planned as if the scene had no whole list: the same notes placed, in the same way.
-    let total = all - wholes.len();
-    // Room is made in this order: lists give up rows, options their third line, the gaps a third; then notes are
-    // counted. A tighter way is taken only when it places more notes.
-    let mut plan = plan(cx, &seen, total, TIGHTER[0], bottom - top);
-    for way in &TIGHTER[1..] {
-        let tighter = self::plan(cx, &seen, total, *way, bottom - top);
-        if plan.placed < total && tighter.placed > plan.placed {
-            plan = tighter;
-        }
-    }
-    let Plan { way, gap, more, needs, placed, used } = plan;
-    let kept = if placed < total { more } else { 0.0 };
+    let out = |(_, note): &At| !told && matches!(note, Note::Told { .. });
+    let total = all - wholes.len() - seen.iter().filter(|at| out(at)).count();
+    // The other notes are planned as if the scene had no whole list: the same notes placed, in the same way. A
+    // told note is planned after the note that follows it and drawn over it. Room is made in this order: lists give
+    // up rows, options their third line, the gaps a third; then notes are counted (`told::chosen`).
+    let seen = told::planned(seen.into_iter().filter(|at| !out(at)).collect());
+    let Plan { way, gap, more, needs, placed, used, .. } = told::chosen(cx, &seen, total, bottom - top);
+    let kept = if told::reserved(&seen, placed, total) { more } else { 0.0 };
     let (mut after, mut drawn) = (used, 0);
-    for (at, (index, note)) in seen.iter().enumerate().take(placed) {
+    // The notes placed are drawn in the scene's order.
+    let mut order: Vec<usize> = (0..placed).collect();
+    order.sort_by_key(|at| seen[*at].0);
+    for at in order {
+        let (index, note) = seen[at];
         after -= needs[at];
-        // A list, and a text, is as long as the room it is given: what the notes after it and the count do not need.
-        let long = matches!(note, Note::List { .. } | Note::Text { .. });
-        let room = if long { bottom - top - after - kept } else { f32::INFINITY };
-        let Some((sheet, id, tilt)) = fill(cx, note, *index, top, room, way) else {
+        // A list, a text and a told note are as long as the room they are given: what the notes after them and
+        let long = matches!(note, Note::List { .. } | Note::Text { .. } | Note::Told { .. });
+        // the count do not need, and never less than it was planned at: a half pixel over, so an exact fit the
+        // sums drifted under (a text note's lines are a floor of its room) is still the fit it was planned at.
+        let room = if long { (bottom - top - after - kept).max(needs[at] - gap + 0.5) } else { f32::INFINITY };
+        let Some((sheet, id, tilt)) = fill(cx, note, index, top, room, way) else {
+            // A told note that is not drawn takes nothing with it: the note it is over is drawn as planned.
+            if matches!(note, Note::Told { .. }) {
+                continue;
+            }
             break;
         };
         drawn += 1;
-        top = stick(cx, sheet, (&id, *index), tilt) + gap;
+        top = stick(cx, sheet, (&id, index), tilt) + gap;
     }
-    // A whole list takes what every other note left, when every one of them is drawn.
-    for (index, note) in wholes.iter().take(if drawn == total { MAX_NOTES } else { 0 }) {
+    // A whole list takes what every other note left, when every one of them is drawn but a told note.
+    let missed = drawn < placed || told::reserved(&seen, placed, total);
+    for (index, note) in wholes.iter().take(if missed { 0 } else { MAX_NOTES }) {
         let Note::Whole { title, rows } = note else { continue };
         let sized = |(above, scale): &(f32, f32)| {
             let top = top - gap + cx.px(*above).min(gap);
@@ -96,10 +110,10 @@ pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
         top = stick(cx, sheet, (&format!("note-{index}"), *index), cx.theme.tilt.list_note) + gap;
     }
     if drawn < all {
-        let sheet = more_sheet(cx, all - drawn, all, top);
-        // Room was kept for the count of the other notes. The count of whole lists alone is drawn where it fits.
-        if drawn < total || sheet.rect.bottom() <= bottom {
-            let mut paper = piece(PieceKind::Note, MORE_NOTES_ID, all, sheet.rect);
+        let (sheet, kind, _) = told::count(cx, &seen, (all - drawn, all), (top - gap, gap));
+        // Room was kept for the count of other notes; of whole lists and told notes alone, it is where it fits.
+        if missed || sheet.rect.bottom() <= bottom {
+            let mut paper = piece(kind, MORE_NOTES_ID, all, sheet.rect);
             paper.text = sheet.runs;
             cx.out.push(paper);
         }
@@ -128,38 +142,46 @@ fn stick(cx: &mut Ctx, sheet: Sheet, (id, index): (&str, usize), tilt: f32) -> f
 }
 
 /// Which notes are placed when room is made in one way.
-struct Plan {
-    way: Way,
-    gap: f32,
+pub(super) struct Plan {
+    pub(super) way: Way,
+    pub(super) gap: f32,
     /// What the sheet that counts the notes left out takes, with the gap above it.
-    more: f32,
+    pub(super) more: f32,
     /// What each note takes with the gap under it; for a list, the least it can be shown in.
-    needs: Vec<f32>,
-    placed: usize,
-    used: f32,
+    pub(super) needs: Vec<f32>,
+    pub(super) placed: usize,
+    pub(super) used: f32,
+    /// How many texts the told notes placed quote.
+    pub(super) told: usize,
 }
 
 /// The notes placed are the first ones that fit `room`, with room kept for the count when any is left out.
-fn plan(cx: &Ctx, seen: &[At], total: usize, way: Way, room: f32) -> Plan {
+pub(super) fn plan(cx: &Ctx, seen: &[At], total: usize, way: Way, room: f32) -> Plan {
     let gap = cx.px(way.1);
-    let more = gap + more_sheet(cx, 0, total, 0.0).rect.h;
-    let (mut needs, mut placed, mut used) = (Vec::new(), 0, 0.0);
+    let more = told::count(cx, seen, (0, total), (0.0, gap)).2;
+    let (mut needs, mut placed, mut used, mut told) = (Vec::new(), 0, 0.0, 0);
     for (at, (index, note)) in seen.iter().enumerate() {
-        let kept = if at + 1 < total { more } else { 0.0 };
+        let kept = if told::reserved(seen, at + 1, total) { more } else { 0.0 };
         let need = height_needed(cx, note, *index, way, room - used - kept) + gap;
         needs.push(need);
         if used + need - gap + kept > room {
             break;
         }
+        told += told::quoted(cx, note, room - used - kept);
         (placed, used) = (at + 1, used + need);
     }
-    Plan { way, gap, more, needs, placed, used }
+    Plan { way, gap, more, needs, placed, used, told }
+}
+
+/// The words that count the notes left out.
+pub(super) fn counted(left_out: usize, total: usize) -> String {
+    format!("+{left_out} more of {total} notes")
 }
 
 /// The level sheet that stands for the notes left out: one line, `+N more`.
-fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
+pub(super) fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
     let mut sheet = open(cx, top, cx.px(14.0), 330.0, (18.0, 22.0));
-    paragraph(cx, &mut sheet, &format!("+{left_out} more of {total} notes"), Role::RowSub, 1);
+    paragraph(cx, &mut sheet, &counted(left_out, total), Role::RowSub, 1);
     sheet.rect.h = sheet.cursor - sheet.rect.y + cx.px(18.0 - 9.0);
     sheet
 }
@@ -175,6 +197,12 @@ fn height_needed(cx: &Ctx, note: &Note, index: usize, way: Way, room: f32) -> f3
             let chosen = |sheet: &Sheet| sheet.options.iter().any(|placed| placed.piece == PieceKind::Option);
             let whole = sized(room, MAX_TEXT_LINES).filter(chosen);
             whole.or_else(|| sized(f32::INFINITY, LEAST_TEXT_LINES))
+        }
+        // A told note needs the rows that fit `room`, the room the note it is over leaves: the notes after it give
+        // way. Where none fits, its least: its title, the count of its rows and its own sentences.
+        Note::Told { id, title, rows, end } => {
+            let parts = (id.as_str(), title.as_str(), rows.as_slice(), end.as_slice());
+            told::sheet(cx, parts, (0.0, room), false).or_else(|| told::sheet(cx, parts, (0.0, f32::INFINITY), true))
         }
         _ => fill(cx, note, index, 0.0, f32::INFINITY, way).map(|(sheet, ..)| sheet),
     };
@@ -207,6 +235,11 @@ fn fill(cx: &Ctx, note: &Note, index: usize, top: f32, room: f32, way: Way) -> O
         }
         // A whole list is not one of the planned notes: `notes` gives it the room they leave.
         Note::Whole { .. } => None,
+        Note::Told { id, title, rows, end } => {
+            let sheet =
+                told::sheet(cx, (id.as_str(), title.as_str(), rows.as_slice(), end.as_slice()), (top, room), false)?;
+            Some((sheet, if id.is_empty() { fallback } else { id.clone() }, tilt.list_note))
+        }
         Note::Plain { title, body } => {
             let mut sheet = open(cx, top, cx.px(14.0), 330.0, (26.0, 22.0));
             heading(cx, &mut sheet, title, Role::NoteTitle);

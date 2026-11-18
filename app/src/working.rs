@@ -1,5 +1,6 @@
 //! A tap on a little one opens its wish, and work that waits is shown, kept or tossed there (F47, ADR 0017,
-//! decision 9). The rules and every word are core's: `jellymoon_core::waits` says whether a made wish's work
+//! decision 9). The rules are core's, and every word but the result's note's, which are the app's (`told.rs`,
+//! ADR 0023, "Found while building F86"): `jellymoon_core::waits` says whether a made wish's work
 //! waits and what the note says of it, `work_tapped` is a tap on one of its choices, and `stands` is what is said
 //! of any other wish. Here a tap is carried to core and core's answer is put in notes. Each call reads files and
 //! asks git, and a keep or a toss writes to the repo, so each is work the window runs off its own thread; what the
@@ -17,6 +18,7 @@ use crate::answering::{with_more, with_question};
 use crate::read::Page;
 use crate::taps::OnShow;
 use crate::today::Today;
+use crate::told::{TOLD, told};
 use crate::wishing::Seen;
 
 /// The starts of the ids of this file's notes, each followed by the wish's id: work that waits with its choices,
@@ -50,14 +52,14 @@ fn text(id: String, title: &str, body: Vec<String>, options: Vec<&str>) -> Note 
 
 fn id_of(note: &Note) -> Option<&str> {
     match note {
-        Note::Text { id, .. } => Some(id),
+        Note::Text { id, .. } | Note::Told { id, .. } => Some(id),
         _ => None,
     }
 }
 
 /// Whether an id is one of this file's notes: a tap on such a note is never a tap for `taps.rs`.
 pub(crate) fn names(id: &str) -> bool {
-    [WORK, SURE, BUSY, SAID, WISH, FILE].iter().any(|start| id.starts_with(start))
+    [WORK, SURE, BUSY, SAID, WISH, FILE, TOLD].iter().any(|start| id.starts_with(start))
 }
 
 /// Whether a note is one of this file's: a look and a reading leave it on show.
@@ -74,7 +76,7 @@ fn file_of(note: &Note, wish: &str) -> Option<usize> {
 /// Whether a note is of `wish`: any of this file's but the one of a wish with no work waiting.
 fn of(note: &Note, wish: &str) -> bool {
     let named = |start: &&str| id_of(note).and_then(|id| id.strip_prefix(*start)) == Some(wish);
-    [WORK, SURE, BUSY, SAID].iter().any(named) || file_of(note, wish).is_some()
+    [WORK, SURE, BUSY, SAID, TOLD].iter().any(named) || file_of(note, wish).is_some()
 }
 
 /// The wish a note of work that waits, or of how a wish stands, is of.
@@ -133,14 +135,18 @@ fn waiting(waits: &Waits, sure: bool) -> Note {
     text(format!("{WORK}{}", waits.wish), waits.title(), waits.lines(), waits.choices(false))
 }
 
+/// The notes of work that waits: what its run says it did, when core printed a piece of it, and the work's own
+/// note, with core's choices, after it.
+pub fn waiting_notes(waits: &Waits) -> Vec<Note> {
+    told(waits).into_iter().chain([waiting(waits, false)]).collect()
+}
+
 /// The notes that say what core answered to a tap on a choice of `wish`.
 pub fn notes_of(wish: &str, done: WorkDone) -> Vec<Note> {
     match done {
         WorkDone::Shown(waits, file) => {
-            vec![
-                waiting(&waits, false),
-                text(format!("{FILE}{}-{wish}", file.n), &file.title(), file.lines(), Vec::new()),
-            ]
+            let file = text(format!("{FILE}{}-{wish}", file.n), &file.title(), file.lines(), Vec::new());
+            waiting_notes(&waits).into_iter().chain([file]).collect()
         }
         WorkDone::Asks(waits) => vec![waiting(&waits, true)],
         WorkDone::Said(title, body) => vec![text(format!("{SAID}{wish}"), title, vec![body], Vec::new())],
@@ -173,8 +179,11 @@ impl Today {
     /// no tap: the window shows one after a tap on its wish's character.
     pub fn with_work(&self, mut shown: Scene) -> Scene {
         let waits = jellymoon_core::waiting(&self.home, &self.run_of("")).map(|day| day.waits).unwrap_or_default();
-        let work = |waits: &Waits| with_more(waiting(waits, false), &waits.wish, self.follows(&waits.wish));
-        let mut notes: Vec<Note> = waits.iter().map(work).collect();
+        let work = |waits: &Waits| {
+            let work = with_more(waiting(waits, false), &waits.wish, self.follows(&waits.wish));
+            told(waits).into_iter().chain([work])
+        };
+        let mut notes: Vec<Note> = waits.iter().flat_map(work).collect();
         let made = jellymoon_core::made(&self.home, &self.date);
         let stands = |wish: &Wish| {
             let follows = self.follows(&wish.id);
@@ -196,8 +205,13 @@ impl Today {
     /// either, the offer of a follow-up when core says one may be made of the wish. None for an id that is no
     /// wish.
     pub(crate) fn note_of(&self, page: Option<&Page>, id: &str) -> Option<Note> {
-        let note = match jellymoon_core::waits(&self.home, &self.run_of(id)) {
-            Some(waits) => waiting(&waits, false),
+        self.notes_on_open(page, id).and_then(|mut notes| notes.pop())
+    }
+
+    /// [`Today::note_of`], with what the run says it did before the note of its work that waits.
+    fn notes_on_open(&self, page: Option<&Page>, id: &str) -> Option<Vec<Note>> {
+        let (said, note) = match jellymoon_core::waits(&self.home, &self.run_of(id)) {
+            Some(waits) => (told(&waits), waiting(&waits, false)),
             None => {
                 // The day's made wishes stand after the page's own, as they are drawn (`taps.rs`).
                 let (wishes, read) = match page {
@@ -207,10 +221,10 @@ impl Today {
                     None => (jellymoon_core::made(&self.home, &self.date), 0),
                 };
                 let at = wishes.iter().position(|wish| crate::scene::drawn_id(&wish.id) == id)?;
-                standing(&wishes[at], at >= read)
+                (None, standing(&wishes[at], at >= read))
             }
         };
-        Some(with_more(note, id, self.follows(id)))
+        Some(said.into_iter().chain([with_more(note, id, self.follows(id))]).collect())
     }
 
     /// `notes` of `wish`, its work that waits among them with the offer of a follow-up when core says one may
@@ -230,11 +244,11 @@ impl Today {
         if busy(&from, id) {
             return None;
         }
-        let note = self.note_of(page, id)?;
+        let notes = self.notes_on_open(page, id)?;
         let mut now = from.clone();
-        // What core is at work on stays; every other note of an opened wish gives way to this one.
+        // What core is at work on stays; every other note of an opened wish gives way to these.
         now.notes.retain(|one| !ours(one) || id_of(one).is_some_and(|id| id.starts_with(BUSY)));
-        now.notes.insert(0, note);
+        now.notes.splice(0..0, notes);
         (now != from).then_some(Seen { from, now })
     }
 }

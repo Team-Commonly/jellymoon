@@ -5,18 +5,53 @@
 //! the window gives a day's page, with a chip for each of the page's first six projects: a picture reads no logs,
 //! so it does not ask which of them a wish can be made for. With `words` the
 //! entry holds them, with the caret after them, and the chip of place `option` (from 0) is the chosen one.
+//!
+//! `--work <waiting file>` puts the notes of the work that waits, as `jellymoon run waiting` prints it, over the
+//! page's notes, and `--told <shown file>` gives the first work the `result` that `jellymoon run show` printed.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use jellymoon_app::{file_part, one_line, read, scene, wishing};
-use sticker_kit::Theme;
+use jellymoon_app::{file_part, one_line, read, scene, wishing, working};
+use jellymoon_core::{Told, Waiting};
+use serde::Deserialize;
 use sticker_kit::draw::headless::{Typing, snapshot_typing};
+use sticker_kit::{Note, Theme};
+
+/// The value after `flag`, taken out of the arguments with it.
+fn taken(args: &mut Vec<String>, flag: &str) -> Option<String> {
+    let at = args.iter().position(|arg| arg == flag)?;
+    let value = args.get(at + 1).cloned();
+    args.drain(at..(at + 2).min(args.len()));
+    value
+}
+
+/// The notes of the work that waits in a `run waiting` file, the first given the result in a `run show` file.
+fn work(waiting: &str, told: Option<&str>) -> Result<Vec<Note>, String> {
+    let read = |file: &str| std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"));
+    let mut waiting: Waiting = serde_json::from_str(&read(waiting)?).map_err(|e| format!("{waiting}: {e}"))?;
+    if let (Some(file), Some(first)) = (told, waiting.waits.first_mut()) {
+        let shown: serde_json::Value = serde_json::from_str(&read(file)?).map_err(|e| format!("{file}: {e}"))?;
+        first.result = Some(Told::deserialize(&shown["result"]).map_err(|e| format!("{file}: {e}"))?);
+    }
+    Ok(waiting.waits.iter().flat_map(working::waiting_notes).collect())
+}
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let (waiting, told) = (taken(&mut args, "--work"), taken(&mut args, "--told"));
+    let notes = match waiting.map(|file| work(&file, told.as_deref())).transpose() {
+        Ok(notes) => notes.unwrap_or_default(),
+        Err(why) => {
+            eprintln!("snapshot: {}", one_line(&why));
+            return ExitCode::FAILURE;
+        }
+    };
     let [file, folder, name, more @ ..] = args.as_slice() else {
-        eprintln!("usage: snapshot <page file> <folder> <name> [width height [words [option [theme file]]]]");
+        eprintln!(
+            "usage: snapshot [--work <waiting file> [--told <shown file>]] <page file> <folder> <name> [width height \
+             [words [option [theme file]]]]"
+        );
         return ExitCode::from(2);
     };
     let side = |at: usize, fallback: f32| more.get(at).and_then(|side| side.parse().ok()).unwrap_or(fallback);
@@ -46,11 +81,13 @@ fn main() -> ExitCode {
             }
         }
     }
+    let mut shown = scene::scene(&page);
+    shown.notes.splice(0..0, notes);
     for theme in themes {
         // A theme file's `name` is the file's text: cleaned, and only a part of the picture's name, never a path.
         let out = PathBuf::from(folder).join(format!("{name}-{}.png", file_part(&theme.name)));
         let typing = entry.clone().map(|entry| Typing { entry, typed: typed.clone() });
-        if let Err(error) = snapshot_typing(scene::scene(&page), theme, typing, side(0, 1440.0), side(1, 900.0), &out) {
+        if let Err(error) = snapshot_typing(shown.clone(), theme, typing, side(0, 1440.0), side(1, 900.0), &out) {
             eprintln!("snapshot: could not render {}: {error}", out.display());
             return ExitCode::FAILURE;
         }

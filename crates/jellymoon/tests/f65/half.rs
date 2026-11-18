@@ -59,15 +59,16 @@ pub fn held_before_the_list(w: &World, name: &str) -> (Going, PathBuf) {
 #[test]
 fn a_git_step_that_fails_takes_back_what_was_made_and_lists_nothing() {
     let steps = ["init", "config", "symbolic-ref", "write-tree", "commit-tree", "update-ref"];
-    // In a home that was not there: nothing is left but the folder git is started in, which Jellymoon keeps empty.
+    // In a home that was not there: nothing is left but the folder git is started in, which Jellymoon keeps
+    // empty, and `take-over.lock`, empty, which the hold of the list's lock left and no command removes.
     let w = heard_world();
     for step in steps {
         let ran = w.run_with(&failing_at(&w, step), &["project", "new", "alpha", "--date", DAY]);
         assert_eq!(refused(&ran), format!("jellymoon: {GIT_FAILED}\n"), "{step}");
         names_no_path(&w, &ran);
         assert!(w.at("fake").join("held").exists(), "the made-up git was never at the step {step}");
-        let left: Vec<PathBuf> = tree(&w.at("jm")).into_iter().map(|(path, _)| path).collect();
-        assert_eq!(left, [w.jm("runs"), w.jm("runs").join("no-hooks")], "{step}");
+        let left = [w.jm("runs"), w.jm("runs").join("no-hooks"), w.jm("take-over.lock")].map(|path| (path, Vec::new()));
+        assert_eq!(tree(&w.at("jm")), left, "{step}");
     }
     // Beside a project that is there: the whole test folder is as it was.
     printed(&w.new_project("beta"));
@@ -147,11 +148,12 @@ fn a_making_that_is_killed_leaves_a_folder_the_next_one_says_is_there_and_the_pe
         // Its lock is left, and is nobody's half a minute on.
         let aged = std::time::SystemTime::now() - std::time::Duration::from_secs(40);
         fs::File::options().write(true).open(w.jm("projects.lock")).unwrap().set_modified(aged).unwrap();
-        // The next one takes that lock over, looks behind it, and leaves it to nobody.
+        // The next one takes that lock over, looks behind it, and leaves it to nobody: the lock is gone, the
+        // file the take-over was behind is there, empty, and nothing else is changed.
         let before = super::alone::but_the_lock(&w);
         let ran = w.new_project(name);
         assert_eq!(refused(&ran), format!("jellymoon: {THERE}\n"));
-        assert!(!w.jm("projects.lock").exists() && super::alone::but_the_lock(&w) == before);
+        assert!(!w.jm("projects.lock").exists() && w.all() == super::alone::and_the_take_over(&w, before));
     }
     // Mended by listing what is there: the repo was whole, and a run starts in it.
     let real = w.real(&w.made("alpha"));

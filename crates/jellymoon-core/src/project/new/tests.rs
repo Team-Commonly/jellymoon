@@ -161,6 +161,13 @@ fn a_refusal_after_the_folder_was_taken_back_says_so_once_and_says_when_it_was_l
     assert_eq!(said(refused(LISTED), true), format!("{LISTED}{BACK}"));
     assert_eq!(said(refused(LISTED), false), format!("{LISTED}{LEFT}"));
     assert_eq!(said(refused(SPELLED), true), SPELLED);
+    // A folder that was left is never said to have been taken back in the same sentence.
+    let git = |end: &str| format!("git could not make the new project's repo{end}");
+    assert_eq!(said(refused(git(TOOK)), true), git(", so what was made was taken back and nothing was listed"));
+    assert_eq!(said(refused(git(TOOK)), false), format!("{}{LEFT}", git(", so nothing was listed")));
+    let spelled = "this file system does not keep the folder under the name it was given, so nothing was listed; \
+                   pick a name of plain letters";
+    assert_eq!(said(refused(SPELLED), false), format!("{spelled}{LEFT}"));
     let store = said(Error::Store(io::Error::other("no room")), true);
     assert_eq!(store, format!("jellymoon's own files: no room{BACK}"));
 }

@@ -98,40 +98,84 @@ This is the only way text gets from a page into a running session, so what is ch
   removed or renamed, and a copy's record is read only behind it.
 - **The lock** is the day's, and `projects.lock` of the list of projects is the same lock
   (`crates/jellymoon-core/src/lock.rs`): a file only one caller can make, removed by that caller when its change is
-  done.
+  done. Its maker writes one line into it, its mark: the process, the moment and a count, which no other lock
+  holds.
   - **Promised.** While a caller holds the lock, and its change takes under 30 seconds, no other caller holds
-    it and nothing removes it. A caller that waits removes only a lock that was *left behind*: something at the
-    name that is no folder and was last written more than 30 seconds from now, before or after, since a clock
-    that was set back dates a lock ahead. Nothing at the name, a lock that cannot be looked at (on Windows, one
-    that is being removed), a lock whose time cannot be read and a lock dated up to 30 seconds ahead are waited
-    for, never removed.
-  - **A take-over.** A lock left behind is removed only behind the system's lock on `take-over.lock` beside it
-    (in `pages`; in the home for the list), and only when a second look, made there, finds it left behind still.
-    So of all the callers that found one lock left behind, one removes it, and none removes the lock the next
-    holder made. Each then asks for the name again, as any caller does, and one of them gets it. Where the
-    system's lock is not to be had (its file cannot be made, something that is no plain file is at its name, the
-    disk gives no such locks) nothing is removed, and the caller is refused after its 3 seconds.
-  - **Letting go.** A holder removes its lock when its change is done, unless the lock counts as left behind
-    by then, by the time the disk gave it when it was made. Such a lock may have been taken over, and what is at
-    the name is then another caller's: it stays, and the next caller takes it over.
+    it and nothing removes it. A lock is removed behind the system's lock on `take-over.lock` beside it (in
+    `pages`; in the home for the list), by what a look made there found: so what is removed is the lock that was
+    looked at, and no two callers act on two readings of one lock (but for a holder that could not have the
+    system's lock, under "Not promised"). A caller that waits removes only a lock that
+    was *left behind*: something at the name that is no folder and was last written more than 30 seconds from
+    now, before or after, since a clock that was set back dates a lock ahead. Nothing at the name, a lock that
+    cannot be looked at (on Windows, one that is being removed), a lock whose time cannot be read and a lock dated
+    up to 30 seconds ahead are waited for, never removed. A holder removes only the lock that holds its own mark.
+  - **A take-over.** A lock left behind is removed only behind the system's lock, and only when a second look,
+    made there, finds it left behind still. So of all the callers that found one lock left behind, one removes
+    it, and none removes the lock the next holder made. Each then asks for the name again, as any caller does,
+    and one of them gets it. `take-over.lock` is opened without following a link: on unix a link at its name is
+    refused by the open itself, and on Windows it is the link that is opened, never what it leads to.
+  - **A lock nobody can take over.** Where the system's lock is not to be had at all (its file cannot be made
+    or opened, something that is no plain file is at its name, the disk gives no such locks) nothing is taken
+    over. A lock a crash left there stays for ever, and every change to that day, or to the list, is refused
+    after its 3 seconds in words of its own: `<the lock's name> is a lock that was left behind, and it could not
+    be taken over, as take-over.lock beside it could not be locked; remove both, then try again`. The way out is
+    what it says: remove the two files (or whatever stands at `take-over.lock`) from `pages`, or from the home for
+    `projects.lock`. While another caller holds the system's lock, the refusal is the usual one: that caller
+    is at work. On Windows a sharing violation and a lock violation are what `take-over.lock` gives
+    while another process has it open or locked, so there they too are a caller at work and get the usual
+    refusal, never this one. "Denied" is said there by a file that is being removed, for a moment, and by a file
+    that may not be written, for good: a caller that is denied on every pass of its 3 seconds gets this refusal,
+    since no caller at work lasts that long, and one that on any pass is not denied gets the usual one,
+    unless its last pass finds what can never be locked. A
+    `take-over.lock` with the read-only attribute is not to be had at all there, by a look made before it is
+    opened. A holder letting go beside a `take-over.lock` that is denied waits its 3 seconds each time. A
+    process with no file handle left is the same on every system: that passes, and says nothing of the file.
+    On unix the open of `take-over.lock` never waits, so a pipe at its name is refused as a folder is.
+  - **Letting go.** A holder asks for the system's lock, waits up to 3 seconds for it while another caller
+    holds it, and behind it removes the lock at the name when that lock holds its own mark, however long it held
+    it. A lock that was taken over is gone, and what is at the name then is another caller's: it stays. Where the
+    system's lock is not had, after those 3 seconds or because it cannot be had at all, the holder still removes
+    a lock of its own that is not left behind: left there, nothing would ever remove it, which is worse than the
+    one case this leaves open (a clock set during the change, below). A lock of its own that is left behind by
+    then stays, for a take-over.
+  - **How long a caller waits.** For the lock, 3 seconds, and it is then refused; a made wish asks again up to
+    its own wait ([wish.md](wish.md)). A take-over never waits: it asks for the system's lock once. Letting go
+    waits at most 3 seconds for the system's lock and, on Windows only, up to 3 more to read a lock in use at
+    that moment and 3 more to remove it: 9 seconds at most there.
+    Nothing waits for ever.
   - **What a crash leaves.** A command killed while it holds the lock leaves the lock's file. For 30 seconds
     every change to that day, or to the list, is refused after its 3 seconds; then the next caller takes the lock
-    over. `take-over.lock` is an empty file for the person alone, made by the first take-over in its folder and
-    never removed. A command killed in the middle of a take-over leaves nothing more: the system drops its lock.
+    over. `take-over.lock` is an empty file for the person alone, made by the first change in its folder and
+    never removed. A command killed in the middle of a take-over, or of letting go, leaves nothing more: the
+    system drops its lock. A lock whose mark could not be written, as on a full disk, is removed at once, and
+    its caller gets the system's error.
   - **Not promised.** A change that takes over 30 seconds, as when the computer sleeps in the middle of one, is
     not protected: its lock can be taken over while it is still at work, and two changes then write the day. A
     folder on a disk whose clock is more than 30 seconds from the computer's gives no lock at all, as every lock
-    made there counts as left behind. A lock a crash left with a time that cannot be read, or dated less than 30
-    seconds ahead by a clock set back, stays until its time is 30 seconds past or the person removes the file. A
-    `jellymoon` built before this change still removes a lock as described next. On Windows nothing of this was
-    run by its builder: it rests on the tests there.
-  - **Before this change** a caller that waited removed whatever was at the name whenever its look at the lock
+    made there counts as left behind; where that disk gives no file locks either, a caller that waits is told
+    to remove a lock that is held, in the words of a lock nobody can take over. A clock set during a change is
+    not protected either: the lock can count as left behind while its holder is at work; and where the holder
+    cannot have the system's lock as well, it can find its lock in time while a caller that waits, behind the
+    system's lock, finds it left behind. Then either removes what it did not look at, in one of two orders: the
+    caller that waits removes the holder's lock, a third makes its own, and the holder removes the third's; or
+    the holder removes its own, a third makes its own, and the caller that waits removes the third's. A mark is
+    one lock's alone on one machine: it names the process, the moment to the nanosecond and a count, with nothing
+    random in it, so two machines or containers that share the folder could write one mark, if their processes
+    had one number and made their locks in the same nanosecond, and one then took the other's lock over. A lock
+    a crash left with a time that cannot be read, or dated less than 30 seconds ahead by a clock set back, stays
+    until its time is 30 seconds past or the person removes the file. A `jellymoon` built before these rules
+    removes a lock as described next, and takes part in neither the system's lock nor the marks. On Windows
+    nothing of this was run by its builder: it rests on the tests there.
+  - **Before these rules** a caller that waited removed whatever was at the name whenever its look at the lock
     failed, for any reason. One reason is that the holder had just let go: by the removal the name could be the
     next holder's, and two callers then wrote behind one lock. In one CI run on Windows that lost a made wish:
     eight wishes were made at once, each command exited 0 with its line, and seven were kept. Two callers that
-    both found a lock left behind could also each remove it, the second removing the first's new lock. Both
-    are shown by `crates/jellymoon-core/src/lock/tests.rs`, which holds each of many threads between its look
-    and what it does about it; unslowed, the first showed in no take of 3600 on a Mac.
+    both found a lock left behind could also each remove it, the second removing the first's new lock. After
+    that was mended a holder still let go by its own clock and outside the system's lock: one that let go at
+    its thirtieth second, one whose lock was dated ahead, and one whose lock had been taken over could each
+    remove the lock of the next caller. All are shown by `crates/jellymoon-core/src/lock/tests.rs` and
+    `lock/tests/corners.rs`, which hold each of many threads between its look and what it does about it;
+    unslowed, the first showed in no take of 3600 on a Mac.
 - **When the settlement cannot be written** the ruling stands: exit 0, the ruling in the JSON, the reason in
   `unkept`, and one line on stderr, "the ruling was made, but the page could not keep it". The same holds after a
   crash between the two writes. For the 24 hours the ruling waits it says what stands, so the same tap again makes

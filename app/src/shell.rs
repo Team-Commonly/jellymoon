@@ -3,8 +3,8 @@
 //! shows the page, the same view in a new window; Quit ends all of it. Once a second what core keeps for the
 //! jellyfish is looked at off the window's thread, and drawn.
 //!
-//! This file is wiring. `window.rs` opens [`wire`] on a screen; `tests/f57/window.rs` opens it on GPUI's test
-//! platform, where there is none.
+//! This file is wiring. `window.rs` opens [`wire`] on a screen; `tests/f57/window.rs` and `tests/f57/looks.rs`
+//! open it on GPUI's test platform, where there is none.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -24,22 +24,25 @@ use crate::today::Later;
 use crate::window::{self, LOOK_EVERY, say};
 
 /// A look at what core keeps for the jellyfish. It reads files, so it is run off the window's thread.
-pub type JellyLook = Arc<dyn Fn() -> JellyDrawn + Send + Sync>;
+type JellyLook = Arc<dyn Fn() -> JellyDrawn + Send + Sync>;
 
 /// Which day it is now, as YYYY-MM-DD. It is asked at each look, and a test gives a clock of its own.
 pub type Clock = Arc<dyn Fn() -> Option<String> + Send + Sync>;
 
 /// The look at what core keeps for the jellyfish in `home`: a day's made wishes and their runs. A day that was
-/// `named` is the one day looked at. Otherwise the page's day and the day `today` gives are both looked at, as
-/// the page files what it writes under the day it was opened on, and the first of the two in core's order is
-/// shown: of two in one state, the page's day's. A look that fails is quiet.
+/// `named` is the one day looked at. Otherwise the day `today` gives is looked at too, when it is a later day
+/// than the page's (the days are ISO dates, compared as text). The page shows the day it was opened on and no
+/// other, so of the later day only a run at work is taken: nothing is said to ask, or to wait, on a page that
+/// does not hold it. That run is shown when the page's day has nothing that comes before it in core's order,
+/// which is no question and no run at work of its own. A look that fails is quiet.
 fn jelly_look(home: PathBuf, page: String, named: bool, today: Clock) -> JellyLook {
     Arc::new(move || {
         let of = |day: &str| jellymoon_core::jellyfish(None, &home, Some(day)).unwrap_or_else(|_| Jelly::quiet());
         let at = |shown: &Jelly| JellyState::ORDER.iter().position(|state| *state == shown.state);
-        let now = if named { None } else { today().filter(|now| *now != page) };
-        let (page, now) = (of(&page), now.map(|now| of(&now)));
-        now.filter(|now| at(now) < at(&page)).unwrap_or(page).drawn()
+        let later = if named { None } else { today().filter(|now| *now > page) };
+        let page = of(&page);
+        let at_work = later.map(|later| of(&later)).filter(|later| later.state == JellyState::Working);
+        at_work.filter(|later| at(later) < at(&page)).unwrap_or(page).drawn()
     })
 }
 

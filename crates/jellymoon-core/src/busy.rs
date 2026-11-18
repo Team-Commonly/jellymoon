@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 pub(crate) const WAIT: Duration = Duration::from_secs(3);
 
 /// Windows's code for a file another process has open in a way that does not share it.
-const SHARING_VIOLATION: i32 = 32;
+pub(crate) const SHARING_VIOLATION: i32 = 32;
 
 /// Whether a step's error may be another process's use of the file and nothing wrong: on Windows, permission
 /// denied or a sharing violation. On every other system no error is. It is also what a folder nobody may write in

@@ -40,6 +40,16 @@ const SPELLED: &str = "this file system does not keep the folder under the name 
 const MOVED: &str = "the new project's folder was removed, replaced or changed while it was being made, so nothing was listed, and \
                      what is there now was left as it is";
 
+/// What a making says, and is no refusal, when it finds its own file gone from the folder it made and the list
+/// holding its name for that very folder: a making whose lock was taken over, and a `project add` of its folder.
+const BY_ANOTHER: &str = "the new project's folder was listed by another command while it was being made, so the \
+                          project is on the list as that command listed it, and this one changed nothing more";
+
+/// How a refusal ends that says what was made was taken back ([`SPELLED`] holds it too), and what stands in
+/// its place when that could not be done.
+const TOOK: &str = ", so what was made was taken back and nothing was listed";
+const TOOK_NOTHING: &str = ", so nothing was listed";
+
 /// What follows a refusal that came after the folder was made and taken back, when its words do not say so.
 const BACK: &str = "; the folder made for it meanwhile was taken back";
 
@@ -185,6 +195,14 @@ impl Made {
         }
         gone
     }
+
+    /// The line the list holds for this name and this very folder, when the folder is the made one still and
+    /// only this making's file is gone from it: another command listed it, and took the file out ([`tidy`]).
+    fn by_another(&self, home: &Path, project: &Path, name: &str, real: &str) -> Option<Known> {
+        let made = self.project.is_some() && mark(project) == self.project;
+        let lines = listed(home).ok().filter(|_| made)?;
+        lines.iter().find(|line| line.name == name && line.folder == real).map(Line::known)
+    }
 }
 
 /// Every look that makes nothing, in the order its refusals are said: the list, `projects`, what is at the name,
@@ -206,8 +224,11 @@ fn look(home: &Path, name: &str, day: &str) -> Result<bool, Error> {
 /// made and nothing changed: a name that is no folder's name, one that is listed, one something is at already,
 /// a list that is full or is not used, no git on `PATH`, a home a project could not be listed in, and a lock
 /// that is held, which is waited for. Behind the lock every look is taken again and the folder is made;
-/// whatever fails then (git, a list written over meanwhile) takes it back.
-pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<Known, Error> {
+/// whatever fails then (git, a list written over meanwhile) takes it back. A refusal said behind the lock
+/// (something at the name, and whatever fails then) leaves `take-over.lock` in Jellymoon's folder, as every
+/// hold of the lock does, and that folder when it was made to hold the lock. With the project comes what the
+/// making has to say of it that is no refusal: that another command listed it meanwhile.
+pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<(Known, Option<&'static str>), Error> {
     let day = day_of(day)?;
     if !makeable(name) {
         return Err(refused(NAME));
@@ -217,7 +238,6 @@ pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<Known, 
     if !matches!(&first, Err(Error::Project(why)) if why == THERE) {
         first?;
     }
-    let fresh = !home.exists();
     let lock = hold(home)?;
     let (folder, mut made) = (home.join("projects"), Made::new());
     let project = folder.join(name);
@@ -226,20 +246,19 @@ pub fn new_project(home: &Path, name: &str, day: Option<&str>) -> Result<Known, 
             Some(back) => after(e, back),
             None => e,
         });
+    // Jellymoon's folder, made to hold the lock, stays: `take-over.lock` in it is never removed (`lock.rs`).
     drop(lock);
-    // Jellymoon's folder, made to hold the lock, goes too when the making left nothing in it.
-    if done.is_err() && fresh {
-        let _ = fs::remove_dir(home);
-    }
     done
 }
 
 /// A refusal that came after the folder was made, when that folder was this command's to take back: it says
-/// that the folder was taken back, when its own words do not, or that it could not be and was left.
+/// that the folder was taken back, when its own words do not, or that it could not be and was left, and then
+/// its own words do not say that what was made was taken back.
 fn after(e: Error, back: bool) -> Error {
     match e.to_string() {
         said if back && said.contains("taken back") => e,
-        said => refused(format!("{said}{}", if back { BACK } else { LEFT })),
+        said if back => refused(format!("{said}{BACK}")),
+        said => refused(format!("{}{LEFT}", said.replace(TOOK, TOOK_NOTHING))),
     }
 }
 
@@ -293,7 +312,13 @@ fn kept_as(asked: Result<(String, String), Error>, name: &str) -> Result<String,
 
 /// The making, behind the lock: the looks again, the two folders, the repo, a look at the name the file system
 /// kept and at whose the folder is, and the list.
-fn build(home: &Path, project: &Path, name: &str, day: &str, made: &mut Made) -> Result<Known, Error> {
+fn build(
+    home: &Path,
+    project: &Path,
+    name: &str,
+    day: &str,
+    made: &mut Made,
+) -> Result<(Known, Option<&'static str>), Error> {
     if !look(home, name, day)?
         && let Some(folder) = project.parent()
     {
@@ -304,18 +329,20 @@ fn build(home: &Path, project: &Path, name: &str, day: &str, made: &mut Made) ->
     begin(project, &made.token)?;
     made.project = mark(project);
     copy::fresh_repo(home, project, &format!("Jellymoon project {name}"))
-        .map_err(|said| refused(format!("{said}, so what was made was taken back and nothing was listed")))?;
+        .map_err(|said| refused(format!("{said}{TOOK}")))?;
     let real = kept_as(stands_as(project), name)?;
     busy::pause("JELLYMOON_TEST_NEW_WAIT_MS");
     if !made.ours(project) {
-        return Err(refused(MOVED));
+        // Listed by another command, it is a made project all the same: nothing is written, and nothing removed.
+        let listed = made.by_another(home, project, name, &real);
+        return listed.map(|line| (line, Some(BY_ANOTHER))).ok_or_else(|| refused(MOVED));
     }
     let mut lines = listed(home)?;
     let known = onto(&mut lines, name, &real, day)?;
     write(home, lines)?;
     // Listed, the folder is a made project, and keeps nothing of its making.
     let _ = fs::remove_file(project.join(&made.token));
-    Ok(known)
+    Ok((known, None))
 }
 
 #[cfg(test)]

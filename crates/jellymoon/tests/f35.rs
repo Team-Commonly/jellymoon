@@ -159,7 +159,8 @@ fn a_tap_makes_one_ruling_of_the_clash_s_two_statements_and_a_session_is_told_it
     assert_eq!((rulings[0]["stands"].as_str(), rulings[0]["over"].as_str()), (Some(B), Some(A)));
     let kept: Value = serde_json::from_str(&fs::read_to_string(w.ruled()).unwrap()).unwrap();
     assert_eq!(kept, json!({"day": DAY, "clashes": [{"a": A, "b": B, "stands": "b"}]}));
-    assert_eq!(tree(&w.home().join("pages")).len(), 2, "the page and its settlement; no lock is left");
+    let left = tree(&w.home().join("pages"));
+    assert!(left.len() == 3 && left[2] == "take-over.lock (0 bytes)", "no lock is left: {left:?}");
 
     let context = w.told("s-1");
     assert!(context.contains(&format!("What stands: \"{B}\". It replaces: \"{A}\".")), "{context}");

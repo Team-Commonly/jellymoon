@@ -285,12 +285,12 @@ fn no_logs(kept: &Page) -> bool {
 }
 
 /// Whether a reading call was made and gave no page. Any other error stopped the day before a call: no logs, a
-/// list or a model's name that was refused, no Claude Code to call, or a call that could not be started
-/// (`Error::Call`: its folder could not be made, the program named is not there). Core gives that same error
-/// when the wait on a started call itself fails, the one case said here as not tried that was.
+/// list or a model's name that was refused, no Claude Code to call, or a call that could not be started (its
+/// folder could not be made, the program is not there or cannot be started, `PATH` names no full folder). A
+/// started call that could not be waited for was made (`Error::Wait`), though core stopped it.
 fn tried(error: &Error) -> bool {
-    use Error::{Failed, Harness, NotAResult, NotPageData, TooLong};
-    matches!(error, TooLong(_) | Failed { .. } | NotAResult | Harness(_) | NotPageData { .. })
+    use Error::{Failed, Harness, NotAResult, NotPageData, TooLong, Wait};
+    matches!(error, TooLong(_) | Wait(_) | Failed { .. } | NotAResult | Harness(_) | NotPageData { .. })
 }
 
 /// The scene with one plain note before its own.
@@ -298,6 +298,9 @@ fn noted(mut shown: Scene, title: &str, body: &str) -> Scene {
     shown.notes.insert(0, Note::Plain { title: title.to_string(), body: body.to_string() });
     shown
 }
+
+/// How the body starts for a call that could not be started. Core's line, which ends it, names what could not be.
+const UNSTARTED: &str = "Claude Code could not be started, so nothing was read.";
 
 /// Why there is no reading, for the person the page is for. Core's own line follows only where it tells them more.
 fn words(error: &Error) -> String {
@@ -320,9 +323,16 @@ fn words(error: &Error) -> String {
         Error::NotPageData { .. } => {
             format!("The model's answer was not a page, so nothing from it is shown. {again}")
         }
-        Error::Call(_) => format!(
-            "Claude Code could not be started, so nothing was read. Check that `claude` answers in a terminal. \
-             {again} What happened: {error}."
+        // Only a `claude` that was found and did not start is one a terminal would show the trouble of.
+        Error::Unstarted { named: false, .. } => {
+            format!("{UNSTARTED} Check that `claude` answers in a terminal. {again} What happened: {error}.")
+        }
+        Error::Call(_) | Error::Folder(_) | Error::Unstarted { .. } => {
+            format!("{UNSTARTED} {again} What happened: {error}.")
+        }
+        Error::Wait(_) => format!(
+            "Claude Code was started, but Jellymoon could not wait for it to end and stopped it, so nothing from it \
+             is shown. {again} What happened: {error}."
         ),
         Error::Failed { .. } | Error::NotAResult | Error::Harness(_) => format!(
             "Claude Code could not do the reading. Check that `claude` answers in a terminal. {again} What happened: \
@@ -352,10 +362,18 @@ fn words(error: &Error) -> String {
 mod tests {
     use super::*;
 
-    // The one kind `layout` cannot be made to play: the limit is three minutes, and fixed (`tests/f34.rs` has
-    // the others).
+    // The two kinds `layout` cannot be made to play: the limit is three minutes, and fixed, and a wait that fails
+    // needs a parent that ignores its children's ends (`tests/f34.rs` has the others).
     #[test]
-    fn a_call_that_took_too_long_was_a_reading_tried() {
+    fn a_call_that_took_too_long_or_could_not_be_waited_for_was_a_reading_tried() {
         assert!(tried(&Error::TooLong(READING_LIMIT)));
+        let lost = Error::Wait(io::Error::other("no child"));
+        assert!(tried(&lost));
+        assert_eq!(
+            words(&lost),
+            "Claude Code was started, but Jellymoon could not wait for it to end and stopped it, so nothing from it \
+             is shown. Open Jellymoon again to try once more. What happened: the reading call was started, the wait \
+             for its end failed, and it was stopped: no child."
+        );
     }
 }

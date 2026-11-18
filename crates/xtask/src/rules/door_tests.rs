@@ -100,6 +100,9 @@ fn a_test_in_core_or_the_app_that_has_the_harness_looked_for_with_its_own_enviro
         "let found = find::harness();",
         "None => harness(),",
         "named_or_found(None).unwrap();",
+        "let missed = search().unwrap();",
+        "match find::search() {",
+        "let said = harness_found(None).unwrap();",
         "Options { harness: None, day }",
     ];
     for look in looks {
@@ -130,7 +133,16 @@ fn a_test_in_core_or_the_app_that_has_the_harness_looked_for_with_its_own_enviro
 #[test]
 fn only_the_look_s_own_name_is_the_look_and_only_what_mod_tests_holds_is_a_file_s_tests() {
     // A method, a longer name and a function of the name are not the look.
-    for rightful in ["let h = w.harness();", "let h = made_up_harness();", "fn harness() -> PathBuf {"] {
+    let rightful = [
+        "let h = w.harness();",
+        "let h = made_up_harness();",
+        "fn harness() -> PathBuf {",
+        "let at = text.search();",
+        "let at = binary_search();",
+        "fn search() -> usize {",
+        "let said = harness_found(Some(made_up));",
+    ];
+    for rightful in rightful {
         let text = format!("fn t() {{\n    {rightful}\n}}\n");
         assert_eq!(found("crates/jellymoon-core/tests/look.rs", &text), NOTHING, "{rightful}");
     }

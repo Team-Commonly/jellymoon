@@ -7,7 +7,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::time::{Duration, Instant};
 
-use crate::shell::{INSTALL, NONE, Shell, finder, found};
+use crate::shell::{INSTALL, NONE, Shell, finder, found, moded};
 use crate::world::World;
 
 const NO_FILE: &str = "it is not a file that can be run";
@@ -44,8 +44,8 @@ fn refused(w: &World, why: &str, case: &str) {
 fn a_login_shell_others_can_write_to_or_that_is_no_program_or_not_on_the_list_is_never_started() {
     type Spoil = fn(&World, &Shell);
     let cases: [(&str, &str, Spoil, &str); 8] = [
-        ("the group can write to it", "zsh", |_, shell| mode(&shell.program, 0o775), OPEN),
-        ("everyone can write to it", "bash", |_, shell| mode(&shell.program, 0o757), OPEN),
+        ("the group can write to it", "zsh", |_, shell| moded(&shell.program, 0o775), OPEN),
+        ("everyone can write to it", "bash", |_, shell| moded(&shell.program, 0o757), OPEN),
         (
             // Its file is in a folder only the test's user can write to, and the link that names it is not.
             "everyone can write to its folder",
@@ -69,7 +69,7 @@ fn a_login_shell_others_can_write_to_or_that_is_no_program_or_not_on_the_list_is
             },
             OPEN,
         ),
-        ("it cannot be run", "zsh", |_, shell| mode(&shell.program, 0o644), NO_FILE),
+        ("it cannot be run", "zsh", |_, shell| moded(&shell.program, 0o644), NO_FILE),
         ("it is not there", "zsh", |_, shell| fs::remove_file(&shell.program).unwrap(), NO_FILE),
         (
             "it is a folder",
@@ -84,7 +84,10 @@ fn a_login_shell_others_can_write_to_or_that_is_no_program_or_not_on_the_list_is
     ];
     for (case, name, spoil, why) in cases {
         let (w, shell) = named(name);
+        let built = fs::metadata(env!("CARGO_BIN_EXE_fake-shell")).unwrap().permissions().mode();
         spoil(&w, &shell);
+        // Whatever the case did, it did to a file of this world: the built program is as it was.
+        assert_eq!(fs::metadata(env!("CARGO_BIN_EXE_fake-shell")).unwrap().permissions().mode(), built, "{case}");
         refused(&w, why, case);
         assert_eq!(shell.starts(), 0, "{case}: the login shell was started");
         // A folder everyone can write to is closed again, so that the world can be removed.

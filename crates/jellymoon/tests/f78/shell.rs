@@ -95,6 +95,18 @@ impl World {
     }
 }
 
+/// Puts a copy of a planted program in its place, with this mode. `plant` makes a hard link on Linux, so a mode
+/// set on a planted file is set on the built program itself, for every test that starts it. A copy with a mode of
+/// its own is never started.
+#[cfg(unix)]
+pub fn moded(program: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    let bytes = fs::read(program).unwrap();
+    fs::remove_file(program).unwrap();
+    fs::write(program, bytes).unwrap();
+    fs::set_permissions(program, fs::Permissions::from_mode(mode)).unwrap();
+}
+
 /// The line `jellymoon harness` prints.
 pub fn found(found: bool, how: &str, says: &str) -> String {
     format!("{}\n", json!({"found": found, "how": how, "says": says}))

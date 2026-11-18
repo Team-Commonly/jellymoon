@@ -134,22 +134,51 @@ fn with_no_login_shell_to_ask_the_look_ends_as_it_did_and_harness_says_it_was_no
 }
 
 // What is remembered is in the process's memory: a hearing that makes two wishes, each with its run asked for,
-// looks for the harness twice. An answer is kept for the second look, and an ask that failed is made again.
+// looks for the harness twice. An answer with a harness in it is kept for the second look: the hearing asks once,
+// and each of the two runs it starts, a command of its own, asks once. An answer with no harness in it is not
+// kept, so a harness installed while the command goes is found by its next look; and an ask that failed is made
+// again.
 #[cfg(unix)]
 #[test]
-fn one_command_asks_once_when_it_was_answered_and_again_when_it_was_not() {
-    for (script, asked) in [("answer", 1), ("none", 2)] {
+fn one_command_asks_once_when_the_answer_held_a_harness_and_again_when_it_held_none_or_failed() {
+    for (script, harness, asked) in [("answer", true, 3), ("answer", false, 2), ("none", false, 2)] {
         let mut w = heard_world();
         let repo = w.repo("alpha");
         w.typed_at("-work-alpha", &repo);
         w.vars.push(("PATH", w.at("git").into()));
         let shell = w.shell("bash");
         shell.play(script);
-        shell.names(&[&w.made("empty")]);
+        shell.names(&[&w.made("empty"), &w.at("held")]);
+        if harness {
+            w.agent_in(&w.at("held"));
+        }
         let events = [hold(0, SAID), vec![tick(5000)], hold(6000, "and log each retry"), vec![tick(11_000)]].concat();
         let printed = w.hear_ran(&["--run"], &events);
         assert_eq!(printed.code, 0, "{}", printed.stderr);
         assert_eq!(printed.stdout.matches("\"made\":").count(), 2, "{script}: {}", printed.stdout);
-        assert_eq!(shell.starts(), asked, "{script}");
+        if harness {
+            for wish in ["m1", "m2"] {
+                w.run_ended(wish);
+            }
+            assert_eq!(w.starts(), 2, "a run of each wish");
+        }
+        assert_eq!(shell.starts(), asked, "{script}, a harness there: {harness}");
     }
+}
+
+// The gate of F78, finding 1: on Linux a planted program is a hard link to the built one, which every test starts.
+// So a test that wants a mode of its own for a file makes a copy of it first. Held on every Unix, with a link
+// made here: on a Mac `plant` copies, and the mistake would not show.
+#[cfg(unix)]
+#[test]
+fn a_mode_set_for_a_test_is_set_on_a_copy_and_never_on_the_file_a_link_shares() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let w = finder();
+    let (built, planted) = (w.reader_in(&w.at("built")), w.made("planted").join("claude"));
+    std::fs::hard_link(&built, &planted).unwrap();
+    let before = std::fs::read(&built).unwrap();
+    moded(&planted, 0o757);
+    let (built, planted) = (std::fs::metadata(&built).unwrap(), std::fs::metadata(&planted).unwrap());
+    assert_eq!((built.permissions().mode() & 0o777, planted.permissions().mode() & 0o777), (0o755, 0o757));
+    assert!(built.ino() != planted.ino() && std::fs::read(w.at("planted").join("claude")).unwrap() == before);
 }

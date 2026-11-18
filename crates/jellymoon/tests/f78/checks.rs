@@ -7,7 +7,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-use crate::shell::{INSTALL, NONE, finder, found};
+use crate::shell::{INSTALL, NONE, finder, found, moded};
 
 fn mode(path: &Path, mode: u32) {
     fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
@@ -21,8 +21,12 @@ fn a_harness_others_can_write_to_or_in_a_folder_everyone_can_write_to_is_passed_
     for folder in ["group", "everyone", "open", "real", "good"] {
         w.reader_in(&at(folder));
     }
-    mode(&at("group").join("claude"), 0o775);
-    mode(&at("everyone").join("claude"), 0o757);
+    moded(&at("group").join("claude"), 0o775);
+    moded(&at("everyone").join("claude"), 0o757);
+    // The two with a mode of their own are copies: the one that is started is still the built program's link.
+    let inode = |folder: &str| std::os::unix::fs::MetadataExt::ino(&fs::metadata(at(folder).join("claude")).unwrap());
+    assert!(inode("group") != inode("good") && inode("everyone") != inode("good") && inode("group") != inode("open"));
+    assert_eq!(fs::metadata(at("good").join("claude")).unwrap().permissions().mode() & 0o777, 0o755);
     // A link in a folder nobody else can write to, to a program in a folder everyone can.
     fs::rename(at("real").join("claude"), at("real").join("the-program")).unwrap();
     w.made("link");

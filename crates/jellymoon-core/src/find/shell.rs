@@ -6,7 +6,7 @@
 mod ask;
 
 #[cfg(unix)]
-pub(super) use ask::folders;
+pub(super) use ask::{folders, forget};
 
 /// How the ask of the login shell ended. Every end but the first names no folder, and each has fixed words.
 #[allow(dead_code)] // Windows makes `NotHere` alone, and no other system makes it
@@ -61,6 +61,10 @@ impl Shell {
 pub(super) fn folders() -> Result<Vec<std::path::PathBuf>, Shell> {
     Err(Shell::NotHere)
 }
+
+/// Nothing was asked, so nothing is remembered.
+#[cfg(not(unix))]
+pub(super) fn forget() {}
 
 #[cfg(test)]
 mod tests {

@@ -111,8 +111,16 @@ ADR 0021, decision 1; the code is `find/shell.rs` and `find/shell/ask.rs` in cor
 - **A harness in one of those folders** is held to the checks of a fixed place, and one more: the folder its
   link-resolved file is in must not be one everyone can write to. One that fails is passed over for the next. It is
   started with this process's `PATH`, then the folder it was found in, then the fixed places.
-- **Remembered.** The folders of an answer, in the process's memory, for as long as the process lives. Nothing is
-  written. An ask that failed is not remembered, and the next look asks again.
+- **Remembered.** The folders of an answer in which a harness was found that passes the checks, in the process's
+  memory, for as long as the process lives. Nothing is written. An answer in which no folder holds such a harness is
+  not remembered, and neither is an ask that failed: the next look asks again. So a person who installs Claude Code
+  while the app is open is found at the next look, with no restart.
+- **From a terminal.** The login shell gets a process group of its own, and no session of its own. Opened from the
+  Finder, the app has no terminal. When `jellymoon` is run from a terminal and no listed place holds a harness, the
+  interactive login shell can open that terminal. This is not run, and is said from how the two shells are known to
+  work: `bash` then stops itself until the 5 seconds end, so the ask fails; `zsh` can make itself the terminal's
+  front group, and after it is killed Ctrl-C may no longer reach `jellymoon`. The remedy is `JELLYMOON_CLAUDE`, a
+  harness on `PATH`, or `JELLYMOON_SHELL` set to nothing.
 
 A login shell that is refused, or that does not answer, changes nothing but the error's list of places. It gains
 `the login shell's PATH` when it answered, or `the login shell (<why>)`, with one of these:
@@ -137,7 +145,8 @@ shell's PATH``, and why.
 and holds no folder. On Windows it says the login shell is not asked.
 
 The home is `HOME` (`USERPROFILE` on Windows) and nothing else, and only when it names a full path. The system's own
-record of the account is not asked. With no such home, places 3 and 4 are not looked in, and the error says so. Core
+record of the account is not asked for the home. It is read for the login shell alone, when `JELLYMOON_SHELL` is not
+set ("The login shell"), and a login shell that is given no `HOME` may take one from that record itself. With no such home, places 3 and 4 are not looked in, and the error says so. Core
 reads the variable itself, so the command and the app cannot differ.
 
 **Who can change the program.** The reading call hands the day's text to this program, so each place on the list is

@@ -129,6 +129,7 @@ fn by_shell(passed_over: &mut Vec<String>) -> Result<PathBuf, Shell> {
             }
         }
     }
+    shell::forget();
     Err(Shell::Answered)
 }
 
@@ -165,7 +166,7 @@ fn longer(on_path: &[PathBuf], program: &Path, places: &[(PathBuf, String)]) -> 
 
 /// The person's home: `HOME` (`USERPROFILE` on Windows) and nothing else, and only when it names a full path, since
 /// where a relative one led would depend on the folder the program was started in. The system's own record of the
-/// account is not asked, so a run given no home, or a scratch one, can never reach what is the person's at the machine.
+/// account is not asked for the home, so a run given no home, or a scratch one, is given none of the person's by this.
 pub fn user_home() -> Option<PathBuf> {
     env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from).filter(|home| home.is_absolute())
 }

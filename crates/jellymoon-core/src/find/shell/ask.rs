@@ -5,8 +5,9 @@
 //! is on [`LISTED`]. It gets one fixed command, nothing on its input, the variables a harness gets and a process
 //! group of its own; it has [`LIMIT`] to answer, at most [`MOST`] bytes of it are read, and the whole group is
 //! killed before this returns, answered or not. Of what it printed only what stands between the two marks counts,
-//! and only when there is exactly one pair of them, on one line. An answer is remembered for as long as this
-//! process lives, in its memory alone; an ask that failed is made again by the next look.
+//! and only when there is exactly one pair of them, on one line. An answer in which a harness was found is
+//! remembered for as long as this process lives, in its memory alone; an answer with no harness in it and an ask
+//! that failed are not, and the next look asks again.
 
 use std::ffi::OsStr;
 use std::io::Read;
@@ -58,6 +59,12 @@ pub(in crate::find) fn folders() -> Result<Vec<PathBuf>, Shell> {
     let folders = named(&asked(&shell)?)?;
     *answer = Some(folders.clone());
     Ok(folders)
+}
+
+/// Forgets the answer. The look does when no folder of it held a harness that passes the checks, so that the next
+/// look asks again: a harness installed since, in a folder new to the login shell's `PATH`, is then found.
+pub(in crate::find) fn forget() {
+    *ANSWER.lock().unwrap_or_else(PoisonError::into_inner) = None;
 }
 
 /// Whether a login shell may be started, and how it is refused when not.

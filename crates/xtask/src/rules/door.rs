@@ -34,16 +34,19 @@ const DOORS: [Door; 2] = [
 
 /// What makes a temporary folder, in the system's or anywhere: `tempfile`'s functions and the standard library's.
 const HOME: [&str; 3] = ["tempdir", "TempDir::new", "temp_dir("];
-/// The look's name in core, and a call's options that name no harness, which is how the look is reached from outside.
-const LOOK: [&str; 3] = ["harness()", "named_or_found(None", "harness: None"];
+/// The look's two names in core, each a call with nothing handed to it.
+const LOOK: [&str; 2] = ["harness()", "search()"];
+/// The ways into the look that are handed no harness, and a call's options that name none, which is how the look is
+/// reached from outside.
+const UNNAMED: [&str; 3] = ["named_or_found(None", "harness_found(None", "harness: None"];
 
-/// Whether a line has the harness looked for: the look called by its own name (`find::harness()`, or `harness()`
-/// alone, but no method or longer name that ends so, and not where a function of that name is written), or
-/// options that name no harness.
+/// Whether a line has the harness looked for: the look called by a name of its own (`find::harness()`, `search()`
+/// alone, but no method or longer name that ends so, and not where a function of that name is written), or a way
+/// in or options that name no harness.
 fn looks(code: &str) -> bool {
     let named = |before: &str| before.ends_with(|last: char| last.is_alphanumeric() || last == '_' || last == '.');
     let called = |(at, _): (usize, &str)| !named(&code[..at]) && !code[..at].ends_with("fn ");
-    code.match_indices(LOOK[0]).any(called) || LOOK[1..].iter().any(|look| code.contains(look))
+    LOOK.iter().any(|look| code.match_indices(look).any(called)) || UNNAMED.iter().any(|look| code.contains(look))
 }
 
 /// No test names a built program outside the door or builds a home outside the support, and none in core or in

@@ -389,7 +389,8 @@ anything (`told::guarded`): with one among the notes they are laid out twice,
 with and without the told notes, and where a note drawn in both differs but
 for its place down the page, or the note a drawn told note is over is drawn
 only without them, the layout without them is kept. A later note may give way
-whole, left out and counted. That is a second layout only when a told note is
+whole, left out and counted, but never one with an option or a field: where
+such a note is drawn only without the told notes, the told notes give way. That is a second layout only when a told note is
 in the scene. While a told note is among the
 notes, the count of the notes left out is one plain line in the same words
 (a `more` piece, no sheet) close under the last note, so the told note keeps

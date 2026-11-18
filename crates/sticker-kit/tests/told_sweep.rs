@@ -1,5 +1,6 @@
 //! A told note never changes the note it is over (F86's gate): over a sweep of scenes, the work's note with a
-//! result on the page has exactly the options, the field and the lines it has with no result. Layout only.
+//! result on the page has exactly the options, the field and the lines it has with no result, and every note
+//! with a choice or a field drawn with no result is drawn with one (the told guard). Layout only.
 
 use sticker_kit::{Field, FixedAdvance, Mark, Note, PieceKind, Placed, Scene, Theme, ToldRow, Viewport, layout};
 
@@ -62,6 +63,20 @@ fn pieces(placed: &[Placed]) -> Vec<String> {
     placed.iter().filter(|p| p.id == WORK).map(of).collect()
 }
 
+/// A second work's note after the first, with its three choices and no field.
+fn second() -> Note {
+    let Note::Text { title, body, options, quoted, .. } = work(1, false, false) else { unreachable!() };
+    Note::Text { id: "work-2".into(), title, body, options, quoted, field: None }
+}
+
+/// The notes drawn with a choice or a field, by the ids of their option and field pieces, in order.
+fn chosen(placed: &[Placed]) -> Vec<&str> {
+    let tapped = |p: &&Placed| matches!(p.piece, PieceKind::Option | PieceKind::Offer | PieceKind::Field);
+    let mut ids: Vec<&str> = placed.iter().filter(tapped).map(|p| p.id.as_str()).collect();
+    ids.dedup();
+    ids
+}
+
 fn sizes() -> Vec<Viewport> {
     let mut sizes = vec![Viewport { w: 960.0, h: 640.0 }, Viewport { w: 1440.0, h: 900.0 }];
     sizes.extend((705..=848).step_by(13).chain([800]).map(|h| Viewport { w: 960.0, h: h as f32 }));
@@ -73,23 +88,27 @@ fn a_result_never_changes_what_the_work_s_note_shows() {
     let (mut scenes, mut kept) = (0, 0);
     for theme in [Theme::sticker(), Theme::plain()] {
         for viewport in sizes() {
-            for (lines, field, whole, long) in (1..=24).flat_map(|n| {
-                [false, true].into_iter().flat_map(move |f| {
-                    [false, true].into_iter().flat_map(move |w| [false, true].map(move |l| (n, f, w, l)))
-                })
+            // After the work's note: nothing, a whole list, or a second work's note with its three choices.
+            for (lines, field, after, long) in (1..=24).flat_map(|n| {
+                [false, true]
+                    .into_iter()
+                    .flat_map(move |f| (0..3).flat_map(move |a| [false, true].map(move |l| (n, f, a, l))))
             }) {
                 let place = |told: Option<Note>| {
                     let list =
                         Note::Whole { title: "wished here today".into(), rows: vec![(Mark::Star, "a wish".into())] };
-                    let notes = told.into_iter().chain([work(lines, field, long)]).chain(whole.then_some(list));
+                    let next = [None, Some(list), Some(second())].into_iter().nth(after).flatten();
+                    let notes = told.into_iter().chain([work(lines, field, long)]).chain(next);
                     layout(&Scene { notes: notes.collect(), ..Scene::sample() }, &theme, viewport, &FixedAdvance(0.56))
                 };
-                let alone = pieces(&place(None));
+                let without = place(None);
+                let alone = pieces(&without);
                 for result in [false, true] {
                     let placed = place(Some(told(result)));
                     let what =
-                        format!("{viewport:?} lines {lines} field {field} whole {whole} long {long} result {result}");
+                        format!("{viewport:?} lines {lines} field {field} after {after} long {long} result {result}");
                     assert_eq!(pieces(&placed), alone, "{what}");
+                    assert_eq!(chosen(&placed), chosen(&without), "{what}");
                     scenes += 1;
                     kept += usize::from(placed.iter().any(|p| p.id == "told-1"));
                 }

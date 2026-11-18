@@ -210,7 +210,8 @@ pub(super) fn chosen(cx: &Ctx, seen: &[At], total: usize, room: f32) -> Plan {
 
 /// Lays the notes out with `draw` and, with a told note among them, again without the told notes. Where a note
 /// other than a told note or a whole list is drawn in both and differs but for its place down the page, or the
-/// note a drawn told note is over is drawn only without them, the layout without the told notes is the one kept.
+/// note a drawn told note is over, or any note with an option or a field, is drawn only without them, the layout
+/// without the told notes is the one kept.
 /// So a result costs no other note anything, whatever the layout does at an edge, for a second layout when one
 /// is on the page.
 pub(super) fn guarded<'a>(cx: &mut Ctx<'a>, scene: &Scene, draw: impl Fn(&mut Ctx<'a>, &Scene, bool)) {
@@ -248,7 +249,8 @@ fn kept(scene: &Scene, with: &[Placed], without: &[Placed]) -> bool {
             Note::Whole { .. } => {}
             _ => {
                 let (was, now) = (of(without, &id), of(with, &id));
-                if now.is_empty() && over && !was.is_empty() || !now.is_empty() && !moved(&was, &now) {
+                let lost = now.is_empty() && !was.is_empty() && (over || chooses(note));
+                if lost || !now.is_empty() && !moved(&was, &now) {
                     return false;
                 }
                 over = false;
@@ -256,6 +258,15 @@ fn kept(scene: &Scene, with: &[Placed], without: &[Placed]) -> bool {
         }
     }
     true
+}
+
+/// Whether a note has something to tap or type in: an option or a field.
+fn chooses(note: &Note) -> bool {
+    match note {
+        Note::Choice { options, .. } => !options.is_empty(),
+        Note::Text { options, field, .. } => !options.is_empty() || field.is_some(),
+        _ => false,
+    }
 }
 
 /// Whether `now` is `was` moved down or up the page and otherwise the same, to a hundredth of a pixel.

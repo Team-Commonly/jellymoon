@@ -784,7 +784,9 @@ max_file_lines = 400
 # notes; no note drawn under its planned height), a file's name kept off the label's line unless the two are one
 # line, and the sweep that proves the first (`tests/told_sweep.rs`).
 # The page says it is working raised the kit by 3: the test that the entry's ring is no red (`tests/colours.rs`).
-"crates/sticker-kit" = 11027
+# The told guard raised the kit by 58: a result never costs a later note its choices (`told::chooses`, 11 net), the
+# test of a second work's note and a clash after a long result, and the sweep's third case after the work's note.
+"crates/sticker-kit" = 11085
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.

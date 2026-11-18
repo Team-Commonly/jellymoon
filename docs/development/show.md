@@ -63,6 +63,8 @@ tells two files apart:
   characters to the cleaning and draw as nothing or as a line's end.
 
 Work that is `kept` or `tossed`, and a run that finished and changed nothing, print no files, and git is not asked.
+A run that finished and changed nothing still prints what it says it did as `result` ("What the run says of its
+work", below).
 
 One file (`ShownFile`, example `shown-file.json`): `run`, `wish`, `work`, `n`, `name`, `size`, `text`, `cut` and
 `most` (65536). `text` is the file as it is in the work, whole, and never a diff. Of a file over 64 KiB only the
@@ -157,8 +159,17 @@ or one part more, is no result, and the list prints as it did before F85. Only t
 A file written by hand is checked exactly as one a run left: the file is not believed, the work is.
 
 **When there is a `result`.** Only in the list (`run show` without `--file`, and `run waiting`), only of work
-that waits, and only when a piece passed or one was dropped. Work that was kept or tossed, and `--file <n>`,
+that waits or of a run that changed nothing (below), and only when a piece passed or one was dropped. Work that was kept or tossed, and `--file <n>`,
 print what they printed before.
+
+**Told alone: a run that changed nothing.** A run that finished and changed nothing (its record's line says so,
+and it was not tossed) has no work to wait, so `run waiting` lists none of it, but `run show` prints its
+`result` beside `"files":[]`. There is no file to check a `change` against, so every `change` is dropped and
+counted; `did`, `decided` and `unsure` pass the door and their bounds as they do with work. No repo is asked.
+The app reads it through `jellymoon_core::ended_alone`, which says how a made wish's run ended when it left no
+work: `Unchanged`, with that `result`, or `Unfinished`, a run whose record says it failed. Core keeps no result
+of a run that failed, so none is read of it, though a file be at the name (`app/tests/told_alone.rs`,
+`crates/jellymoon/tests/f85/kept.rs`).
 
 **The order and the counts.** Pieces are printed in the catalogue's order, whatever order the run wrote them
 in: the first `did`, the first two `change`, the first three `decided`, the first three `unsure`. A piece past

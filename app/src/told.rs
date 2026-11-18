@@ -4,8 +4,10 @@
 //! nothing else: the title, the labels and the last sentences are Jellymoon's fixed words and core's cleaned file
 //! names. The note has no option and no field, so no tap finds a word of it, and the work's note is the note it
 //! is without a result: every choice and every rule of the yes stay there. No file of the work is opened or run.
+//! A run that finished and changed nothing has no work's note: its result's note stands alone over the wish's
+//! own, and says first that nothing in the folder was changed (told alone, `jellymoon_core::Alone`).
 
-use jellymoon_core::{Piece, Waits};
+use jellymoon_core::{Alone, Piece, Told, Waits};
 use sticker_kit::{Note, ToldRow};
 
 /// The start of the id of the note, followed by the wish's id.
@@ -18,6 +20,8 @@ const UNSURE: &str = "Not sure about";
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
 /// Said last when core dropped a piece that failed its check.
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
+/// Said first of a run that finished and changed nothing.
+const UNCHANGED: &str = "Nothing in your folder was changed.";
 
 fn row(label: &str, quotes: &[String]) -> ToldRow {
     ToldRow { label: label.to_string(), quotes: quotes.to_vec(), ..ToldRow::default() }
@@ -42,7 +46,21 @@ fn changed(name: &str, made: bool, before: &[String], after: &[String]) -> ToldR
 /// The note of what the run of `waits` says it did, when core printed a piece of it that passed. None when there is
 /// no result, or when every piece of it was dropped.
 pub(crate) fn told(waits: &Waits) -> Option<Note> {
-    let told = waits.result.as_ref().filter(|told| !told.pieces.is_empty())?;
+    note(&waits.wish, waits.result.as_ref()?, None)
+}
+
+/// The note of what the run of the made wish `wish` says it did, when it finished and changed nothing and core
+/// printed a piece of it that passed. None of any other end.
+pub(crate) fn told_alone(wish: &str, alone: &Alone) -> Option<Note> {
+    let Alone::Unchanged(Some(told)) = alone else { return None };
+    note(wish, told, Some(UNCHANGED))
+}
+
+/// The note of `told` of the wish `wish`, its sentences after `first`, when one is given.
+fn note(wish: &str, told: &Told, first: Option<&str>) -> Option<Note> {
+    if told.pieces.is_empty() {
+        return None;
+    }
     let (mut rows, mut decided, mut unsure) = (Vec::new(), Vec::new(), Vec::new());
     for piece in &told.pieces {
         match piece {
@@ -55,7 +73,7 @@ pub(crate) fn told(waits: &Waits) -> Option<Note> {
     }
     let grouped = [(DECIDED, decided), (UNSURE, unsure)];
     rows.extend(grouped.into_iter().filter(|(_, texts)| !texts.is_empty()).map(|(label, texts)| row(label, &texts)));
-    let mut end = vec![NOTHING_RUN.to_string()];
+    let mut end: Vec<String> = first.into_iter().chain([NOTHING_RUN]).map(str::to_string).collect();
     end.extend((told.dropped > 0).then(|| UNCHECKED.to_string()));
-    Some(Note::Told { id: format!("{TOLD}{}", waits.wish), title: TITLE.to_string(), rows, end })
+    Some(Note::Told { id: format!("{TOLD}{wish}"), title: TITLE.to_string(), rows, end })
 }

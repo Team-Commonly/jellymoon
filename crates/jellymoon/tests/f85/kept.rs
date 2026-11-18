@@ -170,3 +170,25 @@ fn a_run_that_did_not_finish_keeps_nothing_of_what_it_said() {
     assert_eq!((&said["outcome"], &said["star"]), (&json!("failed"), &Value::Null), "{said}");
     assert!(!kept_file(&made).exists());
 }
+
+// Told alone: a run that finished and changed nothing has its result printed by a look, with no file to check a
+// change against, so each `change` is dropped and counted, though it quotes a file of the repo as it is. The run
+// has no work to wait, so `run waiting` lists none.
+#[test]
+fn a_run_that_changed_nothing_has_its_result_printed_by_a_look_and_every_change_of_it_dropped() {
+    let change = json!({"type": "change", "file": "a.txt", "before": ["a.txt as it was"], "after": ["it is"]});
+    let unsure = json!({"type": "unsure", "text": "It could not see the shop's hours."});
+    let (made, said) = told(&[], &[], &[], &done(&json!([change, did("The shop opens at nine."), unsure.clone()])));
+    assert_eq!((&said["outcome"], &said["star"]), (&json!("completed"), &json!(STAR)), "{said}");
+    assert!(said["why"].as_str().unwrap().contains("finished and changed nothing"), "{said}");
+    let shown = printed(&show(&made, &[]));
+    assert_eq!((&shown["work"], &shown["files"]), (&json!("waits"), &json!([])), "{shown}");
+    assert_eq!(shown["result"], json!({"pieces": [did("The shop opens at nine."), unsure], "dropped": 1}));
+    let waiting = printed(&made.w.run(&["run", "waiting", "--date", DAY, "--repo", made.repo.to_str().unwrap()]));
+    assert_eq!(waiting["waits"], json!([]), "{waiting}");
+    // Tossed, the run is no longer said to wait, and a look prints nothing of what it said.
+    let asked = ["run", "toss", "--wish", &made.wish, "--date", DAY, "--repo", made.repo.to_str().unwrap()];
+    assert_eq!(printed(&made.w.run(&asked))["tossed"], json!(true));
+    let shown = printed(&show(&made, &[]));
+    assert_eq!((&shown["work"], &shown["result"]), (&json!("tossed"), &Value::Null), "{shown}");
+}

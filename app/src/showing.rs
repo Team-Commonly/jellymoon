@@ -121,12 +121,17 @@ impl Turns {
     }
 
     /// What a look or a tap gave was shown as `scene`, or dropped. Work on show has had its turn. A dropped
-    /// look that `carried` work is made again: the first look is owed still.
+    /// look that `carried` work is made again: the first look is owed still. What a run says it did, put on the
+    /// page with no work under it, has nothing to choose and so is never in hand: it holds the [`HOLD`] looks
+    /// after it itself, so no other wish's work comes over it before it can be read.
     fn saw(&mut self, scene: Option<&Scene>, carried: bool) {
         match scene {
             Some(scene) => {
                 for id in working::shown(scene) {
                     self.turn.remove(id);
+                }
+                if carried && working::told_on(scene) {
+                    self.hold = HOLD;
                 }
             }
             None if carried && self.first == First::Asked => self.first = First::Due,
@@ -237,20 +242,26 @@ impl Showing {
     /// wish asked of once. Not while a note on the page is in the person's hand, and not in the [`HOLD`] looks
     /// after the page left the hand, the person chose or typed or core answered them: then the work waits its
     /// turn. Of several, the first in core's order is shown. The first look shown also finds the work that
-    /// waited when the window opened, the newest wish's.
+    /// waited when the window opened, the newest wish's. What a run that changed nothing says it did (told
+    /// alone) is shown the same way, but only when no wish asked has work that waits: the look asks on past
+    /// it, and a wish passed over so keeps its turn.
     pub fn look(&self) -> Option<Look> {
         self.with(|on| {
             let Some(asks) = self.2.borrow_mut().asks(&on.scene) else { return on.look() };
             let (today, page, from) = (on.today.clone(), on.page.clone(), on.scene.clone());
             Box::new(move || {
-                let mut now = today.again(page.as_ref(), &from);
+                let (mut now, mut shown) = (today.again(page.as_ref(), &from), None);
                 for id in asks.whom(&now) {
-                    if let Some(over) = today.waiting_over(&now, &id) {
-                        now = over;
-                        break;
+                    match today.waiting_over(page.as_ref(), &now, &id) {
+                        Some((work, true)) => {
+                            shown = Some(work);
+                            break;
+                        }
+                        Some((alone, false)) => shown = shown.or(Some(alone)),
+                        None => asks.none(id),
                     }
-                    asks.none(id);
                 }
+                now = shown.unwrap_or(now);
                 (now != from).then_some(Seen { from, now })
             }) as Look
         })

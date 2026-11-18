@@ -194,3 +194,15 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
   without it, the layout without the result is the one shown. A later note may give way whole, counted. While a result's note is on the page,
   the count of the notes left out is one plain line, not a sheet, so a typical result (a did, one change, a decision) is read whole at
   1440x900.
+
+## Found while building told alone (2026-11-18)
+
+- **Decision 3 is widened to a run with no work.** A run that finished and changed nothing has no work's note, so
+  its result's note stands alone over the wish's own note ("This wish is done."), above it, with no option and no
+  field. `run show` prints its `result` beside `"files":[]`; with no file to check one against, every `change` is
+  dropped and counted, and `did`, `decided` and `unsure` pass as they do with work. The app asks core through
+  `ended_alone` ([show.md](../development/show.md), "Told alone"). The note's sentences start with the app's
+  "Nothing in your folder was changed."; decision 6's sentence stays, as it is still true.
+- A run that did not finish keeps no result (decision 2), so none is shown of it. Its wish's note says, in core's
+  fixed words, that it did not finish, that nothing in the folder was changed, and what the person
+  can do; no word of core's reason, which names the run and the harness's last word.

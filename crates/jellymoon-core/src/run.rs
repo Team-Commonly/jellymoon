@@ -58,7 +58,9 @@ pub(crate) use place::{plain, theirs};
 use record::Record;
 pub(crate) use record::work_waits;
 use serde::{Deserialize, Serialize};
-pub use show::{FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, show_file, show_run};
+pub use show::{
+    Alone, FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, ended_alone, show_file, show_run,
+};
 pub use stop::stop_run;
 pub use told::{Piece, Told};
 pub use toss::{Tossed, toss_run};

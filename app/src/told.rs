@@ -20,24 +20,20 @@ const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits fi
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 
 fn row(label: String, quotes: &[String]) -> ToldRow {
-    ToldRow { label, quotes: quotes.to_vec(), with_last: false }
+    ToldRow { label, quotes: quotes.to_vec(), marks: Vec::new() }
 }
 
-/// The rows of a change: the lines as they were and as they are, each under a label that names the file and the
-/// side, or of a made file its lines under one label. A side with no line has no row.
-fn changed(name: &str, made: bool, before: &[String], after: &[String]) -> Vec<ToldRow> {
+/// The row of a change, one block drawn whole or not at all: a label that names the file, then the lines as they
+/// were and as they are, the first of each side marked "before" or "after". Of a made file, its lines.
+fn changed(name: &str, made: bool, before: &[String], after: &[String]) -> ToldRow {
     if made {
-        return vec![row(format!("New file {name}"), after)];
+        return row(format!("New file {name}"), after);
     }
-    let sides = [("before", before), ("after", after)];
-    let mut rows: Vec<ToldRow> = sides
-        .iter()
-        .filter(|(_, lines)| !lines.is_empty())
-        .map(|(side, lines)| row(format!("Changed in {name}, {side}"), lines))
-        .collect();
-    // The two sides are one unit: drawn together or not at all.
-    rows.iter_mut().skip(1).for_each(|row| row.with_last = true);
-    rows
+    let mut block = row(format!("Changed in {name}"), &[before, after].concat());
+    for (side, lines) in [("before", before), ("after", after)] {
+        block.marks.extend((0..lines.len()).map(|at| if at == 0 { side.to_string() } else { String::new() }));
+    }
+    block
 }
 
 /// The note of what the run of `waits` says it did, when core printed a piece of it that passed. None when there is
@@ -49,7 +45,7 @@ pub(crate) fn told(waits: &Waits) -> Option<Note> {
         match piece {
             // What it did has no label: the title is its label, and it is read first.
             Piece::Did { text } => rows.push(row(String::new(), std::slice::from_ref(text))),
-            Piece::Change { name, made, before, after, .. } => rows.extend(changed(name, *made, before, after)),
+            Piece::Change { name, made, before, after, .. } => rows.push(changed(name, *made, before, after)),
             Piece::Decided { text } => decided.push(text.clone()),
             Piece::Unsure { text } => unsure.push(text.clone()),
         }

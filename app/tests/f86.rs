@@ -86,13 +86,13 @@ fn work(placed: &[Piece]) -> Vec<String> {
     of(placed, "work-m1").iter().map(moved).collect()
 }
 
-/// The rows of [`pieces`], with what each quotes, in the order they are read.
+/// The rows of [`pieces`], each the note's own words in it and what it quotes, in the order they are read. A
+/// change is one row: its label, and the words "before" and "after" beside its sides.
 fn rows(decided: &[String], unsure: &[String]) -> Vec<(&'static str, Vec<String>)> {
     let one = |text: &str| vec![text.to_string()];
     vec![
         ("", one(DID)),
-        ("Changed in a.txt, before", one("a.txt as it was")),
-        ("Changed in a.txt, after", one("edited by the run")),
+        ("Changed in a.txt before after", [one("a.txt as it was"), one("edited by the run")].concat()),
         ("New file n.txt", one("new from the run")),
         ("Decided", [&one("It kept the old name.")[..], decided].concat()),
         ("Not sure about", [&one("It could not try the new line.")[..], unsure].concat()),
@@ -127,8 +127,9 @@ fn layout_prints_the_told_note_before_the_work_s_with_every_text_of_the_run_a_qu
     let placed = w.placed();
     let first = |id: &str| placed.iter().position(|piece| piece.id() == id).unwrap();
     assert!(first("told-m1") < first("work-m1"), "the told note comes first");
-    // At 1440x900; at 960x640 this day's is too long for the room (the test after this one).
     assert!(reads(&placed, &rows(&[], &[]), &[NOTHING_RUN]) >= 1, "what the run did is read first");
+    let small = w.placed_with(&["--size", SIZES[1]]);
+    assert!(reads(&small, &rows(&[], &[]), &[NOTHING_RUN]) >= 1, "{}: what the run did is read first", SIZES[1]);
     // Every run of a quote is in the tone for quoted words, and no text of the run is on the sheet.
     let quoted = of(&placed, "told-m1").into_iter().filter(|piece| piece.kind() == "quote");
     assert!(quoted.flat_map(Piece::roles).all(|role| role == "quoted"));
@@ -141,27 +142,53 @@ fn layout_prints_the_told_note_before_the_work_s_with_every_text_of_the_run_a_qu
     assert!(!ran(tree(w.day.dir.path())), "a text of the run was run");
 }
 
+/// A typical result (`shown-told-typical.json`): a did of two lines, one change, a decided, nothing dropped.
+const TYPICAL: &str = include_str!("../../crates/jellymoon-core/tests/fixtures/shown-told-typical.json");
+
 #[test]
-fn at_960x640_a_short_did_is_read_first_and_one_too_long_for_the_room_draws_no_row_at_all() {
+fn at_1440x900_a_typical_result_reads_what_it_did_and_the_whole_change_before_the_work_s_note() {
+    let (w, _) = finished("edits");
+    let typical: Value = serde_json::from_str(TYPICAL).unwrap();
+    let said = typical["result"]["pieces"].as_array().unwrap();
+    let text = |at: usize| said[at]["text"].as_str().unwrap().to_string();
+    // The fixture's did and decided, and the day's change, which core checks against the work.
+    let change =
+        json!({"type": "change", "file": "a.txt", "before": ["a.txt as it was"], "after": ["edited by the run"]});
+    result(&w, &json!([said[0], change, said[2]]));
+    let placed = w.placed();
+    let rows = vec![
+        ("", vec![text(0)]),
+        ("Changed in a.txt before after", vec!["a.txt as it was".to_string(), "edited by the run".to_string()]),
+        ("Decided", vec![text(2)]),
+    ];
+    assert!(reads(&placed, &rows, &[NOTHING_RUN]) >= 2, "what it did and the whole change are read");
+    let top = note(&placed, "work-m1").expect("the work's note").rect()[1];
+    let quotes = of(&placed, "told-m1").into_iter().filter(|piece| piece.kind() == "quote");
+    assert!(quotes.map(|quote| quote.rect()[1]).all(|y| y < top), "read before the work's note");
+    let options: Vec<String> =
+        of(&placed, "work-m1").iter().filter(|piece| piece.kind() == "option").map(|o| o.said()).collect();
+    assert_eq!(options, CHOICES);
+}
+
+#[test]
+fn at_960x640_a_did_too_long_for_the_room_draws_no_row_at_all_and_the_work_s_note_is_whole() {
     let (w, _) = finished("edits");
     let small = |w: &World| w.placed_with(&["--size", SIZES[1]]);
     let alone = small(&w);
-    // This day's did does not fit what the work's note leaves: no row is drawn, and none after it in its place.
-    result(&w, &pieces());
+    // A did of 231 characters, under core's most, does not fit what the work's note leaves: no row is drawn, and
+    // none after it in its place.
+    let long = [DID; 4].join(" ");
+    let mut said = pieces().as_array().unwrap().clone();
+    said[0] = json!({"type": "did", "text": long});
+    result(&w, &Value::Array(said));
+    let mut rows = rows(&[], &[]);
+    rows[0].1 = vec![long];
     let placed = small(&w);
-    assert_eq!(reads(&placed, &rows(&[], &[]), &[NOTHING_RUN]), 0, "a row was drawn");
+    assert_eq!(reads(&placed, &rows, &[NOTHING_RUN]), 0, "a row was drawn");
     assert_eq!(work(&placed), work(&alone), "the work's note is whole");
     let options: Vec<String> =
         of(&placed, "work-m1").iter().filter(|piece| piece.kind() == "option").map(|o| o.said()).collect();
     assert_eq!(options, CHOICES);
-    // A did that fits is the first thing under the title.
-    let short = "It edited a.txt.";
-    let mut said = pieces().as_array().unwrap().clone();
-    said[0] = json!({"type": "did", "text": short});
-    result(&w, &Value::Array(said));
-    let mut rows = rows(&[], &[]);
-    rows[0].1 = vec![short.to_string()];
-    assert!(reads(&small(&w), &rows, &[NOTHING_RUN]) >= 1, "what the run did is read first");
 }
 
 #[test]

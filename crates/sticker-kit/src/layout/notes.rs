@@ -107,10 +107,11 @@ pub(crate) fn notes(cx: &mut Ctx, scene: &Scene) {
         top = stick(cx, sheet, (&format!("note-{index}"), *index), cx.theme.tilt.list_note) + gap;
     }
     if drawn < all {
-        let sheet = more_sheet(cx, all - drawn, all, top);
+        // With a told note among the notes, the count is one plain line (`told.rs`).
+        let (sheet, kind, _) = told::count(cx, &seen, (all - drawn, all), (top - gap, gap));
         // Room was kept for the count of the other notes. The count of whole lists alone is drawn where it fits.
         if drawn < total || sheet.rect.bottom() <= bottom {
-            let mut paper = piece(PieceKind::Note, MORE_NOTES_ID, all, sheet.rect);
+            let mut paper = piece(kind, MORE_NOTES_ID, all, sheet.rect);
             paper.text = sheet.runs;
             cx.out.push(paper);
         }
@@ -155,7 +156,7 @@ struct Plan {
 /// The notes placed are the first ones that fit `room`, with room kept for the count when any is left out.
 fn plan(cx: &Ctx, seen: &[At], total: usize, way: Way, room: f32) -> Plan {
     let gap = cx.px(way.1);
-    let more = gap + more_sheet(cx, 0, total, 0.0).rect.h;
+    let more = told::count(cx, seen, (0, total), (0.0, gap)).2;
     let (mut needs, mut placed, mut used, mut told) = (Vec::new(), 0, 0.0, 0);
     for (at, (index, note)) in seen.iter().enumerate() {
         let kept = if at + 1 < total { more } else { 0.0 };
@@ -170,10 +171,15 @@ fn plan(cx: &Ctx, seen: &[At], total: usize, way: Way, room: f32) -> Plan {
     Plan { way, gap, more, needs, placed, used, told }
 }
 
+/// The words that count the notes left out.
+pub(super) fn counted(left_out: usize, total: usize) -> String {
+    format!("+{left_out} more of {total} notes")
+}
+
 /// The level sheet that stands for the notes left out: one line, `+N more`.
-fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
+pub(super) fn more_sheet(cx: &Ctx, left_out: usize, total: usize, top: f32) -> Sheet {
     let mut sheet = open(cx, top, cx.px(14.0), 330.0, (18.0, 22.0));
-    paragraph(cx, &mut sheet, &format!("+{left_out} more of {total} notes"), Role::RowSub, 1);
+    paragraph(cx, &mut sheet, &counted(left_out, total), Role::RowSub, 1);
     sheet.rect.h = sheet.cursor - sheet.rect.y + cx.px(18.0 - 9.0);
     sheet
 }

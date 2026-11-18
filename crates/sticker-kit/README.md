@@ -378,9 +378,13 @@ under it, each a `quote` piece in `Role::Quoted`, never a run of the sheet; a
 row with an empty label starts with its first quote. Rows are drawn in their
 order, each to its last character, up to the first that does not fit; it and
 every row after it are counted, `+N more`, and no later row is drawn in its
-place. A text that cleaning would cut is a row that does not fit. A row
-`with_last` is one unit with the row before it: both are drawn or neither,
-counted as two. The note's own
+place. A text that cleaning would cut is a row that does not fit. A row's
+`marks` are the note's own small words in `row_sub`, each level with the
+quote of its place and before it; a row with one sets its quotes close
+together, each ground after the widest word. While a told note is among the
+notes, the count of the notes left out is one plain line in the same words
+(a `more` piece, no sheet) close under the last note, so the told note keeps
+the room a sheet would take; without one the count is the sheet. The note's own
 sentences, `end`, come last and are drawn whole, or the note is left out. It
 has no option, field or mark. It is planned just after the note that follows
 it in the scene, with the rows that fit the room that note leaves (at least

@@ -131,14 +131,15 @@ pub enum Note {
     },
 }
 
-/// One row of a told note: the note's own label, which may be empty, and someone else's texts under it. A row
-/// `with_last` is drawn with the row before it or not at all: the two are one unit, counted as two rows.
+/// One row of a told note: the note's own label, which may be empty, and someone else's texts under it. `marks`
+/// are the note's own small words, each beside the quote of its place (an empty one beside none); a row with one
+/// sets its quotes close together. A row is drawn whole or not at all.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToldRow {
     pub label: String,
     pub quotes: Vec<String>,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub with_last: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub marks: Vec<String>,
 }
 
 /// One line a person types in under a text note. `offer` is the few words over it that say what it is for, and

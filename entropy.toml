@@ -774,7 +774,9 @@ max_file_lines = 400
 # (`tests/entry_layout.rs`, 37 of them: the chips' row end and `go`'s place).
 # F86 raised the kit by 400: `Note::Told` and its row (`scene.rs`), its layout (`layout/told.rs`: rows drawn in order
 # whole up to the first that does not fit, a change one unit, every text a quote, planned after the note it is over) and its tests (`tests/told.rs`).
-"crates/sticker-kit" = 10684
+# The F86 follow-up raised the kit by 58: a change as one block with the note's small words beside its quotes, and
+# the count of the notes left out as one plain line while a told note is on the page, and their tests.
+"crates/sticker-kit" = 10742
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -905,7 +907,8 @@ max_file_lines = 400
 # (`tests/entry_first.rs` and its window test, 192; the made-up window's `enter` and `unready`, 18).
 # F86 raised the app by 370: what a run says it did as a told note (`told.rs`), put before the work's note
 # (`working.rs`), the picture example's `--work` and `--told`, and tests (`tests/f86.rs`, one arm in `tests/f37.rs`).
-"app" = 13347
+# The F86 follow-up raised the app by 23: the test of a typical result at 1440x900 and a did too long at 960x640.
+"app" = 13370
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

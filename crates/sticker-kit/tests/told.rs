@@ -12,7 +12,7 @@ const TITLE: &str = "What it says it did";
 const END: [&str; 2] = ["Nothing was run to try this.", "Something said could not be checked."];
 
 fn row(label: &str, quotes: &[&str]) -> ToldRow {
-    ToldRow { label: label.into(), quotes: quotes.iter().map(|quote| quote.to_string()).collect(), with_last: false }
+    ToldRow { label: label.into(), quotes: quotes.iter().map(|quote| quote.to_string()).collect(), marks: Vec::new() }
 }
 
 fn told(rows: Vec<ToldRow>) -> Note {
@@ -60,18 +60,24 @@ fn words(start: &str, count: usize) -> String {
 #[test]
 fn every_text_of_the_other_is_a_quote_piece_and_the_note_s_own_runs_are_its_title_labels_and_sentences() {
     each(|theme, viewport| {
-        // The first row has no label: the title is its label.
-        let rows = vec![row("", &["It made the page."]), row("Changed in a.txt, after", &["one = 1", "two = 2"])];
-        let placed = place(vec![told(rows)], theme, viewport);
+        // The first row has no label: the title is its label. The second has the note's own word beside two of
+        // its three quotes, which are drawn after the word, close together.
+        let mut change = row("Changed in a.txt", &["one = 0", "one = 1", "two = 2"]);
+        change.marks = ["before", "after", ""].map(str::to_string).to_vec();
+        let placed = place(vec![told(vec![row("", &["It made the page."]), change])], theme, viewport);
         let [sheet] = ours(&placed).into_iter().filter(|p| p.piece == PieceKind::Note).collect::<Vec<_>>()[..] else {
             panic!("one note: {placed:?}")
         };
         let own: Vec<&str> = sheet.text.iter().map(|run| run.text.as_str()).collect();
-        assert_eq!(own, [TITLE, "Changed in a.txt, after", END[0], END[1]]);
+        assert_eq!(own, [TITLE, "Changed in a.txt", "before", "after", END[0], END[1]]);
+        let grounds: Vec<&Placed> = ours(&placed).into_iter().filter(|p| p.piece == PieceKind::Quote).collect();
+        let marked = sheet.text.iter().find(|run| run.text == "before").unwrap();
+        assert!(grounds[1..].iter().all(|ground| ground.rect.x >= marked.rect.x + marked.rect.w), "beside its word");
+        assert!(grounds[1].rect.x > grounds[0].rect.x && grounds[2].rect.x == grounds[1].rect.x);
         assert!(sheet.text.iter().all(|run| run.role != Role::Quoted));
         let quotes: Vec<&Placed> = ours(&placed).into_iter().filter(|p| p.piece == PieceKind::Quote).collect();
         let texts: Vec<String> = quotes.iter().map(|quote| said(quote)).collect();
-        assert_eq!(texts, ["It made the page.", "one = 1", "two = 2"]);
+        assert_eq!(texts, ["It made the page.", "one = 0", "one = 1", "two = 2"]);
         assert!(quotes.iter().flat_map(|quote| &quote.text).all(|run| run.role == Role::Quoted));
         // Nothing of it is to act on: a tap finds no option, field, offer or mark of it.
         let kinds = [PieceKind::Note, PieceKind::Quote, PieceKind::Tape];
@@ -164,7 +170,7 @@ fn a_told_note_takes_room_from_the_notes_after_the_one_it_is_over_and_never_from
 }
 
 #[test]
-fn rows_are_drawn_in_order_up_to_the_first_that_does_not_fit_and_a_unit_is_drawn_whole_or_not_at_all() {
+fn rows_are_drawn_in_order_up_to_the_first_that_does_not_fit_and_none_after_it() {
     each(|theme, viewport| {
         let quotes = |of: &[Placed]| of.iter().filter(|p| p.id == ID && p.piece == PieceKind::Quote).count();
         let long: Vec<String> = (0..30).map(|n| words(&format!("t{n}"), 12)).collect();
@@ -175,10 +181,37 @@ fn rows_are_drawn_in_order_up_to_the_first_that_does_not_fit_and_a_unit_is_drawn
         let own: Vec<&str> = sheet.text.iter().map(|run| run.text.as_str()).collect();
         assert_eq!(own, [TITLE, "+2 more", END[0], END[1]]);
         assert_eq!(quotes(&placed), 0, "a later row was drawn");
-        // A row that goes with the one before it: the first would fit alone, the two do not, and neither is drawn.
-        let mut after = row("After", &long);
-        after.with_last = true;
-        let placed = place(vec![told(vec![row("Before", &["one line"]), after])], theme, viewport);
-        assert_eq!(quotes(&placed), 0, "half of a unit was drawn");
     });
+}
+
+/// The count of the notes left out without a told note, as it was before told notes: its kind, rect, index and
+/// runs, for each theme and size in the order [`each`] takes them.
+const SHEETS: [&str; 4] = [
+    "Note Rect { x: 902.0, y: 704.0, w: 330.0, h: 53.0 } 6 [(\"+4 more of 6 notes\", RowSub, Rect { x: 924.0, y: 722.0, w: 131.04, h: 17.0 }, 13.0)]",
+    "Note Rect { x: 601.3333, y: 507.3333, w: 220.0, h: 38.0 } 6 [(\"+4 more of 6 notes\", RowSub, Rect { x: 616.0, y: 519.3333, w: 110.88002, h: 14.0 }, 11.0)]",
+    "Note Rect { x: 902.0, y: 740.0, w: 330.0, h: 53.0 } 6 [(\"+4 more of 6 notes\", RowSub, Rect { x: 924.0, y: 758.0, w: 131.04, h: 17.0 }, 13.0)]",
+    "Note Rect { x: 601.3333, y: 537.3333, w: 220.0, h: 38.0 } 6 [(\"+4 more of 6 notes\", RowSub, Rect { x: 616.0, y: 549.3333, w: 110.88002, h: 14.0 }, 11.0)]",
+];
+
+#[test]
+fn with_a_told_note_the_count_of_notes_left_out_is_one_plain_line_and_without_one_the_sheet_it_was() {
+    let counts = |placed: &[Placed]| placed.iter().filter(|p| p.id == MORE_NOTES_ID).cloned().collect::<Vec<_>>();
+    let shape = |p: &Placed| {
+        let runs: Vec<_> = p.text.iter().map(|r| (r.text.clone(), r.role, r.rect, r.size)).collect();
+        format!("{:?} {:?} {} {:?}", p.piece, p.rect, p.index, runs)
+    };
+    let sheets = std::cell::RefCell::new(Vec::new());
+    each(|theme, viewport| {
+        let many: Vec<Note> = (0..6).map(|_| work()).collect();
+        let [sheet] = &counts(&place(many.clone(), theme, viewport))[..] else { panic!("one count") };
+        sheets.borrow_mut().push(shape(sheet));
+        let placed = place([vec![told(vec![row("", &["did"])])], many].concat(), theme, viewport);
+        let [line] = &counts(&placed)[..] else { panic!("one count") };
+        assert_eq!(line.piece, PieceKind::More, "a plain line, not a sheet");
+        let [words] = &line.text[..] else { panic!("one line: {line:?}") };
+        let notes = placed.iter().filter(|p| p.piece == PieceKind::Note).count();
+        assert_eq!((words.text.clone(), words.role), (format!("+{} more of 7 notes", 7 - notes), Role::RowSub));
+        assert!(line.rect.y + line.rect.h <= viewport.h);
+    });
+    assert_eq!(sheets.into_inner(), SHEETS, "the sheet as it was");
 }

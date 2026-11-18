@@ -158,7 +158,8 @@ mod tests {
         let none = Started { run: None, why: long.clone(), state: WishState::NeedsYou };
         let said = |passed_over: &[&str], home| {
             let passed_over = passed_over.iter().map(|one| one.to_string()).collect();
-            let missed = Missed { looked: vec!["PATH".to_string()], passed_over, home };
+            let (looked, shell) = (vec!["PATH".to_string()], crate::find::Shell::Off);
+            let missed = Missed { looked, passed_over, home, shell };
             unstarted(none.clone(), Some(&missed))
         };
         let over = ["~/.local/bin/claude: others can write to it"];

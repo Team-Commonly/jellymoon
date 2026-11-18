@@ -48,6 +48,13 @@ path = "tests/support/fake_asker.rs"
 test = false
 doc = false
 
+# A made-up login shell for `JELLYMOON_SHELL` to name (F78): it prints what a test wrote beside it, and runs nothing.
+[[bin]]
+name = "fake-shell"
+path = "tests/support/fake_shell.rs"
+test = false
+doc = false
+
 [dependencies]
 jellymoon-core.workspace = true
 lexopt.workspace = true

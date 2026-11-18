@@ -14,7 +14,7 @@ use std::{env, fs, thread};
 use serde_json::Value;
 use tempfile::TempDir;
 
-use crate::support::{LIMIT, Ran, ZONE, door, jellymoon_in, plant, scratch, tree};
+use crate::support::{LIMIT, Ran, ZONE, door, git_alone, jellymoon_in, plant, scratch, tree};
 
 #[path = "guard.rs"]
 mod guard;
@@ -53,22 +53,6 @@ impl Drop for World {
 
 /// Every file under a folder with its bytes, as `support::tree` lists them.
 type Files = Vec<(PathBuf, Vec<u8>)>;
-
-/// A folder for `PATH` that holds git and no harness: a link to the real git in a folder of the test's own. Where
-/// links cannot be made it is the real git's own folder, which must then hold no `claude`.
-fn git_alone(folder: &Path) -> PathBuf {
-    let name = format!("git{EXE_SUFFIX}");
-    let path = env::var_os("PATH").unwrap();
-    let mut on_path = env::split_paths(&path).map(|dir| dir.join(&name));
-    let real = on_path.find(|git| git.is_absolute() && git.is_file()).unwrap();
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(&real, folder.join(&name)).unwrap();
-    let folder = if cfg!(unix) { folder } else { real.parent().unwrap() };
-    let harness =
-        fs::read_dir(folder).unwrap().any(|entry| entry.unwrap().file_name().to_string_lossy().starts_with("claude"));
-    assert!(!harness, "{} holds a harness: these tests never start the real one", folder.display());
-    folder.to_path_buf()
-}
 
 pub fn world() -> World {
     world_in(scratch())

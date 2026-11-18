@@ -4,6 +4,8 @@
 //! A command the door lets through is given a command name `jellymoon` does not know, so it reads nothing.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "f74/notes.rs"]
+mod notes;
 mod support;
 
 use std::ffi::OsStr;
@@ -13,6 +15,7 @@ use std::process::Stdio;
 use std::slice::from_ref;
 use std::{env, fs};
 
+use notes::HELD;
 use support::door::{self, REFUSED};
 use support::{jellymoon, jellymoon_in, plant, scratch, skipped, system_scratch};
 
@@ -57,8 +60,9 @@ fn a_home_a_folder_of_jellymoon_s_or_the_harness_s_outside_the_temporary_folders
     let (dir, real) = (scratch(), outside("home"));
     // The two folders an install goes to are a person's too: `jellymoon uninstall` removes under them (the review
     // of F74, finding 2).
-    let names =
-        ["HOME", "USERPROFILE", "JELLYMOON_HOME", "JELLYMOON_APP_DIR", "JELLYMOON_BIN_DIR", "CLAUDE_CONFIG_DIR"];
+    // So are the temporary and config folders the programs hand on, git's config file, and the program a world
+    // names as the harness, which is a made-up one (the review of F75, findings 3 and 4).
+    let names = HELD;
     // A world with each of them under Cargo's temporary folder, but the one named, which is the made-up real one.
     let with = |swap: &str| {
         let folder = |name: &str| if name == swap { real.clone() } else { dir.path().join(name) };
@@ -69,8 +73,14 @@ fn a_home_a_folder_of_jellymoon_s_or_the_harness_s_outside_the_temporary_folders
     for name in names {
         assert_eq!(with(name), Some(name.to_string()));
     }
-    // Any other variable may name any path: only these are a person's own folders.
-    assert_eq!(refused(&[("JELLYMOON_CLAUDE", real.as_path()), ("TMPDIR", real.as_path())], NO_COMMAND), None);
+    // git's config is a file, so its folder is held: a temporary folder itself is no place for it.
+    let (tmp, config) = (dir.path().join("tmp"), "GIT_CONFIG_GLOBAL");
+    assert_eq!(door::refusal(from_ref(&tmp), &[(config, &tmp)], NONE), Some(config.to_string()));
+    assert_eq!(door::refusal(from_ref(&tmp), &[(config, tmp.join("gitconfig"))], NONE), None);
+    assert_eq!(door::refusal(from_ref(&tmp), &[("TMPDIR", &tmp)], NONE), None, "a folder may be the folder itself");
+    // Any other variable may name any path: only these are a person's own.
+    let free = [("JELLYMOON_RELEASE_URL", real.as_path()), ("JELLYMOON_TEST_GIT_LIMIT_FROM", real.as_path())];
+    assert_eq!(refused(&free, NO_COMMAND), None);
 }
 
 #[test]
@@ -102,7 +112,8 @@ fn a_world_under_either_temporary_folder_passes_and_so_does_no_home_an_empty_one
     for folder in door::roots() {
         assert_eq!(refused(&[("HOME", folder.as_path())], NO_COMMAND), None, "a temporary folder itself");
     }
-    for home in ["", "user", ".", "..", "~"] {
+    // One that is no full path and stays in the folder it is read from; `..` does not (`f74/notes.rs`).
+    for home in ["", "user", ".", "~"] {
         let vars = [("HOME", Path::new(home)), ("USERPROFILE", Path::new(home)), ("JELLYMOON_HOME", Path::new(home))];
         assert_eq!(refused(&vars, &["day", "--settings", home, "--repo", home]), None, "{home:?}");
     }
@@ -245,7 +256,7 @@ fn as_windows_reads_a_world_a_variable_named_in_another_case_is_the_same_variabl
     let (dir, real, roots) = (scratch(), outside("home"), door::roots());
     let names =
         ["Home", "userprofile", "Jellymoon_Home", "jellymoon_app_dir", "Jellymoon_Bin_Dir", "claude_config_dir"];
-    for name in names.into_iter().chain(["jellymoon_shell"]) {
+    for name in names.into_iter().chain(["jellymoon_shell", "Tmpdir", "git_config_global", "Jellymoon_Claude"]) {
         let (out, inside) = ([(name, real.as_path())], [(name, dir.path())]);
         assert_eq!(door::refusal_as(true, &roots, &out, NO_COMMAND), Some(name.to_string()));
         assert_eq!(door::refusal_as(true, &roots, &inside, NO_COMMAND), None, "{name} under a temporary folder");
@@ -260,27 +271,31 @@ fn as_windows_reads_a_world_a_variable_named_in_another_case_is_the_same_variabl
 }
 
 // Finding 3: `--logs` and the folder under `CLAUDE_CONFIG_DIR` are read as given, from the folder the command is
-// started in, which the door never sees.
+// started in, which the door never sees. The review of F75, finding 1: so is every folder the installer is given,
+// so every variable the door holds is held to this, whatever `jellymoon` does with it.
 #[test]
 fn a_logs_folder_or_a_harness_s_folder_that_is_no_full_path_and_leaves_its_folder_is_refused() {
     let (logs, config) = (Some("--logs".to_string()), Some("CLAUDE_CONFIG_DIR".to_string()));
-    for value in ["..", "../logs", "logs/../../up", "./.."] {
-        assert_eq!(refused(&[("CLAUDE_CONFIG_DIR", Path::new(value))], NO_COMMAND), config, "{value}");
+    for value in ["..", "../logs", "logs/../../up", "./..", "../../../../.local/bin"] {
+        for name in HELD {
+            assert_eq!(refused(&[(name, Path::new(value))], NO_COMMAND), Some(name.to_string()), "{value}");
+        }
         assert_eq!(refused(&[], &["day", "--logs", value]), logs, "{value}");
         assert_eq!(refused(&[], &["day", &format!("--logs={value}")]), logs, "{value}");
-        // Every other one is ignored or refused by `jellymoon` itself when it is no full path.
-        let others = [("HOME", Path::new(value)), ("JELLYMOON_HOME", Path::new(value))];
-        assert_eq!(refused(&others, &["day", "--repo", value, "--settings", value]), None, "{value}");
+        // The two other flags are refused by `jellymoon` itself when they are no full path.
+        assert_eq!(refused(&[], &["day", "--repo", value, "--settings", value]), None, "{value}");
     }
     for value in ["logs", "a/b", ".", "..logs", "a..b/c", "...", ""] {
-        let config = [("CLAUDE_CONFIG_DIR", Path::new(value))];
-        assert_eq!(refused(&config, &["day", "--logs", value]), None, "{value:?} stays in its folder");
+        let world: Vec<(&str, &Path)> = HELD.iter().map(|name| (*name, Path::new(value))).collect();
+        assert_eq!(refused(&world, &["day", "--logs", value]), None, "{value:?} stays in its folder");
     }
     // As Windows reads a path: rooted with no drive, and climbing past either separator.
     let roots = door::roots();
     for value in [r"\People\someone\.claude", "/People/someone/.claude", r"..\up", r"logs\..\..\up"] {
         let vars = [("CLAUDE_CONFIG_DIR", Path::new(value))];
         assert_eq!(door::refusal_as(true, &roots, &vars, NONE), config, "{value}");
+        let bin = [("JELLYMOON_BIN_DIR", Path::new(value))];
+        assert_eq!(door::refusal_as(true, &roots, &bin, NONE), Some("JELLYMOON_BIN_DIR".to_string()), "{value}");
         assert_eq!(door::refusal_as(true, &roots, &vars[..0], &["day", "--logs", value]), logs, "{value}");
     }
     // Elsewhere a backslash is a letter of a name.
@@ -334,6 +349,13 @@ fn a_temporary_folder_that_is_a_root_or_that_is_or_holds_the_person_s_home_is_no
     assert!(!door::no_root(from_ref(&tmp), &homes), "a folder under the home is the test's own");
     assert!(!door::no_root(from_ref(&above), &[]), "no home at all");
     assert!(!door::no_root(from_ref(&above), &[PathBuf::from("user"), PathBuf::new()]), "no full path is no home");
+    // The review of F75, finding 5: what is the person's own under the home is none either, there or not.
+    for own in [".claude", ".jellymoon", ".local"] {
+        assert!(door::no_root(&[home.join(own)], &homes), "{own}");
+    }
+    for beside in [".cache", ".claudes", "local", "tmp"] {
+        assert!(!door::no_root(&[home.join(beside)], &homes), "{beside} is the test's own");
+    }
     if linked(&above, &tmp.join("up")) {
         assert!(door::no_root(&[tmp.join("up")], &homes), "a link to a folder that holds the home");
     }
@@ -350,6 +372,8 @@ fn a_temporary_folder_that_is_a_root_or_that_is_or_holds_the_person_s_home_is_no
     };
     let (passed, said) = inner(&outside("home").join(".."));
     assert!(!passed && said.contains(door::NO_ROOT), "a temporary folder that holds the home: {said}");
+    let (passed, said) = inner(&outside("home").join(".claude"));
+    assert!(!passed && said.contains(door::NO_ROOT), "the harness's own folder under the home: {said}");
     let (passed, said) = inner(&tmp);
     assert!(passed, "a temporary folder of its own: {said}");
 }

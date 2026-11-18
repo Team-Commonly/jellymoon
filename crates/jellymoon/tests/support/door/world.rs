@@ -10,14 +10,16 @@ use std::{env, fs};
 
 /// What a refusal says, whatever was refused. After it comes the name of the variable or the flag, never a path.
 pub const REFUSED: &str = "a test starts nothing in a world outside the temporary folders: the home, Jellymoon's \
-                           folder, JELLYMOON_APP_DIR, JELLYMOON_BIN_DIR, CLAUDE_CONFIG_DIR, the login shell, --logs, \
-                           --settings and --repo are each under the system's temporary folder (in the binary's \
-                           tests /tmp on Unix too) or the one Cargo gives tests, and no --logs or CLAUDE_CONFIG_DIR \
-                           climbs out of the folder it is read from";
+                           folder, JELLYMOON_APP_DIR, JELLYMOON_BIN_DIR, CLAUDE_CONFIG_DIR, the temporary and config \
+                           folders a world names, git's own config file, the login shell, a harness named with \
+                           JELLYMOON_CLAUDE, --logs, --settings and --repo are each under the system's temporary \
+                           folder (in the binary's tests /tmp on Unix too) or the one Cargo gives tests, none of \
+                           those variables and no --logs climbs out of the folder it is read from, and no folder of \
+                           PATH or JELLYMOON_SYSTEM_BIN outside them holds a claude";
 
 /// What the door says when a temporary folder cannot be taken for one. It names no path.
 pub const NO_ROOT: &str = "a test starts nothing: a temporary folder is a file system's root, or it is or holds the \
-                           home of the person running the tests";
+                           home of the person running the tests, or that home's .claude, .jellymoon or .local";
 
 /// What the door says of a world that runs the installer and could open the real app. It names no path.
 pub const UNGUARDED: &str = "a test runs the installer only with JELLYMOON_NO_OPEN set to something, or with a \
@@ -25,17 +27,41 @@ pub const UNGUARDED: &str = "a test runs the installer only with JELLYMOON_NO_OP
                              never opened";
 
 /// The variables that name a folder of the person's: the home on each system, Jellymoon's folder, the two an
-/// install goes to and `jellymoon uninstall` removes under, and the harness's.
-const FOLDERS: [&str; 6] =
-    ["HOME", "USERPROFILE", "JELLYMOON_HOME", "JELLYMOON_APP_DIR", "JELLYMOON_BIN_DIR", "CLAUDE_CONFIG_DIR"];
+/// install goes to and `jellymoon uninstall` removes under, the harness's, and the temporary and config folders
+/// the programs hand on to a harness, to git and to the installer.
+const FOLDERS: [&str; 12] = [
+    "HOME",
+    "USERPROFILE",
+    "JELLYMOON_HOME",
+    "JELLYMOON_APP_DIR",
+    "JELLYMOON_BIN_DIR",
+    "CLAUDE_CONFIG_DIR",
+    "TMPDIR",
+    "TEMP",
+    "TMP",
+    "XDG_CONFIG_HOME",
+    "APPDATA",
+    "LOCALAPPDATA",
+];
+/// The variable that names a file of the person's: its folder is held too.
+const FILE: &str = "GIT_CONFIG_GLOBAL";
+/// The variable that names the program to start as the harness: a made-up one, planted under a temporary folder.
+const HARNESS: &str = "JELLYMOON_CLAUDE";
 const SHELL: &str = "JELLYMOON_SHELL";
 /// The folders of the machine a harness is looked for in: none, unless a test names its own.
 const SYSTEM_BIN: &str = "JELLYMOON_SYSTEM_BIN";
+/// The variables that list folders a harness is looked for in, written as `PATH` is.
+const LISTS: [&str; 2] = ["PATH", SYSTEM_BIN];
+/// The harness's file names, on any system.
+const NAMES: [&str; 3] = ["claude", "claude.exe", "claude.cmd"];
+/// What is the person's own under their home, whatever else a temporary folder there may hold.
+const OWN: [&str; 3] = [".claude", ".jellymoon", ".local"];
 /// The flags whose value names a folder or a file of the person's.
 const FLAGS: [&str; 3] = ["--logs", "--settings", "--repo"];
-/// The variable and the flag whose value is read as given when it is no full path, from the folder the program is
-/// started in, which the door never sees. Every other one is then ignored or refused by the program itself.
-const AS_GIVEN: [&str; 2] = ["CLAUDE_CONFIG_DIR", "--logs"];
+/// The flag whose value is read as given when it is no full path, from the folder the program is started in, which
+/// the door never sees; `jellymoon` refuses the two others then. A variable is held to the same rule whatever a
+/// program does with it: the installer takes its folders as given.
+const AS_GIVEN: &str = "--logs";
 /// How many links whose end is not there are read on the way to one path. One more, and the path is refused.
 const LINKS: u8 = 32;
 
@@ -70,12 +96,13 @@ pub fn command<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
 }
 
 /// Whether one of these temporary folders cannot be taken for one: it is a file system's root, or it is or holds
-/// one of these homes, which are the process's own. `TMPDIR` may name anything, and on Windows the temporary
-/// folder is the home itself when `TMP` and `TEMP` are not set.
+/// one of these homes, which are the process's own, or what is the person's own under one. `TMPDIR` may name
+/// anything else, and on Windows the temporary folder is the home itself when `TMP` and `TEMP` are not set.
 pub fn no_root(roots: &[PathBuf], homes: &[PathBuf]) -> bool {
-    let homes: Vec<PathBuf> =
-        homes.iter().filter(|home| home.is_absolute()).filter_map(|home| resolved(home, LINKS)).collect();
-    let held = |root: &PathBuf| root.parent().is_none() || homes.iter().any(|home| home.starts_with(root));
+    let homes = homes.iter().filter(|home| home.is_absolute());
+    let kept = homes.flat_map(|home| OWN.iter().map(move |own| home.join(own)).chain([home.clone()]));
+    let kept: Vec<PathBuf> = kept.filter_map(|kept| resolved(&kept, LINKS)).collect();
+    let held = |root: &PathBuf| root.parent().is_none() || kept.iter().any(|kept| kept.starts_with(root));
     roots.iter().filter_map(|root| resolved(root, LINKS)).any(|root| held(&root))
 }
 
@@ -90,7 +117,8 @@ pub fn refusal<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
 }
 
 /// [`refusal`], with the system given as a value, so that a test on any system holds both readings. As Windows
-/// reads a world, a variable's name is the same name in any case, and a path may be rooted with no drive.
+/// reads a world, a variable's name is the same name in any case, a path may be rooted with no drive, and one with
+/// a drive and no root is read from that drive's own folder.
 pub fn refusal_as<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
     windows: bool,
     roots: &[PathBuf],
@@ -98,16 +126,16 @@ pub fn refusal_as<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
     args: &[A],
 ) -> Option<String> {
     let roots: Vec<PathBuf> = roots.iter().filter_map(|root| resolved(root, LINKS)).collect();
-    let under = |path: PathBuf| roots.iter().any(|root| path.starts_with(root));
-    let outside =
-        |value: &OsStr| Path::new(value).is_absolute() && !resolved(Path::new(value), LINKS).is_some_and(under);
+    let outside = |value: &OsStr| outside(&roots, Path::new(value));
+    let held = |value: &OsStr| outside(value) || leaves(windows, value);
     let is = |name: &OsStr, known: &str| if windows { name.eq_ignore_ascii_case(known) } else { name == known };
     for (name, value) in vars.iter().map(|(name, value)| (name.as_ref(), value.as_ref())) {
-        let folder = FOLDERS.iter().any(|known| is(name, known)) && outside(value);
-        let climbs = is(name, AS_GIVEN[0]) && leaves(windows, value);
+        let known = |names: &[&str]| names.iter().any(|known| is(name, known));
+        let path = (known(&FOLDERS) || known(&[FILE, HARNESS])) && held(value);
+        let file = is(name, FILE) && Path::new(value).parent().is_some_and(|folder| outside(folder.as_os_str()));
         // A login shell is a made-up program under a temporary folder, or none at all.
         let shell = is(name, SHELL) && !value.is_empty() && (outside(value) || !Path::new(value).is_absolute());
-        if folder || climbs || shell {
+        if path || file || shell || known(&LISTS) && reaches(&roots, value, harness_in) {
             return Some(name.to_string_lossy().into_owned());
         }
     }
@@ -116,7 +144,7 @@ pub fn refusal_as<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
         for flag in FLAGS {
             let joined = arg.strip_prefix(flag).and_then(|rest| rest.strip_prefix('='));
             let value = joined.or_else(|| args.get(at + 1).filter(|_| arg.as_str() == flag).map(String::as_str));
-            let climbs = |value: &str| flag == AS_GIVEN[1] && leaves(windows, OsStr::new(value));
+            let climbs = |value: &str| flag == AS_GIVEN && leaves(windows, OsStr::new(value));
             if value.is_some_and(|value| outside(OsStr::new(value)) || climbs(value)) {
                 return Some(flag.to_string());
             }
@@ -148,14 +176,35 @@ pub fn unguarded_installer<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
     !made_up
 }
 
-/// Whether a value that is no full path leaves the folder it is read from: it climbs with `..`, or it is rooted
-/// with no drive, as Windows reads `\Users`.
+/// Whether a full path is under none of these temporary folders, which are resolved already.
+fn outside(roots: &[PathBuf], path: &Path) -> bool {
+    path.is_absolute() && !resolved(path, LINKS).is_some_and(|path| roots.iter().any(|root| path.starts_with(root)))
+}
+
+/// Whether a list of folders, written as `PATH` is, reaches a harness of the person's: one of its full-path
+/// folders under none of these temporary folders holds one, as `holds` answers. A folder that is no full path is
+/// not passed on by `jellymoon`, and one under a temporary folder holds only what a test planted.
+pub fn reaches(roots: &[PathBuf], folders: &OsStr, holds: impl Fn(&Path) -> bool) -> bool {
+    let roots: Vec<PathBuf> = roots.iter().filter_map(|root| resolved(root, LINKS)).collect();
+    env::split_paths(folders).any(|folder| outside(&roots, &folder) && holds(&folder))
+}
+
+/// Whether a folder holds the harness by one of its names. The system is asked for the name alone: nothing is
+/// started, and nothing of the file is read.
+fn harness_in(folder: &Path) -> bool {
+    NAMES.iter().any(|name| fs::symlink_metadata(folder.join(name)).is_ok())
+}
+
+/// Whether a value that is no full path leaves the folder it is read from: it climbs with `..`, or, as Windows
+/// reads it, it is rooted with no drive (`\Users`) or has a drive and no root (`D:logs`).
 fn leaves(windows: bool, value: &OsStr) -> bool {
     let (path, text) = (Path::new(value), value.to_string_lossy());
     let either = windows && text.split(['/', '\\']).any(|part| part == "..");
     let up = either || path.components().any(|part| part == Component::ParentDir);
     let rooted = path.has_root() || windows && text.starts_with(['/', '\\']);
-    !path.is_absolute() && (up || rooted)
+    let mut letters = text.chars().skip(1);
+    let drive = windows && letters.next() == Some(':') && !matches!(letters.next(), Some('/' | '\\'));
+    !path.is_absolute() && (up || rooted || drive)
 }
 
 /// A path with its links resolved as far as it exists: the longest start of it that is there, as the system

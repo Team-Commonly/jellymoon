@@ -125,6 +125,16 @@ finds a way that needs none (a file of the system, or a system program started b
 `run/dead.rs`), or adds a note here for a package. Whether safe code can give the login shell a session of its
 own is not known either; a process group of its own, as a run's child has, is what the cap needs.
 
+**As built (F78).** The record of the user is read with no `unsafe` and no package: core starts the system's own
+program for it by its full path, with no variable of its own, as `ps` is started in `run/dead.rs`. That is
+`/usr/bin/id -P` on a Mac and `/usr/bin/getent passwd <uid>` elsewhere, two seconds and 4,096 bytes at most; the login
+shell is the last field of the one line printed, when its third field is this user's number. A file of the system
+was not taken: on a Mac `/etc/passwd` does not hold a person's account. The list is `zsh` and `bash`. The mark is
+`__jellymoon_path__`, the stated size is 65,536 bytes, and the login shell gets a process group of its own and no
+session of its own. The words of each refusal are in [page.md](../development/page.md), "The login shell". A test's
+made-up login shell meets the checks as a person's does: it is a program of the test's, under the name `zsh` or
+`bash`, in a folder of the door's world that only the test's user can write to. There is no seam for tests.
+
 **Also here: the harness's own variables.** `call::harness_of` clears the environment and passes a short list
 (`call.rs`, `ENVIRONMENT`), which names no `CLAUDE_CODE_*` variable. So a harness started from inside a Claude
 Code session is not told it is that session's child. This already holds, by the code. What tests hold is
@@ -606,3 +616,35 @@ twelve are taken in F75, which gives the app's tests the same door: the two shar
    own environment, and `cargo xtask check` refuses one that does.
 5. **Held by a check.** In each program's tests `support/door.rs` alone may name a built program; the rest of
    `support/` may make a temporary folder and nothing more.
+
+### Amended after the review of the app's door
+
+The app's door (F75) was reviewed after it merged and failed on two faults, with eight notes. Nine are taken in
+one follow-up and one is left as a named limit. Decision 7 now holds this, and `docs/development/workflow.md`
+carries the same list:
+
+1. **Folders.** `HOME`, `USERPROFILE`, `JELLYMOON_HOME`, `JELLYMOON_APP_DIR`, `JELLYMOON_BIN_DIR`,
+   `CLAUDE_CONFIG_DIR`, and now `TMPDIR`, `TEMP`, `TMP`, `XDG_CONFIG_HOME`, `APPDATA` and `LOCALAPPDATA`, which
+   the programs hand on to a harness, to git and to the installer: a full path is under a temporary folder.
+2. **A file.** `GIT_CONFIG_GLOBAL`: the file and its folder are under a temporary folder.
+3. **Programs.** `JELLYMOON_CLAUDE` is under a temporary folder: every made-up harness is planted there, and it
+   is the one variable that names a program to start. A login shell that is named is a full path under one.
+4. **Lists of folders.** The look reads `PATH` first. No full-path folder of a world's `PATH`, or of a
+   `JELLYMOON_SYSTEM_BIN` a test names, that is outside the temporary folders holds a `claude`, `claude.exe` or
+   `claude.cmd`. The folder is asked for the name only. A world that needs git takes it alone.
+5. **A value that is no full path** is refused for every variable above, and for `--logs`, when it climbs with
+   `..` or, on Windows, is rooted with no drive or has a drive and no root. The first amendment held only
+   `CLAUDE_CONFIG_DIR` and `--logs` to this, on the ground that `jellymoon` ignores or refuses the others. The
+   installer does not: `install.sh` takes `HOME`, `JELLYMOON_APP_DIR` and `JELLYMOON_BIN_DIR` as given. No home,
+   an empty one, and one that is no full path and stays in its folder are let through as before.
+6. **Flags.** `--logs`, `--settings` and `--repo`, as before.
+7. **The temporary folders.** One that is or holds the home's `.claude`, `.jellymoon` or `.local` is taken for
+   none, as one that is or holds the home is. Otherwise the `TMPDIR` of the process that runs the tests is
+   trusted.
+8. **Held by a check.** The made-up asker is a program only the binary's door may name. The rule also catches
+   `TempDir::with_prefix`, either function taken under another name, the look's other name (`search()`) and
+   `missed(None`, and no longer refuses the word `tempdir` at the end of a longer name or inside a string.
+
+**Left as limits**, named in `workflow.md`: a flag value that is not UTF-8, and what a rule that reads text cannot
+see (`concat!` in `env!`, a program found from `current_exe`, a bare `Command::new("claude")`, a block comment,
+`mod tests;` in a file of its own).

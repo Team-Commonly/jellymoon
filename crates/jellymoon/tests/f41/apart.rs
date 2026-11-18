@@ -21,12 +21,11 @@ impl World {
 
     /// [`World::asked`], with more variables for the asker and the command it starts.
     pub(super) fn asked_with(&self, with: &[(&'static str, OsString)], wish: &str) -> Ran {
-        let asker = OsString::from(env!("CARGO_BIN_EXE_fake-asker"));
         let more = [("FAKE_ASKER_JELLYMOON", OsString::from(door::built())), ("FAKE_ASKER_REC", self.at("rec").into())];
         let vars = self.vars.iter().chain(&more).chain(with).map(|(name, value)| (*name, value.as_os_str()));
         let logs = self.at("harness").join("projects");
         let args = [OsString::from("ask"), wish.into(), DAY.into(), self.at("jm").into(), logs.into()];
-        let mut command = door::command(asker, vars, &args);
+        let mut command = door::asker(vars, &args);
         // Its output goes to files. On Windows the run it starts inherits the handles the asker has open, and a
         // pipe's end would be waited for until the run itself had ended.
         let (mut out, mut err) = (tempfile::tempfile().unwrap(), tempfile::tempfile().unwrap());

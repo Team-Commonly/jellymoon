@@ -121,7 +121,9 @@ All of this is from the maintainers' own runs, on one Mac.
   folders. A second run said "updated" and left no old bundle. The signature verified, nothing carried the quarantine
   flag, and the bundle's version was `0.1.0-rc1`. `jellymoon uninstall` then left both folders empty.
 - **Opening the app.** The installed app, started through LaunchServices (`open`), which gives it no shell `PATH`,
-  found Claude Code in one of the places `page.md` lists, read the day with one call and kept the page.
+  found Claude Code in one of the places `page.md` lists, read the day with one call and kept the page. Since F78,
+  when those places hold no harness the app asks the login shell for its `PATH` (`page.md`, "The login shell"), and
+  `jellymoon harness` says how the harness was found. That way is not proved on a person's Mac yet.
 
 Not proved yet:
 

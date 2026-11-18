@@ -20,10 +20,11 @@ fn fake(w: &World) -> Vec<(&'static str, OsString)> {
     let (folder, name) = (w.at("fake"), format!("git{EXE_SUFFIX}"));
     fs::create_dir(&folder).unwrap();
     plant(env!("CARGO_BIN_EXE_fake-git"), &folder.join(&name));
-    let path = env::var_os("PATH").unwrap();
-    let real = env::split_paths(&path).map(|dir| dir.join(&name)).find(|git| git.is_absolute() && git.is_file());
+    // The real git is the one the world's `PATH` holds alone, and the made-up one stands before it.
+    let path = &w.vars.iter().find(|(name, _)| *name == "PATH").unwrap().1;
+    let real = env::split_paths(path).map(|dir| dir.join(&name)).find(|git| git.is_absolute() && git.is_file());
     fs::write(folder.join("real"), real.unwrap().to_str().unwrap()).unwrap();
-    let first = env::join_paths([folder].into_iter().chain(env::split_paths(&path))).unwrap();
+    let first = env::join_paths([folder].into_iter().chain(env::split_paths(path))).unwrap();
     let stalled = w.at("fake").join("stalled").into();
     vec![("PATH", first), ("JELLYMOON_TEST_GIT_LIMIT_MS", "1000".into()), ("JELLYMOON_TEST_GIT_LIMIT_FROM", stalled)]
 }

@@ -886,6 +886,40 @@
       "blockedBy": [
         "a session log line that marks a moved session, to type the fixture from"
       ]
+    },
+    {
+      "id": "F83",
+      "category": "journal",
+      "description": "A run of a later day is read as going only while it is held, by a question in core that writes nothing",
+      "steps": [
+        "core says, for a home and a day, how many of the day's made wishes say working, name a run and have that run held by a living command; the whole home is byte for byte as it was after the call, and a day that cannot be read gives none",
+        "past midnight on GPUI's test platform, with the test's clock: a wish of the later day that says working and whose run nothing holds is not drawn, so the page's day's work that waits is; the same run held swims",
+        "of two wishes of the later day that say working, one held and one not, the count drawn is one; `jellymoon hear` and `layout --jelly --date` say of one day what they say today",
+        "a later day that asks and works at once shows the page's day alone, and the same later day with its question removed swims, with no count",
+        "`app.md` says of the days past midnight what is so: work that waits on the page's day is not shown while a run of the new day goes, one bullet for a run of a day between, no bullet for a cut-off run that still swims, and no line over 120 characters",
+        "on macOS, where GPUI's test platform opens the windows; core's question on macOS, Linux and Windows"
+      ],
+      "test": "cargo test -p jellymoon-app --test f83",
+      "passes": false,
+      "blockedBy": []
+    },
+    {
+      "id": "F84",
+      "category": "journal",
+      "description": "Past midnight the page says a new day has begun, and moves on to it by a tap and never by itself",
+      "steps": [
+        "on GPUI's test platform with the test's clock and no day named: while the clock gives the page's day there is no note; at a later day with the page's day quiet the first note is the choice `new-day`, `a new day has begun`, with the one option `Open today's page`, and however many looks pass the made-up harness is not started and the page's day stays; an earlier day gives no note, and a day named with `--date` gives none at any clock",
+        "while the page's day has a question, a run at work or work that waits, the note is plain, says which in one fixed sentence, the first in core's order, and has no option; the look after the day goes quiet offers the move; an Enter whose run is still being asked for holds the offer back",
+        "a tap on the option shows what opening the app on today shows, the kept page or `Reading your day…`, in the same window, and starts today's reading; a wish entered then is filed under today, and the jellyfish looks at today as the page's day",
+        "after the move nothing of the earlier day is on show: no note of it, an empty entry, and an empty field under today's `m1` where the earlier day's `m1` held typed words; the theme `t` chose stays; the earlier day's files are byte for byte as they were",
+        "a tap on the option when the day is quiet no longer moves nothing and starts no reading, and the next look draws the plain note; work of the earlier day that answers after the move changes nothing on show",
+        "on macOS, where GPUI's test platform opens the windows; the calls with no window (`showing.rs`) on macOS, Linux and Windows"
+      ],
+      "test": "cargo test -p jellymoon-app --test f84",
+      "passes": false,
+      "blockedBy": [
+        "F83"
+      ]
     }
   ],
   "dead": {

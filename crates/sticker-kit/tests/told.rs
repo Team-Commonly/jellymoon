@@ -49,6 +49,11 @@ fn choice(n: usize) -> Note {
     }
 }
 
+/// A note with no option and no field, which may give way to a told note: left out whole and counted.
+fn plain(n: usize) -> Note {
+    Note::Plain { title: format!("Plain {n}"), body: "Nothing to choose here.".into() }
+}
+
 fn place(notes: Vec<Note>, theme: &Theme, viewport: Viewport) -> Vec<Placed> {
     let scene = Scene { notes, ..Scene::sample() };
     layout(&scene, theme, viewport, &FixedAdvance(0.56))
@@ -173,10 +178,10 @@ fn the_note_after_it_is_the_note_it_is_without_it_moved_down_and_the_told_note_c
 fn a_told_note_takes_room_from_the_notes_after_the_one_it_is_over_and_never_from_that_one() {
     each(|theme, viewport| {
         // A note of work and choices that fill the page: the work's note is placed whole with its choices, the
-        // told note over it is drawn, with the rows that fit, and the notes after them give way, left out whole and
-        // counted, never drawn smaller.
+        // told note over it is drawn, with the rows that fit, and the notes after them, with nothing to choose, give
+        // way, left out whole and counted, never drawn smaller.
         let big = told((0..3).map(|n| row(&format!("Row {n}"), &[&words("w", 40)])).collect());
-        let placed = place([vec![big, work()], (0..6).map(choice).collect()].concat(), theme, viewport);
+        let placed = place([vec![big, work()], (0..6).map(plain).collect()].concat(), theme, viewport);
         let first = |id: &str| placed.iter().position(|piece| piece.id == id).unwrap();
         assert!(first(ID) < first("work-1"));
         let options = placed.iter().filter(|p| p.id == "work-1" && p.piece == PieceKind::Option).count();
@@ -185,6 +190,29 @@ fn a_told_note_takes_room_from_the_notes_after_the_one_it_is_over_and_never_from
         let bottom = placed.iter().map(|piece| piece.rect.y + piece.rect.h).fold(0.0, f32::max);
         assert!(bottom <= viewport.h, "{bottom}");
     });
+}
+
+#[test]
+fn a_result_never_costs_a_later_note_its_choices() {
+    // A long result for wish A, A's work, then B's work with its three choices (or a clash's choice of three), on
+    // the small page.
+    let viewport = Viewport { w: 960.0, h: 640.0 };
+    let Note::Text { title, body, options, quoted, field, .. } = work() else { unreachable!() };
+    let second = Note::Text { id: "work-2".into(), title, body, options, quoted, field };
+    let Note::Choice { title, footer, .. } = choice(9) else { unreachable!() };
+    let options = ["This", "That", "Neither"].map(String::from).to_vec();
+    let clash = Note::Choice { id: "work-2".into(), title, options, footer, struck_first: false, whole: false };
+    let both = [Theme::sticker(), Theme::plain()];
+    for (theme, later) in both.iter().flat_map(|theme| [(theme, second.clone()), (theme, clash.clone())]) {
+        let big = told((0..6).map(|n| row(&format!("Row {n}"), &[&words("w", 40)])).collect());
+        let options = |all: &[Placed]| all.iter().filter(|p| p.id == "work-2" && p.piece == PieceKind::Option).count();
+        assert_eq!(options(&place(vec![work(), later.clone()], theme, viewport)), 3, "B's choices fit alone");
+        let placed = place(vec![big, work(), later], theme, viewport);
+        assert_eq!(options(&placed), 3, "the result gave way, never B's choices");
+        assert!(placed.iter().all(|piece| piece.id != ID), "the result is not drawn");
+        let counted: Vec<String> = placed.iter().filter(|p| p.id == MORE_NOTES_ID).map(said).collect();
+        assert!(counted.is_empty() || counted == ["+1 more of 3 notes"], "only the result is counted: {counted:?}");
+    }
 }
 
 #[test]
@@ -223,8 +251,8 @@ fn with_a_told_note_the_count_of_notes_left_out_is_one_plain_line_and_without_on
         let many: Vec<Note> = (0..6).map(|_| work()).collect();
         let [sheet] = &counts(&place(many.clone(), theme, viewport))[..] else { panic!("one count") };
         sheets.borrow_mut().push(shape(sheet));
-        // With a result over the work's note, and notes after them that give way whole (each its own).
-        let after: Vec<Note> = (0..5).map(choice).collect();
+        // With a result over the work's note, and notes after them, with nothing to choose, that give way whole.
+        let after: Vec<Note> = (0..5).map(plain).collect();
         let placed = place([vec![told(vec![row("", &["did"])]), work()], after].concat(), theme, viewport);
         let [line] = &counts(&placed)[..] else { panic!("one count") };
         assert_eq!(line.piece, PieceKind::More, "a plain line, not a sheet");

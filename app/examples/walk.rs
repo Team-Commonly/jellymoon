@@ -5,8 +5,9 @@
 //! how long it took, the titles of the notes on the page and each wish's state. Never a word of a wish, a note's body
 //! or a result: typed words are counted, and a folder is not named.
 //!
-//! `walk <folder for the pictures> <W>x<H> <step>...`, the page first opened as the window opens it (the entry, then
-//! the day's reading). The steps:
+//! `walk [--logs <dir>] <folder for the pictures> <W>x<H> <step>...`, the page first opened as the window opens it
+//! (the entry, then the day's reading). `--logs` is the app's own: the day is read from that folder's logs, so a
+//! walk with a real harness need not read the person's. The steps:
 //! - `type:<words>`: the words in the entry, in place of what it held.
 //! - `chip:<name>`: the chip of that project chosen.
 //! - `enter`: Enter in the entry: a wish for the chosen chip, or on a first page a new project's name.
@@ -83,8 +84,8 @@ fn state(state: State) -> &'static str {
 
 impl Walk {
     /// The first scene, the first page's entry, then each step of the day's reading, as `window::reads` takes them.
-    fn open(folder: PathBuf, size: Viewport) -> Result<Walk, String> {
-        let today = Today::from_env(Asked::default())?;
+    fn open(logs: Option<PathBuf>, folder: PathBuf, size: Viewport) -> Result<Walk, String> {
+        let today = Today::from_env(Asked { logs, ..Asked::default() })?;
         let (scene, page) = today.first();
         let mut later = Some(today.clone().later(page.clone()));
         let shown = Showing::of(Some(OnShow { today, page, scene }));
@@ -253,9 +254,11 @@ impl Walk {
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let logs = (args.first().map(String::as_str) == Some("--logs") && args.len() > 1)
+        .then(|| PathBuf::from(args.drain(..2).nth(1).unwrap_or_default()));
     let [folder, size, steps @ ..] = args.as_slice() else {
-        eprintln!("usage: walk <folder> <W>x<H> <step>...");
+        eprintln!("usage: walk [--logs <dir>] <folder> <W>x<H> <step>...");
         return ExitCode::from(2);
     };
     let Some(size) = sides(size, SMALLEST) else {
@@ -263,7 +266,7 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
     let started = Instant::now();
-    let mut walk = match Walk::open(PathBuf::from(folder), size) {
+    let mut walk = match Walk::open(logs, PathBuf::from(folder), size) {
         Ok(walk) => walk,
         Err(why) => {
             eprintln!("walk: {}", one_line(&why));

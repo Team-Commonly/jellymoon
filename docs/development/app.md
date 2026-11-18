@@ -386,7 +386,8 @@ The steps are `type:<words>`, `chip:<name>`, `enter`, `start` (the tap on `Start
 plain line and exit 1 past the bound), `poke:<wish id>`, `tap:<note title or id>:<option>` (only where the page
 places it) and `picture:<name>`. After each it prints one line: the step, its milliseconds, the titles of the notes
 and each wish's state; a typed step is counted, never shown. `app/tests/walk.rs` walks a whole loop with the made-up
-agent. It does not prove the window's own wiring: the timer, the picker, keys and focus, the kit's keeping of an
+agent. A leading `--logs <dir>` is the app's own option: the day is read from that folder's logs, so a walk with
+a real harness in a made-up home need not read the person's. It does not prove the window's own wiring: the timer, the picker, keys and focus, the kit's keeping of an
 entry with words in it, or the window's other thread.
 
 ## A tap that stops a run (`app/src/stopping.rs`)

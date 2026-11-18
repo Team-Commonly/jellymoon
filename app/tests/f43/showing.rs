@@ -89,10 +89,10 @@ fn a_look_and_a_step_of_the_reading_show_what_they_give_and_a_look_of_a_scene_th
 }
 
 #[test]
-fn t_switches_the_theme_unless_the_entry_has_the_keys_and_the_window_s_lines_say_no_word_of_the_page() {
-    assert!(switches_theme("t", false));
-    assert!(!switches_theme("t", true), "in the entry it is a letter of a wish");
-    assert!(!switches_theme("x", false) && !switches_theme("T", false) && !switches_theme("", false));
+fn the_command_key_and_t_switch_the_theme_and_the_window_s_lines_say_no_word_of_the_page() {
+    assert!(switches_theme("t", true), "the command key and T");
+    assert!(!switches_theme("t", false), "a bare t is a letter of a wish");
+    assert!(!switches_theme("x", true) && !switches_theme("T", true) && !switches_theme("", true));
     let others = ["sticker", "plain", "mine"].map(|name| other_theme(name).name);
     assert_eq!(others, ["plain", "sticker", "plain"]);
     assert_eq!(tap_line("m1", None), "tap id=m1");

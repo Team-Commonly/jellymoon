@@ -128,8 +128,11 @@ Page::new(scene, theme)
     .on_entry(|made, window, cx| { /* made.id, made.text, made.option */ })
 ```
 
-- **Keys.** A click on the field or a chip gives the entry the keys; Escape, or
-  a press anywhere else, gives them back. Text goes in at the caret. Backspace,
+- **Keys.** A page with an entry gives it the keys whenever nothing else on the
+  page holds them: when the window opens, when the entry arrives, after a press
+  anywhere off the fields, and after Escape, which in a note's field gives them
+  to the entry. A click on a note's field or its offer gives that field the
+  keys. What is typed is never lost for want of a holder. Text goes in at the caret. Backspace,
   Delete, Left, Right, Home and End (or Left and Right with the platform's
   command key) edit, the command key with V pastes, Tab and Shift-Tab choose the
   next and the previous option, Enter enters. There is a caret and no selection.
@@ -152,8 +155,9 @@ Page::new(scene, theme)
 - **An input method** (Chinese, Japanese, Korean, a dead key) talks to the page
   through GPUI's `EntityInputHandler`. What it is still composing is underlined,
   and Enter, the editing keys and a click leave it alone until it ends.
-- **A window's own keys.** While `page.entry_focused(window)` is true a letter
-  is text: a window that acts on a bare key asks first. `page.entry()` is what
+- **A window's own keys.** On a page with an entry a letter is always text: a
+  window's own key needs a modifier no field takes (the app's is the command key
+  and T). `page.entry_focused(window)` says whether the entry or a field has the keys. `page.entry()` is what
   is typed now; `set_entry` changes or removes the entry, and keeps the chosen
   option by its name when that name is still offered (`EntryState::keep_option`).
 - **Words are text with a character a person sees** (`text::has_visible`).

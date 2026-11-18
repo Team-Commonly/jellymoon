@@ -195,8 +195,8 @@ impl Page {
         &self.entry.state
     }
 
-    /// Whether the entry has the keys, or the field of a note. While one does, a letter key is text for it: a
-    /// window that acts on plain keys of its own (a `t` to switch theme) asks this first and leaves the key alone.
+    /// Whether the entry has the keys, or the field of a note. On a page with an entry one always does once it is
+    /// drawn, so a letter is always text: a window's own key needs a modifier no field takes.
     pub fn entry_focused(&self, window: &Window) -> bool {
         (self.entry.what.is_some() && self.entry.focused(window)) || self.keyed(window).is_some()
     }
@@ -214,7 +214,11 @@ impl Page {
     /// The elements of the entry and of each note's field, over everything else: the typed line in the field,
     /// and what takes the clicks on the field, on its `go`, on each chip and on a field's offer. None for a page
     /// with neither.
-    pub(super) fn entry_layer(&mut self, window: &Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    pub(super) fn entry_layer(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        // The keys are the entry's whenever nothing else on the page holds them, so nothing typed goes nowhere.
+        if self.entry.what.is_some() && !self.entry_focused(window) {
+            self.focus_view(None, window, cx);
+        }
         for view in std::iter::once(&mut self.entry).chain(&mut self.fields) {
             view.lit = view.focus.get_or_insert_with(|| cx.focus_handle()).is_focused(window);
         }
@@ -269,7 +273,7 @@ impl Page {
             .collect()
     }
 
-    /// A press anywhere else on the page gives the keys back.
+    /// A press anywhere off the fields gives the entry the keys: a tap on a note's option or a character too.
     pub(super) fn entry_left(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let (x, y) = (f32::from(event.position.x), f32::from(event.position.y));
         let on = |piece: &Placed| {
@@ -282,8 +286,8 @@ impl Page {
                 && r.y <= y
                 && y < r.bottom()
         };
-        if self.entry_focused(window) && !self.placed.iter().any(on) {
-            window.blur(cx);
+        if !self.placed.iter().any(on) {
+            self.focus_view(None, window, cx);
         }
     }
 
@@ -319,7 +323,9 @@ impl Page {
             "tab" if held.shift => state.previous_option(),
             "tab" => state.next_option(),
             "enter" => self.entry_entered(which, window, cx),
-            "escape" => window.blur(cx),
+            // From a note's field the keys go to the entry; in the entry they stay: the page is never left
+            // with no holder.
+            "escape" => self.focus_view(None, window, cx),
             "v" if command => {
                 let pasted = cx.read_from_clipboard().and_then(|item| item.text());
                 state.replace(None, &pasted.unwrap_or_default());

@@ -24,7 +24,8 @@ range) exits 1 with one line that names the file by its last name, the key and t
 "<name>" is not sticker, plain or a theme file the kit takes: <why>`.
 
 With `layout` it prints where every piece goes. Without, it opens the page's window (default 1440x900) and the
-jellyfish ("The jellyfish's two windows", below); `t` switches the page between the two built-in themes, and
+jellyfish ("The jellyfish's two windows", below); the command key and T (Ctrl and T off the Mac) switches the page
+between the two built-in themes, and
 `JELLYMOON_QUIT_AFTER=<seconds>` ends the app by itself. `--size` is from 960x640 to 16384x16384, each side a whole
 number of pixels written in digits only: 960x640 is the smallest size a page is drawn at, and the window is asked not to shrink below it
 (a unit test holds what is asked; that the system obeys was seen by hand on the Mac only). A wrong command line exits 2 with the usage on stderr; a file
@@ -225,11 +226,15 @@ what core keeps.
   is cut in the middle by the kit's measure (`app/tests/f63/chips.rs`).
 - **What the chips cost.** Every session log of the day is read once more for them, off the window's thread:
   when the window opens and when a reading ends, and once more for each Enter. Measured on a Mac with a release build, as one `jellymoon day` (one read, and more than a lookup does, since it also prints the day): 300 made-up logs of 1000 lines each, 137 MB, with 10,000 turns typed on the day, took 0.9 seconds, and 2.4 the first time, before the system had the files. A day of a few logs is a few milliseconds.
-- **Keys.** A click on the field gives it the keys; Escape, or a click elsewhere, gives them back. Tab chooses
-  the next project and Shift-Tab the one before; a click on a chip chooses it. Enter enters the text. While an
-  input method is composing, Enter confirms the composition and enters nothing. While the field has the keys, `t`
-  is a letter and does not switch the theme. The window says one line on stderr for an entry, the entry's id and
-  how many characters were entered, never a word of them.
+- **Keys.** What a person types goes to the entry whenever nothing else on the page holds the keys: the window
+  opens with them in the entry (on a first page, in the field that takes a name), and they are the entry's again
+  after a tap on a note's option or on a character, a click anywhere off the fields, and Escape, which in a note's
+  field gives them to the entry and in the entry keeps them there. A click on a note's field, or on its offer,
+  gives that field the keys. Tab chooses the next project and Shift-Tab the one before; a click on a chip chooses
+  it. Enter enters the text. While an input method is composing, Enter confirms the composition and enters
+  nothing. A bare `t` is always a letter: the theme is switched with the command key and T (Ctrl and T off the
+  Mac), which no field takes (`app/tests/entry_keys.rs`). The window says one line on stderr for an entry, the
+  entry's id and how many characters were entered, never a word of them.
 - **Enter.** The words and the name on the chosen chip go to `jellymoon_core::wish_offered`, off the window's
   thread (`OnShow::wishing`), so a day that is locked, a slow disk or many logs never hold the window. The app
   passes the name, never a path and never the chip's place: the chips can change while the words are typed.
@@ -239,8 +244,8 @@ what core keeps.
   answer on the window's thread (`OnShow::answered`) opens no file.
 - **While core is asked the entry waits.** From Enter until core's answer the words stay in the field, drawn
   pale, with no caret. The entry takes no key then: no letter, no editing key, no Tab, no Escape, no click on a
-  chip, no second Enter, and no input method can begin a composition. The keys stay the entry's, so `t` does
-  not switch the theme. A key pressed while it waits is not accepted and
+  chip, no second Enter, and no input method can begin a composition. The keys stay the entry's. A key pressed
+  while it waits is not accepted and
   is not kept for later. The wait is the time of one read of the day's logs, and at most that and the 3 seconds
   core waits for a day that is locked. Kept: the field is empty. Refused: the words are still there, as typed,
   and the entry takes keys again, however many refusals follow one another.
@@ -344,7 +349,7 @@ view. What each act does is `Showing`, the day on show behind the calls the wind
 
 | Act | The window calls | Then, with what the work gave |
 |---|---|---|
-| a key | `switches_theme(key, entry has the keys)`, `other_theme(name)` | |
+| a key | `switches_theme(key, command key held)`, `other_theme(name)` | |
 | the first page | `offering()` | the entry is set |
 | a step of the reading | `reading(step)` | `read(&next)`: the scene, and the step's entry |
 | once a second | `look()`, which also asks core of a wish whose run ended | `seen(seen)`: the scene, or none for a look of a scene that is gone |
@@ -366,8 +371,9 @@ wait for: no Enter can go unanswered for want of one.
 
 What stays in `window.rs`, and is run by no test: opening the window on a screen and its options (a unit test
 holds what is asked), the one-second timer, the order of the reading's steps, which call a tap is carried to, the
-`defer` that lets the view finish a tap before it takes a new scene, and the calls `set_theme` and
-`entry_focused`. A person's walk at a real window is still owed for it.
+`defer` that lets the view finish a tap before it takes a new scene. The keys (who has them, and the command key
+and T) are played through the window on GPUI's test platform (`app/tests/entry_keys.rs`); which view a real
+window gives the keys to is still owed a person's walk.
 
 Not covered: a wish for a project past the sixth, or for one neither typed in today nor listed, is made with
 `jellymoon wish`. A made wish's question is drawn on its wish's note ("A question answered, and more like
@@ -794,7 +800,7 @@ What the jellyfish does not show past midnight:
 - **One count for both days.** Runs that go on both days are not counted together: the count is one day's.
 
 With `--page` or `--waiting` there is no day: the jellyfish is quiet and nothing is looked at. The jellyfish keeps
-the theme the app was opened with; `t` switches the page only.
+the theme the app was opened with; the command key and T switches the page only.
 
 Tests: `app/tests/f57/window.rs` opens all of it on GPUI's test platform, on the Mac, where there is no screen:
 both windows placed, each of the seven states drawn, the bubble opened and removed with nothing moved, the page

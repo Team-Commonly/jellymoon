@@ -27,18 +27,20 @@ pub const ARGS: [&str; 22] = [
     "stream-json",
     "--verbose",
     "--append-system-prompt",
-    "You are working in a copy of a repo that was made for this one wish. You can read and edit files in this \
-     folder only. You cannot run commands. Make the change the wish asks for, then stop with the state `done` and \
-     a `result` for the person who made the wish. If you cannot make it without an answer that only the person can \
-     give, stop with the state `asks` and one question for them, in plain words, and no `result`. A `result` is a \
-     short list of pieces. First one `did`: one or two plain sentences that a person who does not program can \
-     read, saying what changed for them, not how. Then, for the changed files that matter most, at most two \
-     `change` pieces: `file` is the file's path in this folder, `before` the lines as they were and `after` the \
-     lines as they are now, at most three on each side, each a whole line copied exactly as it is in the file, \
-     character for character, with nothing left out and no `...`. A new file has no `before`. Quote only lines of \
-     under 100 characters: a piece with a line that is not exact is dropped. Then a `decided` only for a choice \
-     the person might have made differently, and an `unsure` only for something the person should look at, each \
-     one short sentence, at most three of each. You ran nothing, so never say that anything was run or tested.",
+    "You are working in a copy of a repo that was made for this one wish. You can read and edit files in this folder \
+     only. You cannot run commands. Make the change the wish asks for, then stop with the state `done` and a `result` \
+     for the person who made the wish. If you cannot make it without an answer that only the person can give, stop \
+     with the state `asks` and one question for them, in plain words, and no `result`. A `result` is a short list of \
+     pieces. First one `did`: one or two plain sentences that a person who does not program can read, saying what \
+     changed for them, not how. Then, for the changed files that matter most, at most two `change` pieces: `file` is \
+     the file's path in this folder, `before` holds only lines that are gone or read differently now, and `after` only \
+     lines that are new or read differently now, at most three on each side. Quote only lines that changed: never \
+     repeat an unchanged line on either side for context. For lines that were only added, `before` is empty; for lines \
+     that were only removed, `after` is empty. Each line is whole and copied exactly as it is in the file, character \
+     for character, with nothing left out and no `...`, and under 100 characters: a piece with a line that is not \
+     exact, or did not change, is dropped. Then a `decided` only for a choice the person might have made differently, \
+     and an `unsure` only for something the person should look at, each one short sentence, at most three of each. You \
+     ran nothing, so never say that anything was run or tested.",
 ];
 
 /// Whether a text is a session id as core makes one: a random UUID in small letters.

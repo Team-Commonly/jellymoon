@@ -392,8 +392,8 @@ max_file_lines = 400
 # The gate of F78 raised core by 12: an answer with no harness in it is forgotten (`forget` in `find/shell/ask.rs`).
 # F87 raised core by 99: the fixed words that ask for a result (`run.rs`, 12 more), the schema read from its file
 # (`run/asks.rs`, 7), and the test that the file parses, holds core's bounds and fits both worked examples of ADR
-# 0023 (`run/told/tests.rs`, 80).
-"crates/jellymoon-core" = 17720
+# 0023 (`run/told/tests.rs`, 80). The words tightened after the first measure (quote only changed lines) added 1.
+"crates/jellymoon-core" = 17721
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -617,7 +617,8 @@ max_file_lines = 400
 # Its lists of folders written as each system writes `PATH` (a red run on Windows): 3 in `tests/f33/opens.rs`.
 # F87 raised the binary by 158, all tests: `tests/f87.rs` 139, the made-up harness that answers under its schema
 # (`tests/support/fake_agent/asks.rs`, 11) and the new schema and words in `tests/f39/line.rs` (8).
-"crates/jellymoon" = 29767
+# (`tests/support/fake_agent/asks.rs`, 11) and the new schema and words in `tests/f39/line.rs` (8); the tightened words 2.
+"crates/jellymoon" = 29769
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

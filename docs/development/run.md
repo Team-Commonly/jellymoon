@@ -130,23 +130,27 @@ When that default changes a run needs a flag that keeps the sign-in ("Not covere
 A follow-up's run has three arguments more, where `--session-id <id>` stands: `--resume <followed session>
 --fork-session --session-id <id>` ("A follow-up's run").
 
-The fixed words are these, and nothing of a wish or a repo is in them: "You are working in a copy of a repo that
-was made for this one wish. You can read and edit files in this folder only. You cannot run commands. Make the
-change the wish asks for, then stop with the state `done` and a `result` for the person who made the wish. If you
-cannot make it without an answer that only the person can give, stop with the state `asks` and one question for
-them, in plain words, and no `result`. A `result` is a short list of pieces. First one `did`: one or two plain
-sentences that a person who does not program can read, saying what changed for them, not how. Then, for the
-changed files that matter most, at most two `change` pieces: `file` is the file's path in this folder, `before`
-the lines as they were and `after` the lines as they are now, at most three on each side, each a whole line copied
-exactly as it is in the file, character for character, with nothing left out and no `...`. A new file has no
-`before`. Quote only lines of under 100 characters: a piece with a line that is not exact is dropped. Then a
-`decided` only for a choice the person might have made differently, and an `unsure` only for something the person
-should look at, each one short sentence, at most three of each. You ran nothing, so never say that anything was
-run or tested."
+The fixed words are these, and nothing of a wish or a repo is in them: "You are working in a copy of a repo that was
+made for this one wish. You can read and edit files in this folder only. You cannot run commands. Make the change
+the wish asks for, then stop with the state `done` and a `result` for the person who made the wish. If you cannot
+make it without an answer that only the person can give, stop with the state `asks` and one question for them, in
+plain words, and no `result`. A `result` is a short list of pieces. First one `did`: one or two plain sentences that
+a person who does not program can read, saying what changed for them, not how. Then, for the changed files that
+matter most, at most two `change` pieces: `file` is the file's path in this folder, `before` holds only lines that
+are gone or read differently now, and `after` only lines that are new or read differently now, at most three on each
+side. Quote only lines that changed: never repeat an unchanged line on either side for context. For lines that were
+only added, `before` is empty; for lines that were only removed, `after` is empty. Each line is whole and copied
+exactly as it is in the file, character for character, with nothing left out and no `...`, and under 100 characters:
+a piece with a line that is not exact, or did not change, is dropped. Then a `decided` only for a choice the person
+might have made differently, and an `unsure` only for something the person should look at, each one short sentence,
+at most three of each. You ran nothing, so never say that anything was run or tested."
 
 The words ask for what core can check and the person can read. A `did` is written for someone who does not read
 code, since the person who made the wish may not. Two changes at most, since core looks at the first two. A quote is
-asked for whole and exact, since one that is not is dropped ([show.md](show.md), "What the run says of its work").
+asked for whole and exact, since one that is not is dropped ([show.md](show.md), "What the run says of its work"),
+and of the lines that changed only: core keeps a `before` line only when the file has it more often before the work
+than after, and an `after` line only when it has it more often after, so an unchanged line quoted for context drops
+the piece. An empty side passes: lines only added have no `before`, lines only removed no `after`.
 `decided` and `unsure` are asked for only when they are worth the person's look, so a result stays short. And the
 run is told it ran nothing, since a result that says something was tested would be a claim no run can back.
 
@@ -1228,7 +1232,8 @@ empty `runs/no-hooks`), and they stay.
 
 ## Measured on a real Claude Code
 
-F87 stays open until these are measured by hand, on a real Claude Code, by the coordinator. No number is here yet.
+F87 stays open until these are measured by hand, on a real Claude Code, by the coordinator. First measured
+2026-11-18, on Claude Code 2.1.x on a Mac, with ten small real wishes in a scratch repo:
 
 1. **That the schema is taken.** A run started with this command line is not refused for its schema (one with
    `maxItems` and `maxLength` in it), its init line lists `StructuredOutput`, and its result line has a
@@ -1238,6 +1243,24 @@ F87 stays open until these are measured by hand, on a real Claude Code, by the c
    result may have before it is no result.
 3. **How many `change` pieces pass their check.** Of ten real runs, how many `change` pieces were written and how
    many `run show` prints; `dropped` counts the rest. A low rate shows as results with no before and after.
+
+What was found, with the first words:
+
+1. The schema is taken as it is, `maxItems` and `maxLength` with it: ten of ten runs ended `completed` with a
+   `structured_output` of the shape, in 9 to 14 seconds each.
+2. A last word was 282 to 606 bytes, against 8 KiB.
+3. Of 11 `change` pieces written, 6 passed and 5 were dropped; 4 of 10 results had no before and after at all.
+   Every dropped piece quoted its lines exactly, and every one was dropped for unchanged lines quoted for context,
+   which fail the rule that a quoted line is there more often on its side: a CSS rule quoted whole on both sides
+   with only its colour changed, a list item added and quoted with the items and the `</ul>` around it, a line
+   added and quoted with the unchanged heading above it on both sides, and a new README section with a `before`
+   line that is still in the file.
+
+The words were then tightened ("What the harness is started with": quote only lines that changed, never an
+unchanged line for context, an empty side for lines only added or only removed) and measured again by the
+coordinator:
+
+- Second measure, with the tightened words: (to be filled by the coordinator)
 
 ## Not covered
 

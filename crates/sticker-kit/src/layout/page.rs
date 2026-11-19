@@ -106,6 +106,7 @@ fn legend(cx: &mut Ctx, scene: &Scene, right: f32) {
     let (mark, gap, between) = (cx.px(20.0), cx.px(6.0), cx.px(18.0));
     let mut left = cx.x(m.content_left);
     for (index, item) in scene.legend.iter().enumerate() {
+        let (mark, gap) = if item.mark == Mark::Plain { (0.0, 0.0) } else { (mark, gap) };
         let room = right - left - mark - gap;
         let (text, width) = cx.line(&item.text, Role::Legend, room);
         if text.is_empty() {

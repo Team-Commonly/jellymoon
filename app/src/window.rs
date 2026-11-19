@@ -243,6 +243,13 @@ fn choose_waiting(shown: &Showing, page: &WeakEntity<Page>, cx: &mut App) {
 
 /// A tap on a character: core is asked off the window's thread, and what it gives is shown.
 fn poked(id: &str, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
+    // A wish of the reading has its project's chip chosen, once the view has done with the tap.
+    if let Some(name) = shown.chip_of(id) {
+        let chips = page.clone();
+        cx.defer(move |cx| {
+            let _ = chips.update(cx, |page, cx| page.choose_option(&name, cx));
+        });
+    }
     let (Some(look), shown) = (shown.poked(id), shown.clone()) else { return };
     cx.spawn(async move |cx| {
         let Some(seen) = cx.background_executor().spawn(async move { look() }).await else { return };

@@ -139,14 +139,13 @@ pub(crate) fn reopen(scene: &mut Scene, wish: &str, note: Note) -> Option<Note> 
     None
 }
 
-/// How a wish with no work waiting stands, in core's words, with the question its run asks when the wish is a
-/// made one. Only a made wish has a run to answer: a question a kept page file gives a wish of its own is not
-/// drawn, and gets no field. `alone` is how its run ended, when it left no work.
-fn standing(wish: &Wish, made: bool, alone: Option<&Alone>) -> Note {
+/// How a made wish with no work waiting stands, in core's words, with the question its run asks. `alone` is how
+/// its run ended, when it left no work.
+fn standing(wish: &Wish, alone: Option<&Alone>) -> Note {
     let (title, body) = jellymoon_core::stands(wish, alone);
     let id = crate::scene::drawn_id(&wish.id);
     let note = text(format!("{WISH}{id}"), title, body, Vec::new());
-    with_question(note, &id, wish.question.as_deref().filter(|_| made))
+    with_question(note, &id, wish.question.as_deref())
 }
 
 /// The note of a wish whose run goes on with an answer, in the place of `asked`, the note the answer was typed
@@ -227,7 +226,7 @@ impl Today {
         let stands = |wish: &Wish| {
             let follows = self.follows(&wish.id);
             let typed_to = (wish.question.is_some() || follows) && !waits.iter().any(|waits| waits.wish == wish.id);
-            typed_to.then(|| with_more(standing(wish, true, None), &wish.id, follows))
+            typed_to.then(|| with_more(standing(wish, None), &wish.id, follows))
         };
         notes.extend(made.iter().filter_map(stands));
         shown.notes.splice(0..0, notes);
@@ -270,8 +269,16 @@ impl Today {
         let made = at >= read;
         let alone = made.then(|| jellymoon_core::ended_alone(&self.home, &self.run_of(id))).flatten();
         let told = alone.as_ref().and_then(|alone| told_alone(id, alone));
-        let note = with_more(standing(&wishes[at], made, alone.as_ref()), id, self.follows(id));
-        Some(told.into_iter().chain([note]).collect())
+        let note = if made { standing(&wishes[at], alone.as_ref()) } else { self.read_note(&wishes[at]) };
+        Some(told.into_iter().chain([with_more(note, id, self.follows(id))]).collect())
+    }
+
+    /// The note of a wish of the reading: Jellymoon ran nothing for it, so it says what the reading took it for
+    /// and how to go on (`scene::read_said`). A question a kept page file gives it is not drawn, and gets no field.
+    fn read_note(&self, wish: &Wish) -> Note {
+        let chip = jellymoon_core::offered(&self.read()).contains(&wish.project);
+        let (title, body) = crate::scene::read_said(wish, chip);
+        text(format!("{WISH}{}", crate::scene::drawn_id(&wish.id)), title, body, Vec::new())
     }
 
     /// The work of the made wish `id` that waits, or what its run that changed nothing says it did, over the scene

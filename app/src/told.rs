@@ -55,9 +55,6 @@ fn changed(name: &str, made: bool, before: &[String], after: &[String]) -> ToldR
     block
 }
 
-/// The note of what the run of `waits` says it did, when core printed a piece of it that passed. None when there is
-/// no result, or when every piece of it was dropped. `shown`: the person tapped `Show me`, and each change has its
-/// row; else [`CHECKED`] stands for them all.
 /// Whether a note is one of what a run says it did with the rows of its changes on it, as `Show me` brings them.
 pub(crate) fn rows_shown(note: &Note) -> bool {
     matches!(note, Note::Told { rows, .. } if rows.iter().any(|row| !row.name.is_empty()))
@@ -81,6 +78,9 @@ pub(crate) fn in_turn(mut notes: Vec<Note>, seen: bool) -> Vec<Note> {
     notes
 }
 
+/// The note of what the run of `waits` says it did, when core printed a piece of it that passed. None when there is
+/// no result, or when every piece of it was dropped. `shown`: the person tapped `Show me`, and each change has its
+/// row; else [`CHECKED`] stands for them all.
 pub(crate) fn told(waits: &Waits, shown: bool) -> Option<Note> {
     note(&waits.wish, waits.result.as_ref()?, None, shown)
 }

@@ -16,6 +16,7 @@ use serde_json::Value;
 
 use super::obeyed::{named, plain};
 use super::record;
+use super::show::NAME_MAX;
 use crate::{copy, tap, wish};
 
 /// The most steps whose tool and name are kept: the last ones.
@@ -81,8 +82,6 @@ struct Kind {
 /// The parts of an `assistant` line a step is read from. A line of another shape has no step.
 #[derive(Deserialize)]
 struct Said {
-    #[serde(rename = "type")]
-    kind: String,
     message: Message,
 }
 
@@ -113,22 +112,27 @@ impl Steps {
     /// Takes the steps of one line, and says whether it had any: each block of an `assistant` line's
     /// `message.content` that is a `tool_use` whose `name` is one of the five.
     pub(super) fn took(&mut self, raw: &[u8], places: &[PathBuf]) -> bool {
+        self.took_as(raw, |path| inside(path, places))
+    }
+
+    /// [`Steps::took`] with the naming given. Only the last [`KEPT`] steps of a line can stay kept, so only they
+    /// are named: a line of many steps costs [`KEPT`] names, and the others are counted alone.
+    fn took_as(&mut self, raw: &[u8], mut name: impl FnMut(&str) -> Option<String>) -> bool {
         if !serde_json::from_slice::<Kind>(raw).is_ok_and(|line| line.kind == "assistant") {
             return false;
         }
-        let Some(said) = serde_json::from_slice::<Said>(raw).ok().filter(|said| said.kind == "assistant") else {
-            return false;
+        let Ok(said) = serde_json::from_slice::<Said>(raw) else { return false };
+        let tool = |block: &Value| {
+            text(block, "/name").filter(|_| text(block, "/type") == Some("tool_use")).and_then(Tool::of)
         };
-        let before = self.count;
-        for block in &said.message.content {
-            let text = |at: &str| block.pointer(at).and_then(Value::as_str);
-            let Some(tool) = text("/name").filter(|_| text("/type") == Some("tool_use")).and_then(Tool::of) else {
-                continue;
-            };
-            let file = text("/input/file_path").filter(|_| tool.names()).and_then(|path| inside(path, places));
-            self.push(Step { tool, file });
+        let steps: Vec<(&Value, Tool)> =
+            said.message.content.iter().filter_map(|block| Some((block, tool(block)?))).collect();
+        let named = steps.len().saturating_sub(KEPT);
+        for (nth, (block, tool)) in steps.iter().enumerate() {
+            let path = text(block, "/input/file_path").filter(|_| tool.names() && nth >= named);
+            self.push(Step { tool: *tool, file: path.and_then(&mut name) });
         }
-        self.count != before
+        !steps.is_empty()
     }
 
     fn push(&mut self, step: Step) {
@@ -138,6 +142,11 @@ impl Steps {
             self.last.remove(0);
         }
     }
+}
+
+/// The text at `at` of a block of a line.
+fn text<'a>(block: &'a Value, at: &str) -> Option<&'a str> {
+    block.pointer(at).and_then(Value::as_str)
 }
 
 /// A path as core names a file of the run's: relative to one of `places`, as [`own`] names it. None for a path
@@ -171,8 +180,12 @@ fn own(within: &Path) -> Option<String> {
     });
     let parts: Vec<&str> = parts.collect::<Option<_>>()?;
     let joined = parts.join("/");
+    // What cleaning would cut or change is refused before it is cleaned: cleaning costs more than its length.
+    if parts.is_empty() || joined.len() > 4 * NAME_MAX || joined.chars().any(char::is_control) {
+        return None;
+    }
     let (name, _) = named(joined.as_bytes());
-    (!parts.is_empty() && plain(joined.as_bytes(), &name)).then_some(name)
+    plain(joined.as_bytes(), &name).then_some(name)
 }
 
 fn file(home: &Path, run: &str) -> PathBuf {

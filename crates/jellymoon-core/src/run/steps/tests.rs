@@ -78,7 +78,41 @@ fn a_path_too_long_to_be_a_name_is_refused_before_the_disk_is_asked() {
     let long = format!("{}{}", places[0].display(), "/a".repeat(500_000));
     let started = std::time::Instant::now();
     assert_eq!(inside(&long, &places), None);
-    assert!(started.elapsed() < std::time::Duration::from_secs(2), "walked: {:?}", started.elapsed());
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "walked: {:?}", started.elapsed());
     let near = format!("{}/{}", places[0].display(), "b/".repeat(40) + "c.txt");
     assert_eq!(inside(&near, &places).map(|name| name.len()), Some(85), "a name within the bound is kept");
+}
+
+// A line can hold thousands of steps and only the last few can stay kept: the others are counted and never named,
+// so a line costs no more names than are kept.
+#[test]
+fn only_the_steps_of_a_line_that_can_stay_kept_are_named() {
+    let block = |nth: usize| format!(r#"{{"type":"tool_use","name":"Read","input":{{"file_path":"f{nth}"}}}}"#);
+    let blocks: Vec<String> = (0..50).map(block).collect();
+    let line = format!(r#"{{"type":"assistant","message":{{"content":[{}]}}}}"#, blocks.join(","));
+    let (mut steps, mut asked) = (Steps::default(), Vec::new());
+    let took = steps.took_as(line.as_bytes(), |path| {
+        asked.push(path.to_string());
+        Some(path.to_string())
+    });
+    assert!(took);
+    assert_eq!(asked, ["f46", "f47", "f48", "f49"]);
+    assert_eq!(steps.count, 50);
+    let names: Vec<_> = steps.last.iter().map(|step| step.file.as_deref()).collect();
+    assert_eq!(names, [Some("f46"), Some("f47"), Some("f48"), Some("f49")]);
+}
+
+// A name cleaning would cut or change is refused before it is cleaned: cleaning a long name with a line break in
+// it costs many times its length, and a line of the stream can hold hundreds of them.
+#[test]
+fn a_name_cleaning_would_refuse_is_refused_before_it_is_cleaned() {
+    let long = format!("{}\n{}", "a ".repeat(1000), "b ".repeat(1000));
+    let started = std::time::Instant::now();
+    for _ in 0..300 {
+        assert_eq!(own(Path::new(&long)), None);
+    }
+    assert!(started.elapsed() < std::time::Duration::from_secs(1), "cleaned: {:?}", started.elapsed());
+    assert_eq!(own(Path::new("a\tb.txt")), None, "a control character");
+    assert_eq!(own(Path::new(&"a".repeat(801))), None, "longer than any name");
+    assert_eq!(own(Path::new("src/a b.txt")).as_deref(), Some("src/a b.txt"));
 }

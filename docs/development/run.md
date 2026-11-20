@@ -263,8 +263,11 @@ or a name the cleaning changes is no name, and the step is still counted. So is 
 the last included, that is a link on disk (asked with `symlink_metadata`, which follows nothing): a link the repo
 tracks can lead out of the copy. The name is made first, which bounds the path, so the disk is asked of a short
 one only. A part that is not there yet is no link, so a file about to be made keeps its name; a part that cannot
-be asked is taken as a link. The link rule is tested on macOS and Linux only: a test cannot make a link on
-Windows. `Glob` and `Grep` carry no name. Every step is counted; the last 4 are kept. A line's `type` is read first,
+be asked is taken as a link (on macOS and Linux that includes a part under a plain file). The link rule is tested
+on macOS and Linux only: a test cannot make a link on Windows. A path longer than four times a name's length, or
+with a control character, is refused before it is cleaned: cleaning would refuse it and costs more than its
+length. Of one line's steps only the last 4 are named, since no other can stay kept; the rest are counted alone,
+so a line of thousands of steps costs 4 names. `Glob` and `Grep` carry no name. Every step is counted; the last 4 are kept. A line's `type` is read first,
 and only an `assistant` line is parsed for its blocks. The reader writes the steps, whole, to `runs/<id>/steps.json`
 (`{"count":N,"last":[{"tool":"read","file":"b.txt"},…]}`) at each line that brought a step: a new file renamed over
 the old with one try, not flushed to the disk, so a step lost to a crash or to a file in use is all either costs. A page reads them with

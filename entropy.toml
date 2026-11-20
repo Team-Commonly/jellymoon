@@ -414,7 +414,9 @@ max_file_lines = 400
 # 35 net, `hook::put` no longer used there) and the test of a link in the place (`run/steps/tests.rs`, 28).
 # Its second gate raised core by 18: the name made before the disk is asked, a part that cannot be asked taken as
 # a link, one try at the rename (`run/steps.rs`, 4 net) and the test of a path too long to be a name (14).
-"crates/jellymoon-core" = 18434
+# Its third gate raised core by 47: only the steps of a line that can stay kept are named, and a name cleaning
+# would refuse is refused before it is cleaned (`run/steps.rs`, 13 net), with a test of each (34).
+"crates/jellymoon-core" = 18481
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).

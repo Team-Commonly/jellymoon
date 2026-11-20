@@ -96,14 +96,18 @@ fn field_of(scene: &Scene, note: &str) -> Option<(usize, String, bool)> {
 }
 
 impl Today {
-    /// A follow-up to the made wish `wish`, by core's `wish_after`, and the asking for its run, as a typed wish's.
-    fn following(&self, page: Option<&Page>, from: Scene, typed: &str, wish: &str) -> Answer {
+    /// A follow-up to the made wish `wish`, typed under the note `note`, by core's `wish_after`, and the asking
+    /// for its run, as a typed wish's. Once core kept it, that note goes when it is the wish's own with nothing
+    /// to choose: its field would keep the page in the person's hand (`working::in_hand`), and no look would
+    /// then put the follow-up's own work on the page when its run ends. A tap on the wish opens the note again.
+    fn following(&self, page: Option<&Page>, from: Scene, typed: &str, (note, wish): (&str, &str)) -> Answer {
         let made = jellymoon_core::wish_after(&self.home, Some(&self.date), typed, wish);
         let (said, asking) = match made {
             Ok(made) => (None, Some(self.asking(made.wish.id, made.wish.said))),
             Err(why) => (Some((UNKEPT, wishing::of(typed, &format!("{why}.")))), None),
         };
         let mut now = self.again(page, &from);
+        now.notes.retain(|one| said.is_some() || !working::settled(one, note));
         wishing::newest(&mut now, said.clone());
         Answer::of(Seen { from, now }, said, asking)
     }
@@ -159,8 +163,8 @@ impl OnShow {
         let (at, wish, more) = field_of(&self.scene, note)?;
         let (today, page, typed) = (self.today.clone(), self.page.clone(), typed.to_string());
         if more {
-            let from = self.scene.clone();
-            return Some((None, Box::new(move || today.following(page.as_ref(), from, &typed, &wish))));
+            let (from, note) = (self.scene.clone(), note.to_string());
+            return Some((None, Box::new(move || today.following(page.as_ref(), from, &typed, (&note, &wish)))));
         }
         let at_work = working::at_work(&self.scene.notes[at]);
         let asked = std::mem::replace(&mut self.scene.notes[at], at_work);

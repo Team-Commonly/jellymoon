@@ -999,7 +999,10 @@ max_file_lines = 400
 # its old pins in `tests/told_alone.rs` (0 net).
 # The wait in plain words lowered it by 3: the pill and the note say a stage, no file's name, so the per-tool words,
 # the rows and the blank rule went from `src/live.rs` (21 fewer), and `tests/live_work.rs` checks each stage (18 more).
-"app" = 15879
+# The walk of go on from an answer raised it by 23: a follow-up's done note goes once core kept it, so the looks
+# bring the follow-up's work (`src/answering.rs`, `src/working.rs`, 8), and the test holds the window open over the
+# run and takes the work from looks alone (`tests/go_on_from_an_answer.rs`, 13; `tests/f54/more.rs`, 2).
+"app" = 15902
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

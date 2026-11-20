@@ -49,7 +49,7 @@ fn run_waiting_names_the_wishes_whose_work_waits_or_was_kept_as_the_ones_a_follo
     let unrun = w.wish("alpha");
     let asks = ran_as(&w, &repo, "asks");
     let failed = ran_as(&w, &repo, "exit-3");
-    let nothing = ran_as(&w, &repo, "nothing");
+    ran_as(&w, &repo, "nothing");
     assert_eq!(follows(&w, &repo), [waits.as_str()]);
     // Work that was kept is followed, and work that was tossed is not.
     let tossed = ran_as(&w, &repo, "edits");
@@ -68,11 +68,11 @@ fn run_waiting_names_the_wishes_whose_work_waits_or_was_kept_as_the_ones_a_follo
     assert_eq!(ended(command).code, 0);
     assert_eq!(follows(&w, &repo), [waits.as_str()]);
 
-    // What is named is what `wish --after` makes a follow-up of, and every other wish is refused by it, for
-    // the work there is none of. The day has seven made wishes: the first follow-up is its eighth, and the
-    // next is refused for the eight alone.
+    // What is named is the work `wish --after` follows: a wish with no run, one whose run asks, one that failed
+    // and one whose work was tossed are refused. The two that changed nothing are gone on with (`f53/answer.rs`).
+    // The day has seven made wishes: the first follow-up is its eighth, and the next is refused for the eight alone.
     let said = |after: &str| w.run(&["wish", "--date", DAY, "--say", "and once more", "--after", after]);
-    for other in [&unrun, &asks, &failed, &nothing, &tossed, &going] {
+    for other in [&unrun, &asks, &failed, &tossed] {
         let refused = said(other);
         assert!(refused.code != 0 && !refused.stderr.contains("its 8 made wishes"), "{other}: {}", refused.stderr);
     }

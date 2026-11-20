@@ -20,6 +20,8 @@ const MORE: &str = "More like this";
 const HINT: &str = "Type what to do next, then Enter";
 const NEXT: &str = "then tell me what it costs";
 const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
+/// The looks an Enter holds before one may show work (`showing.rs`).
+const HOLD: usize = 3;
 
 fn ready() -> World {
     let w = world();
@@ -80,19 +82,13 @@ fn a_done_wish_that_changed_nothing_has_the_field_and_enter_there_follows_its_ru
     fs::write(w.at("agent").join("play"), format!("follow\n{}\n0\n", w.at("rec").display())).unwrap();
     let bin = w.install().parent().unwrap().display().to_string();
     let wish_note = format!("wish-{asked}");
+    // The window stays open over the follow-up's run, and then only looks: no tap on the follow-up.
+    let ended = w.at("tmp").join("ended");
     let acts = [format!("bin:{bin}"), format!("poke:{asked}"), format!("type:{wish_note}:{NEXT}"), "start".into()];
-    let printed = acted(&w, &acts);
-    // The done note keeps its words, has the follow-up's field under no offer, and no choice of work.
-    let opened = scene(&printed[0]);
-    assert_eq!(note(&opened, &wish_note), Some((DONE, &[][..], Some(&field("", &asked)))), "{opened:?}");
-    assert!(opened.notes.iter().all(|one| !matches!(one, Note::Text { id, .. } if id.starts_with("work-"))));
-    let text = serde_json::to_string(&opened).unwrap();
-    assert!([MORE, CHOICES[0], CHOICES[1], CHOICES[2]].iter().all(|word| !text.contains(word)), "{text}");
-    // Enter: core kept the follow-up after the wish, and the field was emptied under the same note.
-    assert_eq!(printed[1]["kept"], json!(true), "{}", printed[1]);
-    assert_eq!(note(&scene(&printed[1]["scene"]), &wish_note).and_then(|one| one.2), Some(&field("", &asked)));
-    let follow = kept(&w, "m2");
-    assert_eq!((&follow["said"], &follow["after"], &follow["state"]), (&json!(NEXT), &json!(asked), &json!("working")));
+    let acts: Vec<String> = acts.into_iter().chain([format!("hold:{}", ended.display())]).collect();
+    let acts: Vec<&str> = acts.iter().map(String::as_str).chain(["look"; HOLD + 3]).collect();
+    let mut window = w.taps("logs", &acts);
+    window.printed(3);
     // Its run forks the session of the run that answered, so the answer is known to it.
     wait_until("the follow-up's run", || kept(&w, "m2")["run"].is_string());
     let started = w.at("rec").join("line2");
@@ -100,8 +96,23 @@ fn a_done_wish_that_changed_nothing_has_the_field_and_enter_there_follows_its_ru
     let line = fs::read_to_string(&started).unwrap();
     assert!(line.contains(&format!("--resume\n{session}\n--fork-session")), "{line}");
     wait_until("the follow-up's end", || kept(&w, "m2")["state"] != "working");
-    let poked = acted(&w, &["poke:m2".into()]);
-    assert_eq!(note(&scene(&poked[0]), "work-m2").map(|one| one.1.len()), Some(3), "its work waits with its choices");
+    fs::write(&ended, "").unwrap();
+    let printed: Vec<Value> = window.ended().iter().map(|line| serde_json::from_str(line).expect(line)).collect();
+    // The done note keeps its words, has the follow-up's field under no offer, and no choice of work.
+    let opened = scene(&printed[0]);
+    assert_eq!(note(&opened, &wish_note), Some((DONE, &[][..], Some(&field("", &asked)))), "{opened:?}");
+    assert!(opened.notes.iter().all(|one| !matches!(one, Note::Text { id, .. } if id.starts_with("work-"))));
+    let text = serde_json::to_string(&opened).unwrap();
+    assert!([MORE, CHOICES[0], CHOICES[1], CHOICES[2]].iter().all(|word| !text.contains(word)), "{text}");
+    // Enter: core kept the follow-up after the wish. The note it was typed under has nothing left to choose and
+    // goes: with a field on show the page is in the person's hand, and no look would bring the follow-up's work.
+    assert_eq!(printed[1]["kept"], json!(true), "{}", printed[1]);
+    assert_eq!(note(&scene(&printed[1]["scene"]), &wish_note), None, "{}", printed[1]);
+    let follow = kept(&w, "m2");
+    assert_eq!((&follow["said"], &follow["after"]), (&json!(NEXT), &json!(asked)));
+    // Looks alone then bring the follow-up's work, with its choices, once the looks an Enter holds are made.
+    let work = |look: &&Value| !look.is_null() && note(&scene(look), "work-m2").is_some_and(|one| one.1.len() == 3);
+    assert!(printed[3..].iter().any(|look| work(&look)), "no look showed the follow-up's work: {:#?}", &printed[3..]);
 }
 
 #[test]

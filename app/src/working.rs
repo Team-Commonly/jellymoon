@@ -83,6 +83,12 @@ pub(crate) fn in_hand(scene: &Scene) -> bool {
     })
 }
 
+/// Whether a note is the note `id`, a wish's own, with nothing to choose: a wish that is done, with the field of
+/// a follow-up alone under it.
+pub(crate) fn settled(note: &Note, id: &str) -> bool {
+    matches!(note, Note::Text { id: own, options, .. } if own == id && id.starts_with(WISH) && options.is_empty())
+}
+
 /// The wishes whose work that waits, or what their run says it did, is on a scene.
 pub(crate) fn shown(scene: &Scene) -> impl Iterator<Item = &str> {
     scene.notes.iter().filter_map(|note| id_of(note).and_then(|id| id.strip_prefix(WORK).or(id.strip_prefix(TOLD))))

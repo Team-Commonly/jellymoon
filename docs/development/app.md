@@ -662,8 +662,10 @@ where core says, carries what is typed to core off the window's thread, and draw
   asks once more and has no field. The app does not work it out from the wish's state.
 - **A follow-up.** Enter in that field gives the words and the wish's id to `jellymoon_core::wish_after`, the
   call `jellymoon wish --after` makes. A follow-up core keeps is drawn where core keeps it, and its run is
-  asked for as a typed wish's is, a process of its own ("The run", above). The field is emptied, and the note
-  keeps it: another follow-up may be typed.
+  asked for as a typed wish's is, a process of its own ("The run", above). The field is emptied. A note with
+  choices keeps it: another follow-up may be typed. A done wish's own note, with the field alone under it, goes
+  once core kept the follow-up: a field on show keeps the page in the person's hand, so no look would bring the
+  follow-up's work when its run ends. A tap on the wish opens the note again.
 - **A follow-up core refuses** writes nothing. The page's first note is "That wish was not kept.", with the
   start of the words and core's reason: the page has its 8 made wishes, the words are not a wish, the work was
   tossed meanwhile. The field keeps what was typed.

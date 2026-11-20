@@ -3,7 +3,7 @@
 //! shrink and flow into more rows and columns; they never overlap.
 
 use super::page::{BODY_BOTTOM, BODY_TOP, legend_top};
-use super::{Ctx, PieceKind, piece, run};
+use super::{Ctx, PieceKind, line_height, piece, run};
 use crate::geom::Rect;
 use crate::scene::{Character, Scene, State};
 use crate::text::Role;
@@ -112,6 +112,7 @@ fn place(cx: &mut Ctx, grid: &Grid, slot: usize, index: usize, who: &Character) 
         State::Busy => {
             let rect = round_rect((mid_x + 108.7 * unit, top + 8.7 * unit), 24.0 * unit);
             cx.out.push(piece(PieceKind::Bubble, &who.id, index, rect));
+            says(cx, grid, mid_x, top, index, who);
         }
         State::NeedsYou => {
             let rect = round_rect((mid_x + 104.0 * unit, top + 4.3 * unit), 32.6 * unit);
@@ -130,19 +131,37 @@ fn round_rect(centre: (f32, f32), radius: f32) -> Rect {
 /// reach a neighbour's art, the paper's edge or the notes.
 fn label(cx: &mut Ctx, grid: &Grid, mid_x: f32, top: f32, index: usize, who: &Character) {
     let role = if who.state == State::Dimmed { Role::LabelStruck } else { Role::Label };
-    let pad = cx.px(13.0);
+    pill(cx, grid, (mid_x, top, grid.label_height), (PieceKind::Label, index, who), (&who.label, role));
+}
+
+/// What a busy character says, on a pill one line high and as wide as its label may be, just over its body, in
+/// the room its art reaches above it, which no other piece is placed in. None over its stars, which stand in that
+/// room, and none where the room is lower than the pill.
+fn says(cx: &mut Ctx, grid: &Grid, mid_x: f32, top: f32, index: usize, who: &Character) {
+    let (over, body) = (top - REACH_UP * grid.unit, top - (BODY_TOP + 2.0) * grid.unit);
+    let height = line_height(cx.size(Role::Label)) + cx.px(6.0);
+    if who.says.is_empty() || who.stars > 0 || body - over < height {
+        return;
+    }
+    pill(cx, grid, (mid_x, body - height, height), (PieceKind::Says, index, who), (&who.says, Role::Label));
+}
+
+/// One line of `text` on a pill `height` high, centred on `mid_x` from `top`, cut to fit and capped so that it
+/// cannot reach a neighbour's art, the paper's edge or the notes. Nothing when nothing of the text is left.
+fn pill(cx: &mut Ctx, grid: &Grid, at: (f32, f32, f32), of: (PieceKind, usize, &Character), said: (&str, Role)) {
+    let ((mid_x, top, height), (kind, index, who), (text, role), pad) = (at, of, said, cx.px(13.0));
     let mut half = cx.px(cx.theme.labels.max_width) / 2.0;
     if grid.cols > 1 {
         half = half.min(grid.gap - REACH_RIGHT * grid.unit - grid.rim - cx.px(4.0));
     }
     half = half.min(mid_x - cx.paper().x - cx.px(8.0)).min(cx.content_right() - mid_x);
-    let (text, width) = cx.line(&who.label, role, 2.0 * (half - pad));
+    let (text, width) = cx.line(text, role, 2.0 * (half - pad));
     if text.is_empty() {
         return;
     }
     let size = cx.size(role);
-    let rect = Rect::new(mid_x - width / 2.0 - pad, top, width + 2.0 * pad, grid.label_height);
-    let mut tag = piece(PieceKind::Label, &who.id, index, rect);
-    tag.text = vec![run(text, role, mid_x - width / 2.0, top + grid.label_height / 2.0, width, size)];
+    let rect = Rect::new(mid_x - width / 2.0 - pad, top, width + 2.0 * pad, height);
+    let mut tag = piece(kind, &who.id, index, rect);
+    tag.text = vec![run(text, role, mid_x - width / 2.0, top + height / 2.0, width, size)];
     cx.out.push(tag);
 }

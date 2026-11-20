@@ -3,9 +3,12 @@
 //! it starts as a run's stream does, how many result lines came, the first one's `subtype`, `is_error` and count of
 //! `permission_denials`, and whether a line that could not be read came after it; and its last word, which is data
 //! in one of two shapes (`asks.rs`). No text of the agent's is kept but a question, which then passes the door,
-//! and what a run that is done says of its work, which is checked at every look (`told.rs`).
+//! and what a run that is done says of its work, which is checked at every look (`told.rs`). Beside that, of a
+//! line that is read after the start, its steps: the tool of each tool use and the cleaned name of a file of the
+//! run's (`steps.rs`), which never change how the end is read.
 
 use std::io::{BufReader, Read};
+use std::path::PathBuf;
 use std::process::ChildStdout;
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
@@ -16,6 +19,7 @@ use serde::de::IgnoredAny;
 use serde_json::Value;
 
 use super::asks::{self, Last, WORD_TOOL};
+use super::steps::{self, Live, Steps};
 use super::told::{self, Said};
 use crate::session::next_line;
 
@@ -65,6 +69,8 @@ pub(super) struct Stream {
     /// A harness told to go on with a session gave a result that is an error and says in its `errors` that the
     /// session is not kept (`asks::LOST_SIGN`), wherever in the stream it came.
     pub lost: bool,
+    /// The steps so far, of the lines read after the start (`steps.rs`).
+    pub steps: Steps,
 }
 
 /// The parts of a line of the stream that are looked at. A line that is not an object with a `type` that is text,
@@ -156,22 +162,39 @@ impl Stream {
         }
         true
     }
+
+    /// [`Stream::take`], and then the steps of a line it read after the start: not of a line it skipped. The
+    /// second answer is whether the line had a step.
+    fn read(&mut self, raw: &[u8], expect: &Expect, places: &[PathBuf]) -> (bool, bool) {
+        let skipped = self.skipped;
+        let more = self.take(raw, expect);
+        let read = self.start == Some(true) && self.skipped == skipped;
+        (more, read && self.steps.took(raw, places))
+    }
 }
 
 /// Reads the stream on a thread of its own and sends what it found: at the stream's end, at the cap, or at a start
 /// that is not a run's, after which nothing is read. What it has so far is kept in the second part after every
-/// line, for a stream whose end never comes: something the child left may hold it open.
-pub(super) fn reader(stdout: Option<ChildStdout>, expect: Expect) -> (Receiver<Stream>, Arc<Mutex<Stream>>) {
+/// line, for a stream whose end never comes: something the child left may hold it open. The steps go on from
+/// those `live` has, and are kept after each line that had one, as they are then.
+pub(super) fn reader(
+    stdout: Option<ChildStdout>,
+    expect: Expect,
+    live: Live,
+) -> (Receiver<Stream>, Arc<Mutex<Stream>>) {
     let (send, receive) = mpsc::channel();
     let so_far = Arc::new(Mutex::new(Stream::default()));
     let shared = Arc::clone(&so_far);
     thread::spawn(move || {
-        let mut found = Stream::default();
+        let mut found = Stream { steps: live.from, ..Stream::default() };
         if let Some(stdout) = stdout {
             let mut pipe = BufReader::with_capacity(1 << 16, stdout.take(STREAM_MAX + 1));
             let mut raw = Vec::new();
             while let Ok(true) = next_line(&mut pipe, LINE_MAX, &mut raw) {
-                let more = found.take(&raw, &expect);
+                let (more, stepped) = found.read(&raw, &expect, &live.places);
+                if stepped {
+                    steps::keep(&live.file, &found.steps);
+                }
                 if let Ok(mut shared) = shared.lock() {
                     shared.clone_from(&found);
                 }
@@ -186,6 +209,10 @@ pub(super) fn reader(stdout: Option<ChildStdout>, expect: Expect) -> (Receiver<S
     });
     (receive, so_far)
 }
+
+#[cfg(test)]
+#[path = "stream/steps.rs"]
+mod steps_read;
 
 #[cfg(test)]
 mod tests {

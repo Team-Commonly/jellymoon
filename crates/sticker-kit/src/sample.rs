@@ -3,7 +3,7 @@
 use crate::scene::{Character, LegendItem, Mark, Mood, Note, Scene, State};
 
 fn small(id: &str, label: &str, hue: u8, stars: u8, state: State) -> Character {
-    Character { id: id.into(), label: label.into(), hue, stars, state, mood: Mood::Happy }
+    Character { id: id.into(), label: label.into(), hue, stars, state, mood: Mood::Happy, says: String::new() }
 }
 
 fn pair(a: &str, b: &str) -> (String, String) {

@@ -47,8 +47,9 @@ pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};
 pub use run::{
     ANSWER_READ, Alone, FileChange, FileKind, KeepOptions, Kept, Piece, Ran, RunOptions, RunOutcome, Shown, ShownEntry,
-    ShownFile, Started, Told, Tossed, Waiting, Waits, WorkDone, WorkState, WorkTap, answer_run, ended_alone,
-    followable, keep_run, run, run_apart, show_file, show_run, stands, stop_run, toss_run, waiting, waits, work_tapped,
+    ShownFile, Started, Step, Steps, Told, Tool, Tossed, Waiting, Waits, WorkDone, WorkState, WorkTap, answer_run,
+    doing, ended_alone, followable, keep_run, run, run_apart, show_file, show_run, stands, stop_run, toss_run, waiting,
+    waits, work_tapped,
 };
 pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, ReaderTurn, Ruling, Wish, WishState};
 pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};

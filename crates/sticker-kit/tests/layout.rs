@@ -10,7 +10,8 @@ const SMALL: Viewport = Viewport { w: 960.0, h: 640.0 };
 const MEASURE: FixedAdvance = FixedAdvance(0.56);
 
 fn character(id: usize, label: &str, stars: u8, state: State) -> Character {
-    Character { id: format!("c{id}"), label: label.into(), hue: (id % 5) as u8, stars, state, mood: Mood::Happy }
+    let says = String::new();
+    Character { id: format!("c{id}"), label: label.into(), hue: (id % 5) as u8, stars, state, mood: Mood::Happy, says }
 }
 
 fn scene_with(characters: Vec<Character>) -> Scene {

@@ -253,6 +253,21 @@ asks"), and whether a skipped line came after it. Of the agent's text only a que
 or printed, and a result that is kept as data and printed only by a look, checked ([show.md](show.md), "What the
 run says of its work"); none is put in the commit message, and nothing of what it said on stderr is kept.
 
+**What a run is doing is kept as steps (live work).** After the start is a run's, a line of `type` `assistant` that
+is not skipped is looked through for `tool_use` blocks. One whose `name` is one of the five tools (`Edit`, `Glob`,
+`Grep`, `Read`, `Write`, a closed list in `run/steps.rs`) is a step; any other name is none. Of a step only the tool
+is kept, and for `Edit`, `Read` and `Write` the file it names: `input.file_path`, only when it is text inside the
+run's copy (the copy's folder as given or as the system names it), made relative to it, every part a plain name,
+then cleaned as a result's file name is ([show.md](show.md), `obeyed::named`). A path outside the copy, with `..`,
+or a name the cleaning changes is no name, and the step is still counted. `Glob` and `Grep` carry no name. Every
+step is counted; the last 4 are kept. The reader writes them, whole, to `runs/<id>/steps.json`
+(`{"count":N,"last":[{"tool":"read","file":"b.txt"},…]}`) at each line that brought a step, and a page reads them
+with `jellymoon_core::doing`; a file of another shape, over 4 KiB, or with a name that is not plain reads as no
+steps. An answered or followed run goes on counting from the file. Once the run has ended the file stays as it was
+at the end. Still never kept: the model's text, a tool's other inputs (a pattern, an edit's old and new text, a
+command), a tool's result, a path of the machine, a step before the start or in a skipped line. Steps change nothing
+of how the run's end is read: the same lines are skipped and counted, and the same end is said.
+
 **The start is checked.** The stream's `system`/`init` line says what the harness really started with, and three
 parts of it are compared: `tools` is exactly `Edit`, `Glob`, `Grep`, `Read`, `Write` and `StructuredOutput`, each
 once, in any order, `mcp_servers` is an empty list, and `permissionMode` is `acceptEdits`. `StructuredOutput` is

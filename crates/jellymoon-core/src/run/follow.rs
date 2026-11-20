@@ -18,6 +18,7 @@ use super::child::{self, Ended};
 use super::keep::{BUSY, NO_LOCK, intent};
 use super::record::{self, Record};
 use super::show::{Asked, found, not_cores};
+use super::steps::Live;
 use super::words::unchanged_on;
 use super::{RunOptions, RunOutcome, Session, WorkState, asks, bury, finished, lined, refused, stop};
 use crate::call::harness_of;
@@ -134,7 +135,7 @@ pub(super) struct Go<'a> {
 impl Go<'_> {
     /// One start of the harness, waited for to its end.
     pub(super) fn once(&self, mut command: Command, session: String, from: Session) -> io::Result<Ended> {
-        let expect = lined(&mut command, self.folder, session, from);
+        let expect = (lined(&mut command, self.folder, session, from), Live::of(self.home, self.run, self.folder));
         let (told, stop) = (|pid| record::child(self.home, self.run, pid), || stop::asked(self.home, self.run));
         let began = || record::began(self.home, self.run);
         child::run(command, self.said.clone(), self.limit, expect, told, began, stop)

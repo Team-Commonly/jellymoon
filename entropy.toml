@@ -407,7 +407,10 @@ max_file_lines = 400
 # Done with a question raised core by 10: 25 added and 16 removed in `run/asks.rs` (10 of the added in tests), as a
 # `question` beside `done` is not counted and `Word::result` reads past it, and 1 in `run/told/tests.rs`, whose schema
 # check takes a `description`. Three test lines of the old rule were deleted.
-"crates/jellymoon-core" = 17916
+# Live work raised core by 437: `run/steps.rs` (190: the five tools, a name only inside the copy, the kept file and
+# `doing`), its tests of the kept file (42), the stream reader's step tests (`run/stream/steps.rs`, 171), and the
+# reader's handover (`stream.rs`, `child.rs`, `answer.rs`, `follow.rs`, the exports: 34 net). Nothing was deleted.
+"crates/jellymoon-core" = 18353
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -638,7 +641,10 @@ max_file_lines = 400
 # Told alone raised the binary by 22, all tests: a run that changed nothing prints its result (`tests/f85/kept.rs`).
 # Done with a question raised the binary by 26, all tests: a run done with a question (`tests/f87.rs`, 25) and the
 # made-up agent's unfit word 3, now `asks` with no question (1).
-"crates/jellymoon" = 29893
+# Live work raised the binary by 82, all tests: the e2e of a run held between two steps (`tests/f39/steps.rs`, 43,
+# with its lines in `f39.rs`, 3) and the made-up agent's `steps` script (`support/fake_agent/steps.rs`, 39, with the
+# wait it shares moved there: `fake_agent.rs` 3 shorter).
+"crates/jellymoon" = 29975
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -802,7 +808,9 @@ max_file_lines = 400
 # Typing goes to the entry raised the kit by 10: the entry is given the keys whenever nothing holds them (6 in
 # `draw/entry.rs`), and the pins of the old keys in `tests/entry_draw.rs` and `tests/field_draw.rs` (4).
 # Open a wish raised the kit by 3: a legend line with no mark (`Mark::Plain`, its room and its empty drawing).
-"crates/sticker-kit" = 11098
+# Live work raised the kit by 83: what a busy character says (`Character::says`, `PieceKind::Says`, the pill shared
+# with the label in `layout/grid.rs`, its drawing: 27 net) and its test (`tests/says.rs`, 56).
+"crates/sticker-kit" = 11181
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -965,7 +973,9 @@ max_file_lines = 400
 # `open_a_wish/window.rs`); 52 net the legend's tap line and a read wish's note (`scene.rs`), its use and the
 # made-only `standing` (`working.rs`), the chip a tap chooses (`showing.rs`, `window.rs`, the walk's `poke`).
 # Its old pins raised the app by 5 (11 added, 6 removed): the read wishes' notes in `tests/f43.rs`.
-"app" = 15459
+# Live work raised the app by 257: `src/live.rs` (118, with its unit test), the two calls and the module lines (5),
+# `tests/live_work.rs` (112) and the walk's picture of a run held mid-way (`tests/walk.rs`, 22).
+"app" = 15716
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

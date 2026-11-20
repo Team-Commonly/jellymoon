@@ -210,6 +210,7 @@ fn little_one(index: usize, wish: &Wish) -> Character {
             WishState::LetGo => State::Dimmed,
         },
         mood: Mood::Happy,
+        says: String::new(),
     }
 }
 

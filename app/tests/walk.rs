@@ -16,7 +16,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use support::door;
-use support::wished::{SAID, World, quiet};
+use support::wished::{SAID, World, quiet, wait_until};
 
 /// What the run says it did, which no line of the walk may hold.
 const DID: &str = "It made hello.txt with one word in it.";
@@ -136,6 +136,28 @@ fn a_whole_loop_walks_from_a_new_project_to_kept_work_with_no_tap_on_the_wish() 
 #[test]
 fn a_whole_loop_with_a_tap_on_the_wish_says_titles_and_states_only() {
     whole_loop(&["until:done:30", "poke:m1"]);
+}
+
+/// A picture taken while the made-up run waits between its two steps: the page has the note of what it is doing
+/// (live work), and the walk names no file.
+#[test]
+fn a_picture_taken_while_a_run_waits_between_its_steps_has_what_it_is_doing() {
+    let w = quiet();
+    w.install();
+    w.play("steps");
+    let typed = format!("type:{SAID}");
+    let steps = ["type:garden", "enter", typed.as_str(), "enter", "until:steps-m1:30", "picture:midway"];
+    let (code, lines, said) = walk(&w, &steps, 120);
+    fs::write(w.at("rec").join("go"), "").unwrap();
+    // The walk's wish is of today, not the world's day: its run's end is waited for by its lock.
+    let runs = w.at("jm").join("runs");
+    let free = || fs::read_dir(&runs).into_iter().flatten().flatten().all(|run| !run.path().join("run.lock").exists());
+    wait_until("the end of the run", free);
+    assert_eq!(code, Some(0), "{said}");
+    let midway = &lines[steps.len()];
+    assert!(midway.contains("\"What it is doing\"") && midway.contains("wishes: m1 working"), "{midway}");
+    assert!(fs::read(w.at("pictures").join("midway.png")).unwrap().starts_with(b"\x89PNG"));
+    assert!(!lines.join("\n").contains("b.txt"), "{lines:#?}");
 }
 
 #[test]

@@ -14,7 +14,7 @@ use std::panic::{self, AssertUnwindSafe};
 use jellymoon_core::{Alone, RunOptions, Waits, Wish, WishState, WorkDone, WorkTap};
 use sticker_kit::{Note, Scene};
 
-use crate::answering::{with_more, with_question};
+use crate::answering::{with_go_on, with_more, with_question};
 use crate::read::Page;
 use crate::taps::OnShow;
 use crate::today::Today;
@@ -81,6 +81,12 @@ pub(crate) fn in_hand(scene: &Scene) -> bool {
         Note::Plain { title, .. } => title == crate::stopping::STOPPING,
         _ => false,
     })
+}
+
+/// Whether a note is the note `id`, a wish's own, with nothing to choose: a wish that is done, with the field of
+/// a follow-up alone under it.
+pub(crate) fn settled(note: &Note, id: &str) -> bool {
+    matches!(note, Note::Text { id: own, options, .. } if own == id && id.starts_with(WISH) && options.is_empty())
 }
 
 /// The wishes whose work that waits, or what their run says it did, is on a scene.
@@ -233,9 +239,14 @@ impl Today {
         shown
     }
 
-    /// Whether core says a follow-up may be made of the made wish `wish` (`jellymoon_core::followable`).
+    /// Whether core says a follow-up of its work may be made of the made wish `wish` (`jellymoon_core::followable`).
     fn follows(&self, wish: &str) -> bool {
-        jellymoon_core::followable(&self.home, &self.date).iter().any(|one| one == wish)
+        jellymoon_core::followable(&self.home, &self.date, true).iter().any(|one| one == wish)
+    }
+
+    /// Whether core says a follow-up may be made of the made wish `wish`, whose run changed nothing.
+    fn goes_on(&self, wish: &str) -> bool {
+        jellymoon_core::followable(&self.home, &self.date, false).iter().any(|one| one == wish)
     }
 
     /// The note of the made wish `id` as core says the wish stands now: its work that waits with its choices,
@@ -270,7 +281,8 @@ impl Today {
         let alone = made.then(|| jellymoon_core::ended_alone(&self.home, &self.run_of(id))).flatten();
         let told = alone.as_ref().and_then(|alone| told_alone(id, alone));
         let note = if made { standing(&wishes[at], alone.as_ref()) } else { self.read_note(&wishes[at]) };
-        Some(told.into_iter().chain([with_more(note, id, self.follows(id))]).collect())
+        let note = with_go_on(with_more(note, id, self.follows(id)), id, made && self.goes_on(id));
+        Some(told.into_iter().chain([note]).collect())
     }
 
     /// The note of a wish of the reading: Jellymoon ran nothing for it, so it says what the reading took it for

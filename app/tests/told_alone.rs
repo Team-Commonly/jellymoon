@@ -107,11 +107,11 @@ fn row(label: &str, quote: &str) -> ToldRow {
     ToldRow { label: label.to_string(), quotes: vec![quote.to_string()], ..ToldRow::default() }
 }
 
-/// The wish's own note: its title and texts, with no option and no field.
-fn plain(scene: &Scene) -> (String, Vec<String>) {
+/// The wish's own note: its title and texts, with no option, and whether it has a field (go on from an answer).
+fn plain(scene: &Scene) -> (String, Vec<String>, bool) {
     let Note::Text { title, body, options, field, quoted, .. } = note(scene, "wish-m1") else { panic!("{scene:?}") };
-    assert!(options.is_empty() && field.is_none() && quoted.is_empty(), "{scene:?}");
-    (title.clone(), body.clone())
+    assert!(options.is_empty() && quoted.is_empty(), "{scene:?}");
+    (title.clone(), body.clone(), field.is_some())
 }
 
 fn shown(line: &str) -> Option<Scene> {
@@ -128,7 +128,7 @@ fn a_run_that_changed_nothing_shows_what_it_says_it_did_over_the_wish_s_note_and
     assert_eq!(title, TITLE);
     assert_eq!(rows, &[row("", DID), row("Decided", DECIDED)]);
     assert_eq!(end, &[UNCHANGED, NOTHING_RUN, UNCHECKED]);
-    assert_eq!(plain(&opened), (DONE.to_string(), vec![format!("“{SAID}”")]));
+    assert_eq!(plain(&opened), (DONE.to_string(), vec![format!("“{SAID}”")], true));
     // A run's text is never a title, a label, a sentence of Jellymoon's, an option or a field.
     let text = serde_json::to_string(&opened).unwrap();
     assert_eq!(text.matches("The shop opens").count(), 1, "{text}");
@@ -152,7 +152,7 @@ fn a_run_that_changed_nothing_and_said_nothing_is_done_as_before() {
     let w = ended(r#"{"state":"done"}"#, 0, "completed");
     let opened = w.taps("logs", &["poke:m1"]).showed().remove(0).expect("a tap opens the wish");
     assert_eq!(ids(&opened), ["wish-m1"]);
-    assert_eq!(plain(&opened), (DONE.to_string(), vec![format!("“{SAID}”")]));
+    assert_eq!(plain(&opened), (DONE.to_string(), vec![format!("“{SAID}”")], true));
     assert_eq!(w.taps("logs", &["look"]).ended(), ["null"], "a look shows nothing of it");
 }
 
@@ -162,7 +162,7 @@ fn a_run_that_did_not_finish_says_so_in_jellymoon_s_words_and_nothing_of_core_s_
     let opened = w.taps("logs", &["poke:m1"]).showed().remove(0).expect("a tap opens the wish");
     assert_eq!(ids(&opened), ["wish-m1"]);
     let said = [format!("“{SAID}”"), UNFINISHED[0].to_string(), UNFINISHED[1].to_string()];
-    assert_eq!(plain(&opened), (NEEDS.to_string(), said.to_vec()));
+    assert_eq!(plain(&opened), (NEEDS.to_string(), said.to_vec(), false));
     let text = serde_json::to_string(&opened).unwrap();
     // Core's reason reads "run <id> did not finish (its last word was not `done` alone, ...)".
     for word in ["`", "did not finish (", "last word", "its copy", "r0", "run r"] {
@@ -239,8 +239,9 @@ fn state(w: &World, id: &str) -> String {
     wishes.iter().find(|wish| wish["id"] == id).map_or(String::new(), |wish| wish["state"].as_str().unwrap().into())
 }
 
-// A note told alone, shown by a look, stays as long as the answer to a choice does: another wish's work that ends
-// meanwhile is not put over it until the looks after it are held.
+// A note told alone, shown by a look, stays: another wish's work that ends meanwhile is not put over it. Its wish's
+// note has the field of a follow-up (go on from an answer), so it is in the person's hand as any field is, and
+// holds every look while it is on show, past the looks an answer to a choice holds.
 #[test]
 fn a_note_told_alone_shown_by_a_look_holds_the_looks_after_it() {
     let w = day();
@@ -259,10 +260,9 @@ fn a_note_told_alone_shown_by_a_look_holds_the_looks_after_it() {
         fs::write(&ended, "").unwrap();
         window.ended()
     });
-    let [first, held @ .., turn, _] = &lines[..] else { panic!("{lines:#?}") };
-    assert_eq!(looked(first)[..2], ["told-m1", "wish-m1"]);
+    let [first, held @ ..] = &lines[..] else { panic!("{lines:#?}") };
+    assert_eq!((looked(first)[..2].to_vec(), held.len()), (vec!["told-m1".to_string(), "wish-m1".into()], HOLD + 2));
     for line in held {
         assert!(!looked(line).iter().any(|id| id == "work-m2"), "the told note was taken away: {line}");
     }
-    assert_eq!(looked(turn)[0], "work-m2", "the work that waited its turn");
 }

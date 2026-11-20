@@ -17,7 +17,7 @@ use std::time::Duration;
 use super::child::{self, Ended};
 use super::keep::{BUSY, NO_LOCK, intent};
 use super::record::{self, Record};
-use super::show::{Asked, found, not_cores};
+use super::show::{Asked, found, not_cores, unchanged};
 use super::steps::Live;
 use super::words::unchanged_on;
 use super::{RunOptions, RunOutcome, Session, WorkState, asks, bury, finished, lined, refused, stop};
@@ -38,23 +38,33 @@ struct Followed {
     /// Whether the work waits. It was kept when it does not, as the commit `kept`.
     waits: bool,
     kept: Option<String>,
+    /// Of a run that changed nothing: the commit the work it stood on was kept as ([`stood_on`]).
+    under: Option<String>,
     /// The id the harness keeps the run's session under, when the record names one of core's.
     session: Option<String>,
 }
 
-/// Finds the work of the wish `after`. Refused as a look is, and: a run that changed nothing, work that was
-/// tossed, and a record that names no commits.
+/// Finds the work of the wish `after`. Refused as a look is, and: work that was tossed, a run that changed
+/// nothing in a copy that held work that is not kept, and a record that names no commits. A run that changed
+/// nothing is followed with no work: neither waits nor kept, so the follow-up's copy is made where the person's
+/// checkout stands, as one of kept work's is, and sees the files as they are now. Where it stood on kept work,
+/// the checkout must hold that work's commit, as for a follow-up of the work itself.
 fn followed(home: &Path, day: &str, after: &str) -> Result<Followed, Error> {
     let options = RunOptions { wish: after.to_string(), day: Some(day.to_string()), ..RunOptions::default() };
     let found = found(home, &options, &FOLLOWED)?;
     let run = found.run.clone();
-    if found.why != finished(&run, true) {
-        return Err(refused(format!("run {run} changed nothing: there is no work of it to follow")));
-    }
     let state = found.record.work.unwrap_or(WorkState::Waits);
     if state == WorkState::Tossed {
         return Err(refused(format!("the work of run {run} was tossed, so it cannot be followed")));
     }
+    let changed = found.why == finished(&run, true);
+    let stood = || stood_on(home, &found.record).ok().filter(|_| unchanged(&found));
+    let under = match changed {
+        true => None,
+        false => stood().ok_or_else(|| {
+            refused(format!("run {run} changed nothing on work that is not kept: follow the wish of that work instead"))
+        })?,
+    };
     let Some(named) = found.named()? else {
         return Err(refused(format!(
             "the record of run {run} is from before a run's record named its commits: its work is not followed by \
@@ -69,7 +79,31 @@ fn followed(home: &Path, day: &str, after: &str) -> Result<Followed, Error> {
         return Err(not_cores(&run));
     }
     let session = found.record.session.clone().filter(|session| asks::is_session(session));
-    Ok(Followed { project: found.made.project, run, repo, end, waits: state == WorkState::Waits, kept, session })
+    let waits = changed && state == WorkState::Waits;
+    Ok(Followed { project: found.made.project, run, repo, end, waits, kept, under, session })
+}
+
+/// The commit the work a run that changed nothing stood on was kept as: the work of the nearest run it follows,
+/// through runs that changed nothing, that changed files. None: it stood on no work, only on the person's
+/// checkout. Err: that work is not kept, or a record on the way is not there, is not of a run that changed
+/// nothing, or is one more than a day holds: the run's copy held files the checkout does not, and its session
+/// has seen them.
+fn stood_on(home: &Path, record: &Record) -> Result<Option<String>, ()> {
+    let mut follows = record.follows.clone();
+    for _ in 0..wish::MADE_MAX {
+        let Some(run) = follows else { return Ok(None) };
+        let was = record::kept(home, &run).ok_or(())?;
+        let why = |line: String| was.why.as_deref() == Some(line.as_str());
+        if why(finished(&run, true)) {
+            let kept = intent(&was.kept, &was.onto)?.filter(|_| was.work == Some(WorkState::Kept));
+            return kept.map(|(commit, _)| Some(commit.to_string())).ok_or(());
+        }
+        if !why(finished(&run, false)) && !why(unchanged_on(&run)) {
+            return Err(());
+        }
+        follows = was.follows;
+    }
+    Err(())
 }
 
 /// The project of a follow-up of the wish `after`: the followed wish's own. Err: that wish cannot be followed.
@@ -77,12 +111,15 @@ pub(crate) fn project(home: &Path, day: &str, after: &str) -> Result<String, Err
     followed(home, day, after).map(|followed| followed.project)
 }
 
-/// The made wishes of `day` a follow-up may be made of, in their order (F54): each whose work [`followed`] finds,
-/// which waits or was kept. So `wish --after` refuses none of them for its work, and every other wish for it.
+/// The made wishes of `day` a follow-up of work may be made of, in their order (F54): each whose work
+/// [`followed`] finds, which waits or was kept. `with_work` false: each [`followed`] finds with no work, its run
+/// having changed nothing. `wish --after` refuses none of either for what it follows, and every other wish.
 /// Read from the home alone, as a look reads it: nothing of a repo is asked, and nothing is written.
-pub fn followable(home: &Path, day: &str) -> Vec<String> {
+pub fn followable(home: &Path, day: &str, with_work: bool) -> Vec<String> {
     let made = wish::kept_of(home, day).unwrap_or_default();
-    made.into_iter().map(|made| made.id).filter(|id| followed(home, day, id).is_ok()).collect()
+    let work = |followed: Followed| followed.waits || followed.kept.is_some();
+    let of = |id: &String| followed(home, day, id).is_ok_and(|followed| work(followed) == with_work);
+    made.into_iter().map(|made| made.id).filter(of).collect()
 }
 
 /// What a follow-up's run is started on, with the lock a keep and a toss hold.
@@ -103,10 +140,12 @@ pub(super) fn on(home: &Path, day: &str, wish: &MadeWish) -> Result<Option<On>, 
 
 impl On {
     /// Where the follow-up's copy is made: at the followed work's commit while that work waits, and where the
-    /// person's checkout stands once it was kept, when that checkout holds the commit it was kept as.
+    /// person's checkout stands once it was kept, when that checkout holds the commit it was kept as. Of a run
+    /// that changed nothing: where the checkout stands, when it holds the kept work that run stood on, if any.
     pub(super) fn base(&self) -> Base<'_> {
         let at = self.followed.waits.then_some(self.followed.end.as_str());
-        Base { repo: &self.followed.repo, run: &self.followed.run, at, kept: self.followed.kept.as_deref() }
+        let kept = self.followed.kept.as_deref().or(self.followed.under.as_deref());
+        Base { repo: &self.followed.repo, run: &self.followed.run, at, kept }
     }
 
     /// The run that is followed, and whether its session is forked.

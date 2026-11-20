@@ -49,10 +49,13 @@ made with `--after <id>` in place of `--project`:
   wrong command line (exit 2), and so is neither.
 - **A wish of another day** is followed on that day: `--date` names the day the followed wish was made on, and
   the follow-up is kept there and counts in that day's eight. Today's file never names a wish of another day.
-- **What can be followed.** A wish whose run finished with work that waits or was kept. A follow-up is
-  followed in its turn. `jellymoon_core::followable` lists the day's wishes that can be, `jellymoon run
-  waiting` prints them as `follows`, and the app's window offers `More like this` under each and makes the
-  follow-up by this same call (F54, [app.md](app.md#a-question-answered-and-more-like-this-appsrcansweringrs)).
+- **What can be followed.** A wish whose run finished with work that waits or was kept, and a wish whose run
+  finished and changed nothing (a question answered): that follow-up has no work to build on, so its copy is
+  made where the person's checkout stands, as one of kept work's is ([run.md](run.md), "A follow-up's run"). A
+  follow-up is followed in its turn. `jellymoon_core::followable` lists the day's wishes that can be, those with
+  work apart from those without; `jellymoon run waiting` prints the first as `follows`, and the app's window
+  offers `More like this` under each of them, and the field alone under the done note of each of the others, and
+  makes the follow-up by this same call (F54, [app.md](app.md#a-question-answered-and-more-like-this-appsrcansweringrs)).
   Each of these is refused in one sentence, with nothing kept:
 
   | The followed wish | The sentence |
@@ -64,7 +67,7 @@ made with `--after <id>` in place of `--project`:
   | names a run that was stopped | `run <run> was cancelled by a stop: there is no work of it to follow` |
   | names a run that was cut off | `run <run> was cut off before it ended: there is no work of it to follow` |
   | names a run that failed | `run <run> did not finish: there is no work of it to follow` |
-  | names a run that changed nothing | `run <run> changed nothing: there is no work of it to follow` |
+  | names a run that changed nothing in a copy of work that is not kept: the nearest run it follows that changed files, through runs that changed nothing, or a record on that way that is not there or is not such a run's | `run <run> changed nothing on work that is not kept: follow the wish of that work instead` |
   | had its work tossed | `the work of run <run> was tossed, so it cannot be followed` |
   | has a record from before F48 | `the record of run <run> is from before a run's record named its commits: its work is not followed by Jellymoon` |
 

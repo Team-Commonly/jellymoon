@@ -197,6 +197,10 @@ empty logs, on a wish that cannot be done without one answer:
 - **Work can be followed when its run finished with a commit and the work waits or was kept.** No run, a run
   that is going, asks, failed, was stopped, was cut off or changed nothing, tossed work and a record from
   before F48 are each refused in one fixed sentence (wish.md, "A follow-up"), and nothing is kept.
+  2026-11-19 (go on from an answer): widened. A run that finished and changed nothing is followed too, with no
+  work: its copy is made where the checkout stands now, under a fork of its session. A person who asks a
+  question first had a dead end, with no way to answer back. Only a run that changed nothing in a copy of work
+  it follows that is not kept is still refused: its session saw files the checkout does not hold.
 - **A follow-up is followed in its turn**, by the same rule. Three in a row are kept first to last.
 - **A wish of another day is followed on that day.** `--date` names it, the follow-up is kept in that day's
   file and counts in that day's eight. A day's file never names a wish of another day.

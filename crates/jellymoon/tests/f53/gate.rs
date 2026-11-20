@@ -168,6 +168,28 @@ fn a_follow_up_of_kept_work_is_refused_in_a_checkout_whose_history_does_not_hold
     assert_eq!((&said["outcome"], &w.record(&run_of(&said))["start"]), (&json!("completed"), &json!(made.end())));
 }
 
+// Go on from an answer's gate: a question asked on kept work saw that work, so a follow-up of the question needs
+// the checkout to hold it, as a follow-up of the work itself does.
+#[test]
+fn a_follow_up_of_a_question_asked_on_kept_work_needs_a_checkout_that_holds_that_work() {
+    let made = finished();
+    let (w, start) = (&made.w, made.record()["start"].as_str().unwrap().to_string());
+    assert_eq!(printed(&made.keep(&[]))["kept"], json!(made.end()));
+    // A follow-up of the kept work that changed nothing: a question, answered in a copy that held the work.
+    let (question, said) = made.follows("follow", 2);
+    assert_eq!((&said["outcome"], &w.record(&run_of(&said))["start"]), (&json!("completed"), &json!(made.end())));
+    let wish = followed(w, &question);
+    w.play("follow", 2);
+    // The person's own branch, put back behind the commit the work was kept as.
+    made.git(&["reset", "-q", "--hard", &start]);
+    let before = made.all();
+    made.unchanged(&made.found(&wish, &["--repo", made.repo.to_str().unwrap()]), &before, NOT_HELD);
+    // The branch holds the work again: the follow-up of the question runs.
+    made.git(&["reset", "-q", "--hard", &made.end()]);
+    let said = printed(&made.found(&wish, &["--repo", made.repo.to_str().unwrap()]));
+    assert_eq!((&said["outcome"], &w.record(&run_of(&said))["start"]), (&json!("completed"), &json!(made.end())));
+}
+
 /// Followed work kept as one new commit on the person's own, a follow-up of it that waits, and then a commit of
 /// the person's that takes part of the followed work back: `n.txt` is removed again and `b.txt` is back.
 fn taken_back() -> (Made, String, String) {

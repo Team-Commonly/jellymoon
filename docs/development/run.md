@@ -642,14 +642,16 @@ branch and no record, and the wish can be run again once what refused it is mend
 |---|---|---|
 | waits | the commit the followed run's record names as its `end` | the followed run's branch is at that commit in the repo |
 | was kept | the commit the person's checkout stands on, as any run's | the checkout's history holds the commit the followed run's record names as `kept` |
+| is none: the followed run changed nothing | the commit the person's checkout stands on now, as any run's | where that run stood on kept work (it followed it, or followed runs that changed nothing down to it), the checkout's history holds the commit that work was kept as; where it stood on no work, nothing more |
 
-In both, the folder the run would start in must be a checkout of the repo the followed run's record names. The
+In each, the folder the run would start in must be a checkout of the repo the followed run's record names. The
 commit is the follow-up's `start`, so `run show`, `run keep` and `run toss` of a follow-up compare its work with
 the work it follows and never with what was there before both.
 
 Kept work is in one branch's history. A second worktree on a branch without it, or the person's own branch put
 back behind the kept commit, would give the follow-up a copy of the old files under a fork of a session that
-has seen the new ones: the run is refused, and runs once the checkout holds the work again.
+has seen the new ones: the run is refused, and runs once the checkout holds the work again. A run that changed
+nothing on kept work has seen that work too, so a follow-up of it is refused in the same sentence.
 
 These three checks are a run's refusals and none of the folder: each is said in its own sentence and nothing
 before it, whether the folder was named with `--repo`, typed in on the day or found on the list of projects.

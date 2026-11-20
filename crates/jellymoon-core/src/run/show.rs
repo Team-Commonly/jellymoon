@@ -209,7 +209,7 @@ pub fn ended_alone(home: &Path, options: &RunOptions) -> Option<Alone> {
 }
 
 /// Whether a run that completed changed nothing, by its record's line, and was not tossed since.
-fn unchanged(found: &Found) -> bool {
+pub(super) fn unchanged(found: &Found) -> bool {
     let (run, why) = (&found.run, &found.why);
     let waits = found.record.work.is_none_or(|work| work == WorkState::Waits);
     waits && (*why == finished(run, false) || *why == unchanged_on(run))

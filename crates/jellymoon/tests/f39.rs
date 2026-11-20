@@ -3,7 +3,8 @@
 //! `fake-agent` (`support/fake_agent.rs`), first on a `PATH` whose only other folder holds git alone, so the real
 //! Claude Code is never started. Every repo is made here with the real `git`, under an empty global config, and both
 //! homes and the harness's folder are scratch folders. `f39/failed.rs` holds the runs that do not finish and the
-//! caps on the stream, `f39/stream.rs` the star's rule and the stream's first line, `f39/refused.rs` what is refused
+//! caps on the stream, `f39/stream.rs` the star's rule and the stream's first line, `f39/steps.rs` what a run is
+//! doing while it works, `f39/refused.rs` what is refused
 //! or not started, `f39/limits.rs` the time limit, a run cut off and two runs at once, `f39/safe.rs` what never leaks,
 //! `f39/world.rs` the test's folder, which F40's tests use too, and `f39/guard.rs` what ends with a test, which
 //! `f39/panics.rs` proves.
@@ -19,6 +20,8 @@ mod panics;
 mod refused;
 #[path = "f39/safe.rs"]
 mod safe;
+#[path = "f39/steps.rs"]
+mod steps;
 #[path = "f39/stream.rs"]
 mod stream;
 mod support;

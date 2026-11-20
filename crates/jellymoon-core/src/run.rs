@@ -29,6 +29,7 @@ mod obeyed;
 mod place;
 mod record;
 mod show;
+mod steps;
 mod stop;
 mod stream;
 mod told;
@@ -61,6 +62,7 @@ use serde::{Deserialize, Serialize};
 pub use show::{
     Alone, FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, ended_alone, show_file, show_run,
 };
+pub use steps::{Step, Steps, Tool, doing};
 pub use stop::stop_run;
 pub use told::{Piece, Told};
 pub use toss::{Tossed, toss_run};

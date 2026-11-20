@@ -12,6 +12,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::asks;
+use super::steps::Live;
 use super::stream::{self, Expect, Stream};
 use crate::busy::{or_test, test_file};
 
@@ -57,7 +58,7 @@ pub(super) struct Ended {
 const NEWER: [&str; 5] = ["--restricted", "--json-schema", "--session-id", "--resume", "--fork-session"];
 
 /// Starts the command with `said` as its whole input, and waits for it to end, `limit` at most. Its stream is
-/// read against `expect`. `started` is told
+/// read against `expect`, and its steps kept where `live` says (`steps.rs`). `started` is told
 /// the child's pid as soon as there is one, and `began` is called once its stream has started as a run's does.
 /// `stop` says whether the person has asked for the run to stop: it is
 /// asked before the child is started, which then never is, and every 10 ms while the child goes. A child that has
@@ -66,7 +67,7 @@ pub(super) fn run(
     mut command: Command,
     said: String,
     limit: Duration,
-    expect: Expect,
+    (expect, live): (Expect, Live),
     started: impl FnOnce(u32),
     began: impl FnOnce(),
     stop: impl Fn() -> bool,
@@ -89,7 +90,8 @@ pub(super) fn run(
     let stdin = child.stdin.take();
     // A harness that exits without reading its input leaves this write failing, which is its affair.
     thread::spawn(move || stdin.map(|mut stdin| stdin.write_all(said.as_bytes())));
-    let ((stream, so_far), head) = (stream::reader(child.stdout.take(), expect), stderr_head(child.stderr.take()));
+    let (stream, so_far) = stream::reader(child.stdout.take(), expect, live);
+    let head = stderr_head(child.stderr.take());
     let (mut deadline, grace) = (Instant::now() + limit, or_test(GRACE, "JELLYMOON_TEST_GRACE_MS"));
     // A test's limit is counted from when its made-up agent has left its mark (`busy::test_file`).
     let from = test_file("JELLYMOON_TEST_RUN_LIMIT_FROM");

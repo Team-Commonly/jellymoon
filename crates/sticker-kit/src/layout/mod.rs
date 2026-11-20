@@ -30,6 +30,8 @@ pub enum PieceKind {
     Bubble,
     Badge,
     Label,
+    /// What a busy character says it is doing: one line on a small bubble over it. `id` is the character's.
+    Says,
     Note,
     Option,
     /// The mark in front of a row of a whole list: `id` is the note's, `index` the row.
@@ -197,7 +199,7 @@ impl PieceKind {
             PieceKind::Label => 10,
             PieceKind::Hero | PieceKind::Character => 11,
             PieceKind::Star => 12,
-            PieceKind::Bubble | PieceKind::Badge => 13,
+            PieceKind::Bubble | PieceKind::Badge | PieceKind::Says => 13,
             PieceKind::Note => 20,
             PieceKind::Option | PieceKind::Mark | PieceKind::Quote | PieceKind::Field | PieceKind::Offer => 21,
             PieceKind::Tape => 22,

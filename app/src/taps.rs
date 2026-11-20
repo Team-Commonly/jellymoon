@@ -63,6 +63,7 @@ impl Today {
         let data = jellymoon_core::with_made(&self.home, page.data.clone());
         let made = data.wishes.len().saturating_sub(page.data.wishes.len());
         let mut shown = scene::ruled(&Page { data, ..page.clone() }, &standing, made);
+        crate::live::drawn(&self.home, &self.date, made, &mut shown);
         // With no project on offer the field takes a new project's name, so the empty page says so, folder first.
         let listed = || jellymoon_core::projects(&self.home).is_ok_and(|known| !known.projects.is_empty());
         if page.data.read.projects.is_empty() && !listed() {

@@ -85,11 +85,12 @@ impl Brush<'_> {
                 fill: self.note_colors(piece.index).0,
                 shadow: self.shadow(9.0, 18.0, -3.0),
             }),
-            PieceKind::Label => out.push(Shape::Slab {
+            // What a busy character says is drawn as its label is, with the bubble's ring round it.
+            PieceKind::Label | PieceKind::Says => out.push(Shape::Slab {
                 rect,
                 radius: rect.h / 2.0,
                 fill: p.tag,
-                edge: None,
+                edge: (piece.piece == PieceKind::Says).then_some((p.bubble_ring, 1.5 * self.k)),
                 shadow: Some(self.shadow(3.0, 7.0, -1.0)),
                 grid: None,
             }),

@@ -49,6 +49,10 @@ pub struct Character {
     pub stars: u8,
     pub state: State,
     pub mood: Mood,
+    /// A few words of what a busy character is doing, drawn on a small bubble over it when there is room and it
+    /// has no star: text only, cut to fit. Nothing when empty, and never of a character that is not busy.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub says: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -217,3 +217,15 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
   `question` of any shape, written any number of times, is not kept, shown, asked or counted, and the `result` beside
   it is read as beside any `done`. `asks` is unchanged. The schema's `state` and `question` now say when a question
   is written ([run.md](../development/run.md), "A run that asks").
+
+## Found while building live work: what a run is doing (2026-11-19)
+
+- **The context said core keeps "no tool line and no prose".** That stays the rule for the end and for the record:
+  `run.json` and how a run's end is read are unchanged. Beside it, the reader now keeps a run's steps while it works,
+  so the page can say what the run is doing: of a tool use with one of the five tools only the tool, and for `Edit`,
+  `Read` and `Write` the cleaned name of a file inside the run's copy; every step counted and the last 4 kept, in
+  `runs/<id>/steps.json`. Still no prose, no tool input but that name and no tool result
+  ([run.md](../development/run.md), "What is read of the stream").
+- **A name on the pill.** A file's name is the run's word here too: the pill beside a working wish draws a name
+  after its fixed word only when the name holds no blank, as a result's note draws a blank-free name beside its
+  label; a name with a blank is left out of the pill and stands, quoted, in the note.

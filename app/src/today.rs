@@ -273,7 +273,8 @@ impl Today {
         let read = PageRead { turns: 0, projects: Vec::new(), no_logs: false };
         let made = wishes.len();
         let data = PageData { day: self.date.clone(), wishes, clashes: Vec::new(), read };
-        let shown = ruled(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() }, &[], made);
+        let mut shown = ruled(&Page { data, unknown: Vec::new(), left_out: LeftOut::default() }, &[], made);
+        crate::live::drawn(&self.home, &self.date, made, &mut shown);
         // Nothing was read, so the footer says nothing of a reading: only whose words the made wishes are.
         Scene { footer: own(made), ..shown }
     }

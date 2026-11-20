@@ -154,7 +154,8 @@ fn show_me_brings_the_rows_of_the_changes_and_the_names_as_they_were() {
     let lines = w.taps("logs", &["look", "choose:work-m1:0", "run", "placed", "look"]).ended();
     let [_, _, shown, placed, later] = &lines[..] else { panic!("five lines: {lines:#?}") };
     let shown = scene(shown);
-    assert_eq!(ids(&shown), ["told-m1", "work-m1", "file-1-m1"]);
+    // No file comes with the rows: a page has room for two of a wish's notes, and the next tap brings one.
+    assert_eq!(ids(&shown), ["told-m1", "work-m1"]);
     let changed = ToldRow {
         label: "Changed in".to_string(),
         name: "a.txt".to_string(),
@@ -174,6 +175,26 @@ fn show_me_brings_the_rows_of_the_changes_and_the_names_as_they_were() {
     // A look leaves what the person asked to see.
     let after = serde_json::from_str::<Option<Scene>>(later).unwrap().unwrap_or_else(|| shown.clone());
     assert_eq!((told(&after), work(&after)), (told(&shown), work(&shown)));
+}
+
+/// A page has room for two of a wish's notes. So the first tap brings the rows and the names and no file, and each
+/// tap after it a file, drawn over the work's choices; the result goes last, where it gets the room they leave.
+#[test]
+fn every_tap_on_show_me_brings_something_the_page_draws() {
+    let w = waiting(&pieces());
+    let steps = ["look", "choose:work-m1:0", "run", "choose:work-m1:0", "run", "placed", "choose:work-m1:0", "run"];
+    let lines = w.taps("logs", &steps).ended();
+    let [_, _, first, _, second, placed, _, third] = &lines[..] else { panic!("eight lines: {lines:#?}") };
+    assert_eq!(ids(&scene(first)), ["told-m1", "work-m1"]);
+    let second = scene(second);
+    assert_eq!(ids(&second), ["work-m1", "file-1-m1", "told-m1"]);
+    assert_eq!(work(&second).last().map(String::as_str), Some("a.txt, b.txt, n.txt"));
+    // The file is drawn, and so are the work's choices: the third tap is one on a placed option.
+    let placed: Vec<Piece> = serde_json::from_str::<Vec<Value>>(placed).unwrap().into_iter().map(Piece).collect();
+    let drawn = |id: &str| placed.iter().any(|piece| piece.id() == id);
+    assert!(drawn("file-1-m1") && drawn("work-m1"), "the file and the work are on the page");
+    // The next file that is text and was not removed: `b.txt` was.
+    assert_eq!(ids(&scene(third)), ["work-m1", "file-3-m1", "told-m1"]);
 }
 
 #[test]

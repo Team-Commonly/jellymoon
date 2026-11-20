@@ -1010,7 +1010,9 @@ max_file_lines = 400
 # and `Show me` brings them, the changes' rows first, also when it can show no file (`src/told.rs`,
 # `src/working.rs`, 26), with its test (`tests/result_in_plain_words.rs`, 197) and the older pins of the first
 # view and of a `Show me` with no file (`tests/f86.rs`, `tests/f47*`, `examples/snapshot.rs`, 17).
-"app" = 16224
+# `Show me` in turn raised it by 48: the first tap brings the rows with no file and each later tap a file the page
+# draws (`src/told.rs`, `src/working.rs`, 27), with its test (`tests/result_in_plain_words.rs`, 21).
+"app" = 16272
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

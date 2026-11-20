@@ -553,8 +553,12 @@ that fit and counts the rest in a last line, `+N more`.
   never every line: core looks at a result's first two changes and no further, a later one is neither drawn nor
   counted, and a change core dropped is said by the sentence that something could not be checked, as before. The
   work's note has core's count and not core's line of names: core is asked for its lines of the same work with
-  every name among the files it only counts. A tap on `Show me` brings the rows and the names with the first
-  file (`working::notes_of`, `WorkDone::Shown`). Each row is drawn as it was before this, and the rows of the
+  every name among the files it only counts. A tap on `Show me` brings the rows and the names
+  (`working::notes_of`, `WorkDone::Shown`), and no file with them: a page has room for two of a wish's notes,
+  and with the result and the work on it a file's note was never drawn, so a second tap changed nothing a person
+  saw. Each tap after the first brings a file, under the work's choices, and the result goes after them, where
+  the kit gives it the room they leave (`told::in_turn`); a result with no row of a change has nothing to show
+  first, so its first tap brings the file. Which tap it is, the scene says: a file's note, or a change's row. Each row is drawn as it was before this, and the rows of the
   changes come before what the run did, decided and is not sure about: the kit leaves out the rows that do not
   fit from the end, and the changed lines are what the tap asked for. A `Show me` that can show no file (the work only removed files, or none of them is text that can
   be shown) brings them too, beside core's sentence of why no file was shown: no other tap names the files. They

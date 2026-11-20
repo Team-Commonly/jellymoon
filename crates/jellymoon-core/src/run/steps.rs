@@ -7,7 +7,7 @@
 //! this shape and no other, with every name cleaned again.
 
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 use std::process;
 
@@ -16,7 +16,6 @@ use serde_json::Value;
 
 use super::obeyed::{named, plain};
 use super::record;
-use crate::busy::retried;
 use crate::{copy, tap, wish};
 
 /// The most steps whose tool and name are kept: the last ones.
@@ -143,18 +142,23 @@ impl Steps {
 
 /// A path as core names a file of the run's: relative to one of `places`, as [`own`] names it. None for a path
 /// outside every place, for one [`own`] does not name, and for one with a part under the place, the last
-/// included, that is a link on disk: it may lead out of the place. A part is asked with `symlink_metadata`, which
-/// follows nothing and opens no file; a part that is not there is no link, so a file about to be made keeps its name.
+/// included, that is a link on disk: it may lead out of the place. The name comes first: it bounds the path, so
+/// the disk is asked of a short one only. A part is asked with `symlink_metadata`, which follows nothing and opens
+/// no file; one that is not there is no link and has nothing behind it, so a file about to be made keeps its
+/// name. A part that cannot be asked is taken as a link.
 fn inside(path: &str, places: &[PathBuf]) -> Option<String> {
     let (place, within) = places.iter().find_map(|place| Some((place, Path::new(path).strip_prefix(place).ok()?)))?;
+    let name = own(within)?;
     let mut at = place.clone();
     for part in within.components() {
         at.push(part);
-        if fs::symlink_metadata(&at).is_ok_and(|meta| meta.file_type().is_symlink()) {
-            return None;
+        match fs::symlink_metadata(&at) {
+            Ok(meta) if !meta.file_type().is_symlink() => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => break,
+            _ => return None,
         }
     }
-    own(within)
+    Some(name)
 }
 
 /// A relative path as core names a file: its parts joined by `/`, printed so that a person reads it as it is
@@ -177,7 +181,7 @@ fn file(home: &Path, run: &str) -> PathBuf {
 
 /// Writes the steps so far over the kept ones, whole or not at all: a new file beside it, only its owner's, then
 /// renamed over it. Not flushed to the disk: it is written at every step, on the reader's thread, and a step lost
-/// to a crash is no harm. One that cannot be written is left as it was.
+/// to a crash is no harm. One that cannot be written is left as it was, with one try: the next step writes again.
 pub(super) fn keep(file: &Path, steps: &Steps) {
     let Ok(written) = serde_json::to_string(steps) else { return };
     let mut name = file.as_os_str().to_os_string();
@@ -188,7 +192,7 @@ pub(super) fn keep(file: &Path, steps: &Steps) {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
     let wrote = open.open(&new).and_then(|mut made| made.write_all(format!("{written}\n").as_bytes()));
-    if wrote.and_then(|()| retried(|| fs::rename(&new, file))).is_err() {
+    if wrote.and_then(|()| fs::rename(&new, file)).is_err() {
         let _ = fs::remove_file(&new);
     }
 }

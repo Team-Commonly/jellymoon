@@ -43,6 +43,9 @@ fn a_run_s_steps_are_what_core_says_while_it_works_and_are_kept_when_it_ends() {
     // Steps are a wish's only when its run's record is of that wish and that day.
     let record = w.jm("runs").join(&run).join("run.json");
     let written = fs::read_to_string(&record).unwrap();
+    let same: serde_json::Value = serde_json::from_str(&written).unwrap();
+    fs::write(&record, same.to_string()).unwrap();
+    assert_eq!(doing(&home, DAY).len(), 1, "the record written again, unchanged, is still the wish's");
     for (part, other) in [("wish", "m9"), ("day", "2026-03-11")] {
         let mut changed: serde_json::Value = serde_json::from_str(&written).unwrap();
         changed[part] = json!(other);

@@ -226,3 +226,6 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
   `Read` and `Write` the cleaned name of a file inside the run's copy; every step counted and the last 4 kept, in
   `runs/<id>/steps.json`. Still no prose, no tool input but that name and no tool result
   ([run.md](../development/run.md), "What is read of the stream").
+- **A name on the pill.** A file's name is the run's word here too: the pill beside a working wish draws a name
+  after its fixed word only when the name holds no blank, as a result's note draws a blank-free name beside its
+  label; a name with a blank is left out of the pill and stands, quoted, in the note.

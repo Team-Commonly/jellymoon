@@ -412,7 +412,9 @@ max_file_lines = 400
 # reader's handover (`stream.rs`, `child.rs`, `answer.rs`, `follow.rs`, the exports: 34 net). Nothing was deleted.
 # Its gate raised core by 63: no name through a link and the steps file written without a flush (`run/steps.rs`,
 # 35 net, `hook::put` no longer used there) and the test of a link in the place (`run/steps/tests.rs`, 28).
-"crates/jellymoon-core" = 18416
+# Its second gate raised core by 18: the name made before the disk is asked, a part that cannot be asked taken as
+# a link, one try at the rename (`run/steps.rs`, 4 net) and the test of a path too long to be a name (14).
+"crates/jellymoon-core" = 18434
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -647,7 +649,8 @@ max_file_lines = 400
 # with its lines in `f39.rs`, 3) and the made-up agent's `steps` script (`support/fake_agent/steps.rs`, 39, with the
 # wait it shares moved there: `fake_agent.rs` 3 shorter).
 # Its gate raised the binary by 11: `doing` against a record of another wish and another day (`tests/f39/steps.rs`).
-"crates/jellymoon" = 29986
+# Its second gate raised the binary by 3: that test first reads the record written again unchanged.
+"crates/jellymoon" = 29989
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.

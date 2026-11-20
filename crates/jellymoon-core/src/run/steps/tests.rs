@@ -68,3 +68,17 @@ fn a_file_named_through_a_link_in_the_place_has_no_name() {
     let file = through.join("src").join("real.txt").display().to_string();
     assert_eq!(inside(&file, &[through]).as_deref(), Some("src/real.txt"));
 }
+
+// The name bounds the path before the disk is asked: a path that fills a line of the stream (1 MiB) is no name at
+// once, and its parts are not walked one by one. Walked, it took many seconds: longer than a run's end waits.
+#[test]
+fn a_path_too_long_to_be_a_name_is_refused_before_the_disk_is_asked() {
+    let dir = tempfile::tempdir().unwrap();
+    let places = [dir.path().to_path_buf()];
+    let long = format!("{}{}", places[0].display(), "/a".repeat(500_000));
+    let started = std::time::Instant::now();
+    assert_eq!(inside(&long, &places), None);
+    assert!(started.elapsed() < std::time::Duration::from_secs(2), "walked: {:?}", started.elapsed());
+    let near = format!("{}/{}", places[0].display(), "b/".repeat(40) + "c.txt");
+    assert_eq!(inside(&near, &places).map(|name| name.len()), Some(85), "a name within the bound is kept");
+}

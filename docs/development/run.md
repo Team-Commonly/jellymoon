@@ -261,11 +261,13 @@ run's copy (the copy's folder as given or as the system names it), made relative
 then cleaned as a result's file name is ([show.md](show.md), `obeyed::named`). A path outside the copy, with `..`,
 or a name the cleaning changes is no name, and the step is still counted. So is a path with a part under the copy,
 the last included, that is a link on disk (asked with `symlink_metadata`, which follows nothing): a link the repo
-tracks can lead out of the copy. A part that is not there yet is no link, so a file about to be made keeps its
-name. `Glob` and `Grep` carry no name. Every step is counted; the last 4 are kept. A line's `type` is read first,
+tracks can lead out of the copy. The name is made first, which bounds the path, so the disk is asked of a short
+one only. A part that is not there yet is no link, so a file about to be made keeps its name; a part that cannot
+be asked is taken as a link. The link rule is tested on macOS and Linux only: a test cannot make a link on
+Windows. `Glob` and `Grep` carry no name. Every step is counted; the last 4 are kept. A line's `type` is read first,
 and only an `assistant` line is parsed for its blocks. The reader writes the steps, whole, to `runs/<id>/steps.json`
 (`{"count":N,"last":[{"tool":"read","file":"b.txt"},…]}`) at each line that brought a step: a new file renamed over
-the old, not flushed to the disk, so a step lost to a crash is all a crash costs. A page reads them with
+the old with one try, not flushed to the disk, so a step lost to a crash or to a file in use is all either costs. A page reads them with
 `jellymoon_core::doing`, for a made wish whose run's record is of that wish and that day; a file of another shape or
 over 4 KiB reads as no steps, and a name in it that is not plain is dropped while its step is kept. An answered run
 goes on counting from the file; a follow-up is a new run and counts from zero. Once the run has ended the file

@@ -214,13 +214,15 @@ fn the_page_says_a_wish_is_being_worked_on_and_its_work_still_shows_itself_when_
 }
 
 #[test]
-fn work_that_waited_when_the_window_opened_is_shown_once_and_only_the_newest_wishs() {
+fn of_work_that_waited_when_the_window_opened_the_newest_is_shown_and_the_older_has_its_turn() {
     let w = day();
     let (first, second) = (ended(&w, "edits", "completed"), ended(&w, "edits", "completed"));
     assert_eq!((first.as_str(), second.as_str()), ("m1", "m2"));
-    let acts = ["look", "look", "choose:work-m2:2", "run", "look", "look"];
+    let acts = ["look", "look", "choose:work-m2:2", "run", "look", "look", "look", "look", "look"];
     let lines = w.taps("logs", &acts).ended();
-    let [opened, again, at_once, tossed, later, last] = &lines[..] else { panic!("six lines: {lines:#?}") };
+    let [opened, again, at_once, tossed, later, last, held, turn, after] = &lines[..] else {
+        panic!("nine lines: {lines:#?}")
+    };
     let opened = scene(opened).expect("the first look shows the work that waits");
     assert_eq!(ids(&opened), ["work-m2"], "the newest wish's work, and that alone");
     assert_eq!(options(&opened, "work-m2"), CHOICES);
@@ -228,10 +230,17 @@ fn work_that_waited_when_the_window_opened_is_shown_once_and_only_the_newest_wis
     assert_eq!(ids(&scene(at_once).expect("a tap on Toss it")), ["busy-m2"]);
     let tossed = scene(tossed).expect("core's answer");
     assert_eq!((ids(&tossed), title(&tossed, "said-m2")), (vec!["said-m2"], TOSSED));
-    // The older wish's work waited at the window's opening too: it is not opened by itself, then or later.
-    assert!(no_work(later, "m1") && no_work(last, "m1"), "{later} {last}");
-    let last = [later, last].into_iter().filter_map(|line| scene(line)).next_back().unwrap_or(tossed);
+    // The older wish's work waited at the window's opening too: it is not put under a second tap.
+    assert!(no_work(later, "m1") && no_work(last, "m1") && no_work(held, "m1"), "{later} {last} {held}");
+    let last = [later, last, held].into_iter().filter_map(|line| scene(line)).next_back().unwrap_or(tossed);
     assert_eq!(ids(&last), ["said-m2"], "what was said of the toss stays");
+    // Past the looks held back it has its turn: nothing else on the page says a change still waits.
+    let turn = scene(turn).expect("the older wish's work has its turn");
+    assert_eq!(
+        (ids(&turn), options(&turn, "work-m1")),
+        (vec!["work-m1", "said-m2"], CHOICES.map(String::from).to_vec())
+    );
+    assert_eq!(after, "null", "and it is in the person's hand");
     // A tap on its character opens it, as before.
     assert_eq!(ids(&scene(&w.taps("logs", &["poke:m1"]).ended()[0]).expect("a tap opens the wish")), ["work-m1"]);
 }

@@ -484,8 +484,10 @@ that fit and counts the rest in a last line, `+N more`.
     A page with nothing new is looked at as before: the notes and characters on show are gone through, and no
     call is added.
   - *Work that waited when the window opened.* The first look that is free to shows the newest done wish's
-    work that waits, asking the done wishes from the newest until one waits. Once a window, and one work: an
-    older wish's stays behind its character.
+    work that waits, asking the done wishes from the newest. Once a window. It asks on past the work it shows,
+    and every older wish whose work waits has its turn after it, as a run that ended under this window has: so
+    a keep or a toss is followed by the next change that waits, past the looks held back, and nobody is left
+    to believe a change is in the folder that is not.
   - *Never over a note in the person's hand.* While the scene on show, placed or not, holds a choice with an
     option (a clash's, the one that turns delivery on, a stop's), a text note with an option or a field (work
     that waits, the same asked once more, a question, a follow-up), or a note core's answer comes in the place

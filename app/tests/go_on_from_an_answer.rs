@@ -115,6 +115,26 @@ fn a_done_wish_that_changed_nothing_has_the_field_and_enter_there_follows_its_ru
     assert!(printed[3..].iter().any(|look| work(&look)), "no look showed the follow-up's work: {:#?}", &printed[3..]);
 }
 
+// The gate of the walk's fix, note 1: a look that lands with a change between Enter and core's answer shows a
+// scene of its own, so the answer's scene is not the one shown. The done note goes all the same.
+#[test]
+fn the_done_note_goes_also_when_a_look_changed_the_page_before_core_answered() {
+    let w = ready();
+    let asked = ran(&w, "nothing", 0);
+    let (wish_note, go) = (format!("wish-{asked}"), w.at("tmp").join("go"));
+    let acts = [format!("poke:{asked}"), format!("enter:{wish_note}:{NEXT}"), format!("hold:{}", go.display())];
+    let acts: Vec<&str> = acts.iter().map(String::as_str).chain(["look", "answer"]).collect();
+    let mut window = w.taps("logs", &acts);
+    window.printed(2);
+    w.jellymoon(&["wish", "--date", DAY, "--say", "and another thing", "--project", "alpha"]);
+    fs::write(&go, "").unwrap();
+    let printed: Vec<Value> = window.ended().iter().map(|line| serde_json::from_str(line).expect(line)).collect();
+    let looked = scene(&printed[2]);
+    assert!(looked.characters.len() == 2 && note(&looked, &wish_note).is_some(), "the look drew the new wish");
+    assert_eq!(printed[3]["kept"], json!(true), "{}", printed[3]);
+    assert_eq!(note(&scene(&printed[3]["scene"]), &wish_note), None, "{}", printed[3]);
+}
+
 #[test]
 fn a_wish_at_work_a_wish_with_work_and_a_wish_of_the_reading_are_as_before() {
     let w = ready();

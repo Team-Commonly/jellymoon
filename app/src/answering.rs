@@ -100,6 +100,7 @@ impl Today {
     /// for its run, as a typed wish's. Once core kept it, that note goes when it is the wish's own with nothing
     /// to choose: its field would keep the page in the person's hand (`working::in_hand`), and no look would
     /// then put the follow-up's own work on the page when its run ends. A tap on the wish opens the note again.
+    /// It goes where the answer is shown (`OnShow::answered`), whatever a look put on the page meanwhile.
     fn following(&self, page: Option<&Page>, from: Scene, typed: &str, (note, wish): (&str, &str)) -> Answer {
         let made = jellymoon_core::wish_after(&self.home, Some(&self.date), typed, wish);
         let (said, asking) = match made {
@@ -107,9 +108,8 @@ impl Today {
             Err(why) => (Some((UNKEPT, wishing::of(typed, &format!("{why}.")))), None),
         };
         let mut now = self.again(page, &from);
-        now.notes.retain(|one| said.is_some() || !working::settled(one, note));
         wishing::newest(&mut now, said.clone());
-        Answer::of(Seen { from, now }, said, asking)
+        Answer::of(Seen { from, now }, said, asking).under(note)
     }
 
     /// Whether the run of the made wish `wish` waits on `question` now: core keeps a question with a wish only

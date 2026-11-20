@@ -74,19 +74,26 @@ pub struct Answer {
     /// answer was given, and when it was not given and the run is known to wait on that question no more; else
     /// the note it was typed under, with its field.
     opened: Option<(String, Note)>,
+    /// After a follow-up core kept (`answering.rs`): the note it was typed under, which goes when it is settled.
+    under: Option<String>,
 }
 
 impl Answer {
     /// Core's answer to words for a wish: they were kept when a run is asked for.
     pub(crate) fn of(seen: Seen, said: Option<Said>, asking: Option<Asking>) -> Self {
         let kept = asking.is_some();
-        Answer { seen, said, asking, kept, opened: None }
+        Answer { seen, said, asking, kept, opened: None, under: None }
+    }
+
+    /// This answer, to a follow-up typed under the note `note`.
+    pub(crate) fn under(self, note: &str) -> Self {
+        Answer { under: self.kept.then(|| note.to_string()), ..self }
     }
 
     /// Core's answer to an answer. `kept` is whether the answer was given to the run: the field it was typed
     /// in is emptied then, whatever core has to say of what came after.
     pub(crate) fn taken(seen: Seen, said: Option<Said>, opened: Option<(String, Note)>, kept: bool) -> Self {
-        Answer { seen, said, asking: None, kept, opened }
+        Answer { seen, said, asking: None, kept, opened, under: None }
     }
 
     /// Whether core took what was typed.
@@ -170,6 +177,9 @@ impl OnShow {
                 let under = under(&self.scene);
                 self.scene.notes.insert(under, note);
             }
+        }
+        if let Some(note) = answer.under {
+            self.scene.notes.retain(|one| !working::settled(one, &note));
         }
         (self.scene.clone(), answer.asking)
     }

@@ -229,3 +229,6 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
 - **A name on the pill.** A file's name is the run's word here too: the pill beside a working wish draws a name
   after its fixed word only when the name holds no blank, as a result's note draws a blank-free name beside its
   label; a name with a blank is left out of the pill and stands, quoted, in the note.
+- **2026-11-19, later: no name on the page.** The pill and the note now say the stage ("looking around", "making
+  the change") and the count, in fixed words, and draw no file's name at all, so the rule above has nothing left to
+  rule: a person who asked for something does not read each file. Core still keeps the names.

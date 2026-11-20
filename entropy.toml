@@ -1004,7 +1004,9 @@ max_file_lines = 400
 # run and takes the work from looks alone (`tests/go_on_from_an_answer.rs`, 13; `tests/f54/more.rs`, 2).
 # Its gate's first note raised it by 30: the note goes where the answer is shown, also after a look changed the
 # page meanwhile (`src/wishing.rs`, `src/answering.rs`, 11), with its test (`tests/go_on_from_an_answer.rs`, 19).
-"app" = 15932
+# The walk's `say` step raised it by 52: Enter in a note's field, its words counted and never printed, also in a
+# failure's line (`examples/walk.rs`, 32), with its test (`tests/walk.rs`, 20).
+"app" = 15984
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

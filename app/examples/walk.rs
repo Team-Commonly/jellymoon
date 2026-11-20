@@ -18,6 +18,7 @@
 //!   `needs_you`, `let_go`) or a note of that title or id is on the page; past the bound it fails.
 //! - `poke:<wish id>`: a tap on that wish's character.
 //! - `tap:<note title or id>:<option>`: a tap on that option, only where the page places it.
+//! - `say:<note title or id>:<words>`: Enter in that note's field with those words, only where the page places it.
 //! - `picture:<name>`: `<name>.png` in the folder, the page as it is now, in the sticker theme.
 //!
 //! A step that fails says why on one line on stderr, and the walk ends with 1.
@@ -202,6 +203,23 @@ impl Walk {
         Ok(())
     }
 
+    /// Enter in the field of a note the page places, with `words` in it; what it leaves is run, and shown.
+    fn say(&mut self, note: &str, words: &str) -> Result<(), String> {
+        let scene = self.scene();
+        let named = |one: &&Note| title(one) == note || id_of(one) == Some(note);
+        let id = scene.notes.iter().find(named).and_then(id_of).ok_or_else(|| format!("no note {note:?}"))?;
+        let placed = lines::lines(&scene, self.entry.as_ref(), &Theme::sticker(), self.size);
+        let is = |piece: Value| piece["kind"] == "field" && piece["id"] == id;
+        if !placed.lines().filter_map(|line| serde_json::from_str(line).ok()).any(is) {
+            return Err(format!("no field of {note:?} is placed on the page"));
+        }
+        let (_, typing) = self.shown.typing(id, words).ok_or_else(|| format!("{note:?} has no field"))?;
+        if let Some(asking) = self.shown.answered(Some(typing())).asking {
+            self.shown.asked(asking());
+        }
+        Ok(())
+    }
+
     fn picture(&self, name: &str) -> Result<(), String> {
         let out = self.folder.join(format!("{}.png", file_part(name)));
         let typing = self.entry.clone().map(|entry| Typing { entry, typed: Some((self.typed.clone(), self.chosen)) });
@@ -236,6 +254,10 @@ impl Walk {
                 let (note, option) = split(rest).ok_or("tap:<note>:<option>")?;
                 self.tap(&note, &option)?;
             }
+            "say" => {
+                let (note, words) = split(rest).ok_or("say:<note>:<words>")?;
+                self.say(&note, &words)?;
+            }
             "picture" => self.picture(rest)?,
             _ => return Err(format!("no step {name:?}")),
         }
@@ -244,16 +266,25 @@ impl Walk {
 
     /// The line after a step: titles and states only.
     fn said(&self, step: &str, took: Duration) -> String {
-        let step = match step.split_once(':') {
-            Some(("type", words)) => format!("type ({} characters)", words.chars().count()),
-            Some(("folder", _)) => "folder".to_string(),
-            _ => one_line(step),
-        };
+        let step = printed(step);
         let scene = self.scene();
         let notes: Vec<String> = scene.notes.iter().map(|note| format!("{:?}", title(note))).collect();
         let wishes: Vec<String> =
             scene.characters.iter().map(|wish| format!("{} {}", one_line(&wish.id), state(wish.state))).collect();
         format!("{step} | {} ms | notes: {} | wishes: {}", took.as_millis(), notes.join(", "), wishes.join(", "))
+    }
+}
+
+/// A step as it is printed: what was typed is counted, never shown, and a folder is not named.
+fn printed(step: &str) -> String {
+    match step.split_once(':') {
+        Some(("type", words)) => format!("type ({} characters)", words.chars().count()),
+        Some(("say", rest)) => {
+            let (note, words) = rest.rsplit_once(':').unwrap_or((rest, ""));
+            format!("say:{} ({} characters)", one_line(note), words.chars().count())
+        }
+        Some(("folder", _)) => "folder".to_string(),
+        _ => one_line(step),
     }
 }
 
@@ -281,7 +312,7 @@ fn main() -> ExitCode {
     for step in steps {
         let started = Instant::now();
         if let Err(why) = walk.step(step) {
-            eprintln!("walk: {step:?}: {}", one_line(&why));
+            eprintln!("walk: {:?}: {}", printed(step), one_line(&why));
             return ExitCode::FAILURE;
         }
         println!("{}", walk.said(step, started.elapsed()));

@@ -398,7 +398,8 @@ The steps are `type:<words>`, `chip:<name>`, `enter`, `start` (the tap on `Start
 `Choose a folder` gives it, with no picker), `look`, `until:<state or note>:<seconds>` (a look once a second, and a
 plain line and exit 1 past the bound), `poke:<wish id>` (of a wish of the reading, it chooses the chip of its
 project too, as the window's tap does), `tap:<note title or id>:<option>` (only where the page
-places it) and `picture:<name>`. After each it prints one line: the step, its milliseconds, the titles of the notes
+places it), `say:<note title or id>:<words>` (Enter in that note's field, only where the page places it; the run
+it leaves is asked for) and `picture:<name>`. After each it prints one line: the step, its milliseconds, the titles of the notes
 and each wish's state; a typed step is counted, never shown. `app/tests/walk.rs` walks a whole loop with the made-up
 agent, with no tap on the wish: the look shows its work. A second walk there taps the wish as well (`until:done:30
 poke:m1`). A leading `--logs <dir>` is the app's own option: the day is read from that folder's logs, so a walk with

@@ -138,6 +138,27 @@ fn a_whole_loop_with_a_tap_on_the_wish_says_titles_and_states_only() {
     whole_loop(&["until:done:30", "poke:m1"]);
 }
 
+/// Enter in the field under a kept wish's note: a follow-up is made and its run asked for, and the words are counted.
+#[test]
+fn a_say_step_enters_a_follow_up_under_a_note_and_its_words_are_never_printed() {
+    let w = quiet();
+    w.install();
+    told(&w);
+    let typed = format!("type:{SAID}");
+    let steps = ["type:garden", "enter", typed.as_str(), "enter", "until:Your folder is not changed yet.:30"];
+    let steps = [&steps[..], &["tap:work-m1:Keep it", "poke:m1", "say:wish-m1:and once more"][..]].concat();
+    let (code, lines, said) = walk(&w, &steps, 120);
+    let runs = w.at("jm").join("runs");
+    let free = || fs::read_dir(&runs).into_iter().flatten().flatten().all(|run| !run.path().join("run.lock").exists());
+    wait_until("the end of the follow-up's run", free);
+    assert_eq!(code, Some(0), "{said}");
+    let last = &lines[steps.len()];
+    assert!(last.starts_with("say:wish-m1 (13 characters) | ") && last.contains("m2 working"), "{last}");
+    assert!(!lines.join("\n").contains("once more"), "{lines:#?}");
+    let (code, _, said) = walk(&w, &["say:wish-m9:and once more"], 20);
+    assert_eq!((code, said.as_str()), (Some(1), "walk: \"say:wish-m9 (13 characters)\": no note \"wish-m9\"\n"));
+}
+
 /// A picture taken while the made-up run waits between its two steps: the page has the note of what it is doing
 /// (live work), and the walk names no file.
 #[test]

@@ -119,7 +119,7 @@ Every check comes first, in this order. Each is a refusal below.
    (`app/tests/f47/named.rs` gives it a name too few, one too many and another in one's place).
 6. If the branch is not at `start`: `start` is in its history, git is 2.38 or later, git merges the two in the
    store, the files the merged tree changes are judged again (the person's own rename can carry the work into a
-   file their tools obey), and git names an author.
+   file their tools obey).
 7. The index is not locked, every name of a file that would be written is one the disk takes, git's own trial
    of the move passes, no file that would be written has a filter set ("A file with a filter"), and nothing is
    on the disk where a file the work makes would go: at its path, or a file or a link where a folder of its path
@@ -437,7 +437,7 @@ Every answer is read to a size and git's words are never kept: a failure is one 
 | whether it fits | on a copy of the checkout's index (`runs/<run>/keep.trial`, removed before the answer): `update-index -q --refresh`, then `read-tree -n -m -u <branch's commit> <target>`, and when that passed `-c core.splitIndex=false read-tree -m <branch's commit> <target>`, which makes the copy the index the step would leave | Jellymoon's own file: `-n` is a trial, and without `-u` no file of the checkout is written |
 | whether a filter is set | `ls-files -z -- ':(glob)**/.gitattributes'` of the checkout's index, `read-tree <target>` into an index file of Jellymoon's own (`runs/<run>/keep.index`), then `check-attr -z --stdin filter` four times ("A file with a filter"), the names on git's input. The file, the folder beside it and a lock a cut keep left are removed at once | Jellymoon's own files |
 | whether what is in the way is ignored, in a keep begun again | `check-ignore -z --stdin`, the names on git's input | nothing |
-| the one new commit | `commit-tree -p <branch's commit> -m "Jellymoon run <id>" <tree>`, with the person's name and address as author and committer | one object in the store |
+| the one new commit | `commit-tree -p <branch's commit> -m "Jellymoon run <id>" <tree>`, with the person's name and address as author and committer, or Jellymoon's own where git names nobody | one object in the store |
 | the landing | `merge --ff-only ...`, above | the checkout's files, its index, the branch, `ORIG_HEAD` and the reflog |
 | where the commit is after the step | `for-each-ref` of the branch; if it is not there, `symbolic-ref --quiet HEAD`, `rev-parse --verify --quiet HEAD^{commit}`, `for-each-ref` of the name `HEAD` gave and, with `HEAD` elsewhere than at the commit, `merge-base --is-ancestor`, the first two through the git folder of the checkout the keep was asked in. After a step git stopped, `symbolic-ref --quiet HEAD` alone | nothing |
 | the run's branch | `update-ref --no-deref -d <name> <end>` | that one ref |
@@ -456,9 +456,12 @@ No file name is an argument to git: names go on git's input, ended by a zero byt
 
 With commits of the person's own, the one new commit is made with the name and address git gives for the checkout
 at that moment (`user.name`, `user.email`), as author and committer. They are read through the checkout's own git
-folder, so a linked worktree's own name is the one used there. Jellymoon never makes one up: with either missing,
-empty, or made only of spaces and the marks git takes off a name's ends (`,:;<>"\'`), the keep is refused. Its message is `Jellymoon run <id>`, and its one parent is the person's last
-commit: there is no merge commit, and the run's own commit is in nobody's history.
+folder, so a linked worktree's own name is the one used there. With either missing, empty, or made only of
+spaces and the marks git takes off a name's ends (`,:;<>"\'`), the commit is by Jellymoon's own name and
+address, both of them (`Jellymoon <jellymoon@localhost>`), as a run's commit is where the repo names nobody: a
+person who never told git who they are keeps the second of two changes made together as they kept the first
+(ADR 0017, "Found on a walk with three wishes"). Its message is `Jellymoon run <id>`, and its one parent is the
+person's last commit: there is no merge commit, and the run's own commit is in nobody's history.
 
 When the branch is still where the run started, what lands is the run's own commit, and no commit is made. Its
 author is who the run's copy found the person to be when the run ended, or Jellymoon's fallback name when the
@@ -530,7 +533,6 @@ instead. `<unchanged>` stands for `the work of run <id> was not kept, and nothin
 | git is too old | `the branch has commits since run <id> started, and this git is too old to merge them with the work in the store (it is from before 2.38): <unchanged>` | printed |
 | both changed the same | `the branch's commits since run <id> started and the run's work changed the same lines, or the same file in a way git does not merge: <unchanged>` | printed |
 | git ended the merge in the store with an error | `git could not merge the work of run <id> with the branch's commits since in the repo's store: the store takes no new object (the merge writes one tree there, asked or not), or git did not answer: <unchanged>` | printed |
-| git names no author | `git has no name and address for this repo's commits (user.name and user.email), and Jellymoon makes none up: <unchanged>` | printed |
 | another repo's entry | ``the work of run <id> adds, changes or removes another repo's entry or `.gitmodules`, and Jellymoon never keeps such work: nothing was changed`` | printed |
 | files tools obey | ``the work of run <id> touches files the person's tools obey, which `run keep --ask` names: it is kept only with --with-settings, and nothing was changed`` | printed |
 | a filter | `a file of the work would be passed through a filter this repo sets for it, and Jellymoon starts no filter: <unchanged>` | printed |
@@ -611,7 +613,7 @@ made only of spaces or of `<>`, and takes an address of either.
 - **A name the disk does not take** is found by its length and by what the disk says of the name. A name that is
   one only to some program (a name Windows keeps for a device, on a git that writes it) is left to git's step.
 - **Who the person is** is read from git's config alone (`user.name`, `user.email`). A name given only in
-  `GIT_AUTHOR_NAME` or under `author.name` is not read, and the keep is refused as having no name.
+  `GIT_AUTHOR_NAME` or under `author.name` is not read, and the one new commit is then Jellymoon's own.
 - **A sparse checkout** was run in one scene (a file of the person's at a path it leaves out, "The steps"). **A
   partial clone and a repo whose objects are borrowed** were not run.
 - **A `.gitattributes` git cannot remove** is found after the step and said, not prevented ("A file with a

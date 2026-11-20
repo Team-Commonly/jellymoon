@@ -186,27 +186,6 @@ fn a_git_too_old_to_merge_in_the_store_is_refused_only_when_a_merge_is_needed() 
 }
 
 #[test]
-fn a_commit_is_never_made_under_a_made_up_name() {
-    let nobody = "git has no name and address for this repo's commits (user.name and user.email), and Jellymoon \
-                  makes none up";
-    for missing in ["user.name", "user.email"] {
-        let made = finished();
-        made.moved_on();
-        made.git(&["config", "--unset", missing]);
-        unfit(&made, nobody);
-        // A name that is set to nothing is no name, and neither is one git would cut down to nothing: spaces,
-        // and the marks git takes off both ends of a name.
-        for nothing in ["", " ", " \t ", "<>", "< >", ",;:\"'"] {
-            made.git(&["config", missing, nothing]);
-            unfit(&made, nobody);
-        }
-    }
-    // No commit is made to move a branch forward, so nobody is asked who they are.
-    let made = finished();
-    kept(&made, &made.keep(&[]), &made.end(), "main", FORWARD);
-}
-
-#[test]
 fn a_locked_index_and_another_keep_at_work_are_refused() {
     let made = finished();
     fs::write(made.repo.join(".git").join("index.lock"), "").unwrap();

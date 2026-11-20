@@ -34,8 +34,6 @@ pub(crate) enum Unkept {
     Clash,
     /// git ended the merge in the store with an error: the store takes no new object, or git did not answer.
     Unmerged,
-    /// A commit must be made, and the repo names no author.
-    Nobody,
     /// The work adds, changes or removes another repo's entry or `.gitmodules`.
     Repos,
     /// The work touches a file the person's tools obey, and that was not asked for.

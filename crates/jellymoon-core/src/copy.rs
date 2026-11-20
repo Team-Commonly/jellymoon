@@ -45,7 +45,7 @@ use crate::{Error, busy};
 /// How many failed copies are kept for a look.
 pub const KEPT: usize = 5;
 
-/// Who a run's commit is by when the person's git config names nobody.
+/// Who a run's commit, and a keep's one new commit, is by when the person's git config names nobody.
 const JELLYMOON: (&str, &str) = ("Jellymoon", "jellymoon@localhost");
 
 /// What `copy make` and `copy clean` print: the run, its folder, its branch, and whether the folder is still there.

@@ -327,10 +327,6 @@ fn words(run: &str, unkept: Unkept) -> String {
             "the branch's commits since run {run} started and the run's work changed the same lines, or the same \
              file in a way git does not merge: {unchanged}"
         ),
-        Unkept::Nobody => format!(
-            "git has no name and address for this repo's commits (user.name and user.email), and Jellymoon makes \
-             none up: {unchanged}"
-        ),
         Unkept::Repos => format!(
             "the work of run {run} adds, changes or removes another repo's entry or `.gitmodules`, and Jellymoon \
              never keeps such work: nothing was changed"

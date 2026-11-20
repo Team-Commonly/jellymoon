@@ -447,8 +447,9 @@ that fit and counts the rest in a last line, `+N more`.
   that waits: one note, `work-<wish>`, "Your folder is not changed yet.", which says first, in one line, that the change is
   in a copy and what `Keep it` and `Toss it` do (only `Toss it` where a page has no keep), so a result's note over
   it keeps its room (F86); then the wish's own words, the files as a person counts them ("1 file
-  changed", "2 new files, 1 changed"), their names, and the choices `Show me`, `Keep it`, `Toss it`. No run's id is
-  on it. Work that could not be read: "This change could not be read.", what the person can do next, the wish's
+  changed", "2 new files, 1 changed"), and the choices `Show me`, `Keep it`, `Toss it`. No run's id is
+  on it, and no file's name before `Show me`: core's line of names is on the note once a file was shown, and not
+  when a look, a tap on the little one or `layout` puts the note on the page ("The result in plain words", below). Work that could not be read: "This change could not be read.", what the person can do next, the wish's
   words and core's reason, and no choice. Any other made wish: one note, `wish-<wish>`, with how
   it stands and its own words, and no choice. Of a made wish whose run did not finish (its record says it
   failed), "This wish needs you." and its words are followed by two fixed sentences of core's (`stands`): "It
@@ -525,7 +526,7 @@ that fit and counts the rest in a last line, `+N more`.
 - **What the run says it did** (F86, ADR 0023, `app/src/told.rs`): when core prints a `result` with a piece
   that passed, the work's note has one more note before it, `told-<wish>`, the kit's `Note::Told`. Its title is
   "What it says it did", which is also the label of what the run did: that text is the first thing under it.
-  Then, in this order, each change as one block drawn whole or not at all, `Changed in <name>` (the name on the
+  Then, in this order, once `Show me` was tapped ("The result in plain words", below), each change as one block drawn whole or not at all, `Changed in <name>` (the name on the
   label's line only when the two are one line and the name holds no blank; else the name is the block's first
   quote) over its lines as they were and as they are, set close, with the small words "before" and "after" beside the first of each side
   (of a made file `New file <name>`), then `Decided` and `Not sure about`, each over the run's texts,
@@ -538,8 +539,30 @@ that fit and counts the rest in a last line, `+N more`.
   row after it is counted. While it is on the page the count of the notes left out is one plain line, not a
   sheet. With several works waiting, a result's note takes room the later notes give way to, as `layout` prints
   it; never room from its own work's note, which shows what it shows with no result, or the result is left out. At 1440x900 a typical result (a did of two lines, one change of a line a side, a decision) reads its
-  did and its whole change; a did too long for the room draws no row: the title, the count and the sentences. It is shown when the wish is opened, with `Show me`'s file, and by `layout`, and goes with the
+  did and, after `Show me`, its whole change; a did too long for the room draws no row: the title, the count and the sentences. It is shown when the wish is opened, with `Show me`'s file, and by `layout`, and goes with the
   work's note when the work is kept, tossed or asked about once more. No file of the work is opened or run.
+- **The result in plain words** (`app/src/told.rs`, `app/src/working.rs`). A person who asked for something
+  follows it without reading a file's name or a changed line, so neither is on the notes as they first come onto
+  the page: by a look that found the run ended, by a tap on the little one, and at `layout`. The result's note
+  then holds what the run did, `Decided` and `Not sure about`, and in the place of every change's row one
+  sentence of the app's, before the others: "Some of its changed lines were checked against the copy, and they match." It starts the paragraph that
+  nothing was run and adds none of its own, so what the run did is still read at 960x640 (as a paragraph of its
+  own it took that row's room there). It is
+  said when at least one change passed core's check, which proves that each line it quotes is a whole line the
+  work took from its file or put in it (`crates/jellymoon-core/src/run/told.rs`, `change`). It says "some" and
+  never every line: core looks at a result's first two changes and no further, a later one is neither drawn nor
+  counted, and a change core dropped is said by the sentence that something could not be checked, as before. The
+  work's note has core's count and not core's line of names: core is asked for its lines of the same work with
+  every name among the files it only counts. A tap on `Show me` brings the rows and the names with the first
+  file (`working::notes_of`, `WorkDone::Shown`). Each row is drawn as it was before this, and the rows of the
+  changes come before what the run did, decided and is not sure about: the kit leaves out the rows that do not
+  fit from the end, and the changed lines are what the tap asked for. A `Show me` that can show no file (the work only removed files, or none of them is text that can
+  be shown) brings them too, beside core's sentence of why no file was shown: no other tap names the files. They
+  stay while the file is on
+  show, and a tap on the little one shows the first view again, as it always closed the file. Nothing is kept
+  to know this: the notes on the scene are the ones the tap's answer made. How a text of the run is checked,
+  cleaned and quoted is unchanged. `app/tests/result_in_plain_words.rs`; the rows after `Show me` at
+  1440x900, `app/tests/f86.rs`; the names after a `Show me` that showed no file, `app/tests/f47/named.rs`.
 - **Told alone: a run that changed nothing** (`jellymoon_core::ended_alone`, [show.md](show.md)). A made wish
   whose run finished and changed nothing has no work's note, so what its run says it did is `told-<wish>` over
   the wish's own note ("This wish is done." and its words), above it and not in its place: the person reads
@@ -975,6 +998,7 @@ written, named after that theme, and the file's warnings are said on stderr, eac
 prints it, over the page's notes, and `--told <shown file>` gives the first work the `result` of what
 `jellymoon run show` printed, so a page with work that waits and what its run says can be looked at from core's
 examples (`crates/jellymoon-core/tests/fixtures/waiting.json`; `shown-told.json`, a result with a dropped piece; and
-`shown-told-typical.json`, a typical one: a did, one change, a decision, nothing dropped).
+`shown-told-typical.json`, a typical one: a did, one change, a decision, nothing dropped). The notes are drawn as
+they first come onto the page: no row of a change, and no file's name.
 
 Linux needs the packages the CI job installs. The dependencies and GPUI's pin are in `docs/adr/0013-the-shell-dependencies.md`.

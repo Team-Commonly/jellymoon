@@ -7,7 +7,8 @@
 //! entry holds them, with the caret after them, and the chip of place `option` (from 0) is the chosen one.
 //!
 //! `--work <waiting file>` puts the notes of the work that waits, as `jellymoon run waiting` prints it, over the
-//! page's notes, and `--told <shown file>` gives the first work the `result` that `jellymoon run show` printed.
+//! page's notes, and `--told <shown file>` gives the first work the `result` that `jellymoon run show` printed:
+//! the notes as they first come onto the page, before `Show me`.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -34,7 +35,7 @@ fn work(waiting: &str, told: Option<&str>) -> Result<Vec<Note>, String> {
         let shown: serde_json::Value = serde_json::from_str(&read(file)?).map_err(|e| format!("{file}: {e}"))?;
         first.result = Some(Told::deserialize(&shown["result"]).map_err(|e| format!("{file}: {e}"))?);
     }
-    Ok(waiting.waits.iter().flat_map(working::waiting_notes).collect())
+    Ok(waiting.waits.iter().flat_map(|waits| working::waiting_notes(waits, false)).collect())
 }
 
 fn main() -> ExitCode {

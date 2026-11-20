@@ -22,10 +22,11 @@ const UNSURE: &str = "Not sure about";
 /// Said on every such note: a run cannot run a command, so nothing it says was tried.
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
 /// Said in the place of every change's row before `Show me`, when a change passed core's check: each line it
-/// quotes is a whole line the work took from its file or put in it. Not said of a change core left out or dropped.
+/// quotes is a whole line the work took from its file or put in it. "Some": core looks at a result's first two
+/// changes and no further, and one it dropped is said by [`UNCHECKED`]; so it is never said of every line.
 /// It starts the paragraph of [`NOTHING_RUN`] and so adds none of its own: at 960x640 what the run did is still
 /// read (`tests/f86.rs`).
-const CHECKED: &str = "The changed lines it reported match the copy.";
+const CHECKED: &str = "Some of its changed lines were checked against the copy, and they match.";
 /// Said last when core dropped a piece that failed its check.
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 /// Said first of a run that finished and changed nothing.

@@ -19,7 +19,7 @@ use support::worked::{finished, tree};
 
 const TITLE: &str = "What it says it did";
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
-const CHECKED: &str = "The changed lines it reported match the copy.";
+const CHECKED: &str = "Some of its changed lines were checked against the copy, and they match.";
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
 const SIZES: [&str; 2] = ["1440x900", "960x640"];

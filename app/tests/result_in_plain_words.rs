@@ -17,7 +17,7 @@ use support::Piece;
 use support::day::DAY;
 use support::wished::{SAID, World, quiet};
 
-const CHECKED: &str = "The changed lines it reported match the copy.";
+const CHECKED: &str = "Some of its changed lines were checked against the copy, and they match.";
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 const READY: &str = "It is in a copy: Keep it puts it in; Toss it throws it away.";
@@ -187,4 +187,11 @@ fn the_checked_sentence_is_said_only_when_a_change_passed_core_s_check() {
     // One change passed and one dropped: both sentences, and still no row of a change.
     result(&w, &json!([did(), change(), unchecked()]));
     assert_eq!(told(&looked(&w)), (vec![row("", DID)], own(&[&checked(), UNCHECKED])));
+    // Three changes, the third of lines no file holds: core looks at the first two and no further, so the third
+    // is not dropped and not counted. The sentence says "some", which is true of that too.
+    let made = json!({"type": "change", "file": "n.txt", "after": ["new from the run"]});
+    let third = json!({"type": "change", "file": "a.txt", "after": ["a line no file holds"]});
+    result(&w, &json!([did(), change(), made, third]));
+    assert_eq!(told(&looked(&w)), (vec![row("", DID)], own(&[&checked()])));
+    assert!(CHECKED.starts_with("Some of "), "the sentence is of some lines, never of all: {CHECKED}");
 }

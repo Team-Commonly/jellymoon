@@ -6,7 +6,7 @@ before and after) and the work's note with every file's name. Following and trus
 Now the first view of both notes names no file and holds no changed line:
 
 - "What it says it did": the run's own sentence, `Decided`, `Not sure about`, then the app's last sentences. In
-  the place of every change's row one fixed sentence, "The changed lines it reported match the copy.", said only when at
+  the place of every change's row one fixed sentence, "Some of its changed lines were checked against the copy, and they match.", said only when at
   least one change passed core's check. It starts the paragraph "Nothing was run to try this. ..." and adds none of
   its own; as a paragraph of its own it took the room of the run's own sentence at 960x640.
 - the work's note: core's count ("1 new file, 1 changed, 1 removed.") and no name.
@@ -22,6 +22,12 @@ about how a text of the run is checked, cleaned or quoted.
 What the sentence claims is what core's check proves and no more: each line a passed change quotes is a whole
 line the work took from its file or put in it. Core looks at a result's first two changes only, so the sentence
 does not say "every".
+
+After the gate at `42a929b` (one blocker): the sentence then read as if of every changed line the run reported,
+which is false of a third change core never looks at and of a change it dropped. It now says "Some of its changed
+lines were checked against the copy, and they match." And a `Show me` that can show no file (work that only
+removes files, or of no text file) now brings the names and the rows beside core's sentence of why: before that
+fix no tap named the files of such work.
 
 Deleted: nothing but the change rows and the names from the first view, and their pins there.
 

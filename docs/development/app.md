@@ -545,21 +545,24 @@ that fit and counts the rest in a last line, `+N more`.
   follows it without reading a file's name or a changed line, so neither is on the notes as they first come onto
   the page: by a look that found the run ended, by a tap on the little one, and at `layout`. The result's note
   then holds what the run did, `Decided` and `Not sure about`, and in the place of every change's row one
-  sentence of the app's, before the others: "The changed lines it reported match the copy." It starts the paragraph that
+  sentence of the app's, before the others: "Some of its changed lines were checked against the copy, and they match." It starts the paragraph that
   nothing was run and adds none of its own, so what the run did is still read at 960x640 (as a paragraph of its
   own it took that row's room there). It is
-  said when at least one change passed core's check, and says what that check proves and no more: each quoted
-  line is a whole line the work took from its file or put in it (`crates/jellymoon-core/src/run/told.rs`,
-  `change`). A change core dropped is said by the sentence that something could not be checked, as before. The
+  said when at least one change passed core's check, which proves that each line it quotes is a whole line the
+  work took from its file or put in it (`crates/jellymoon-core/src/run/told.rs`, `change`). It says "some" and
+  never every line: core looks at a result's first two changes and no further, a later one is neither drawn nor
+  counted, and a change core dropped is said by the sentence that something could not be checked, as before. The
   work's note has core's count and not core's line of names: core is asked for its lines of the same work with
   every name among the files it only counts. A tap on `Show me` brings the rows and the names with the first
   file (`working::notes_of`, `WorkDone::Shown`). Each row is drawn as it was before this, and the rows of the
   changes come before what the run did, decided and is not sure about: the kit leaves out the rows that do not
-  fit from the end, and the changed lines are what the tap asked for. They stay while the file is on
+  fit from the end, and the changed lines are what the tap asked for. A `Show me` that can show no file (the work only removed files, or none of them is text that can
+  be shown) brings them too, beside core's sentence of why no file was shown: no other tap names the files. They
+  stay while the file is on
   show, and a tap on the little one shows the first view again, as it always closed the file. Nothing is kept
   to know this: the notes on the scene are the ones the tap's answer made. How a text of the run is checked,
   cleaned and quoted is unchanged. `app/tests/result_in_plain_words.rs`; the rows after `Show me` at
-  `layout`'s sizes, `app/tests/f86.rs`.
+  1440x900, `app/tests/f86.rs`; the names after a `Show me` that showed no file, `app/tests/f47/named.rs`.
 - **Told alone: a run that changed nothing** (`jellymoon_core::ended_alone`, [show.md](show.md)). A made wish
   whose run finished and changed nothing has no work's note, so what its run says it did is `told-<wish>` over
   the wish's own note ("This wish is done." and its words), above it and not in its place: the person reads

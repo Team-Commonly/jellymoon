@@ -262,16 +262,16 @@ impl Today {
     }
 
     /// The notes of the work of the made wish `id` that waits: what its run says it did, then the work with its
-    /// choices and the offer of a follow-up. None when no work of it waits.
-    fn work_notes(&self, id: &str) -> Option<Vec<Note>> {
+    /// choices and the offer of a follow-up, as they first come or as `Show me` shows them. None when none waits.
+    fn work_notes(&self, id: &str, shown: bool) -> Option<Vec<Note>> {
         let waits = jellymoon_core::waits(&self.home, &self.run_of(id))?;
-        let work = with_more(waiting(&waits, false, false), id, self.follows(id));
-        Some(told(&waits, false).into_iter().chain([work]).collect())
+        let work = with_more(waiting(&waits, false, shown), id, self.follows(id));
+        Some(told(&waits, shown).into_iter().chain([work]).collect())
     }
 
     /// [`Today::note_of`], with what the run says it did before the note of its work that waits.
     fn notes_on_open(&self, page: Option<&Page>, id: &str) -> Option<Vec<Note>> {
-        if let Some(notes) = self.work_notes(id) {
+        if let Some(notes) = self.work_notes(id, false) {
             return Some(notes);
         }
         // The day's made wishes stand after the page's own, as they are drawn (`taps.rs`).
@@ -365,9 +365,13 @@ impl OnShow {
         self.scene.notes[at] = doing;
         let (today, page, from) = (self.today.clone(), self.page.clone(), self.scene.clone());
         let work = move || {
-            let failed = tap.failed();
+            let (failed, shows) = (tap.failed(), matches!(tap, WorkTap::Show { .. }));
             let asked = || {
-                let notes = today.with_offer(&wish, notes_of(&wish, ask(&today, &wish, tap)));
+                let mut notes = notes_of(&wish, ask(&today, &wish, tap));
+                // A `Show me` that showed no file still brings the names and the rows: no other tap does.
+                let unshown = shows && notes.iter().all(|note| id_of(note).is_some_and(|id| id.starts_with(SAID)));
+                notes.extend(unshown.then(|| today.work_notes(&wish, true)).flatten().into_iter().flatten());
+                let notes = today.with_offer(&wish, notes);
                 let mut now = today.again(page.as_ref(), &from);
                 put(&mut now, &wish, notes.clone());
                 (now, notes)

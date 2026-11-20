@@ -179,9 +179,12 @@ fn show_me_passes_over_a_removed_file_asks_for_eight_files_at_most_and_goes_on_f
     let before = w.everything(&repo);
     let showed = w.taps("logs", &[&["poke:m1"][..], &show, &show].concat()).showed();
     let notes = texts(showed[4].as_ref().unwrap());
-    let [(id, title, body, _)] = &notes[..] else { panic!("one note: {notes:?}") };
+    // The work's note comes with it, with its names: they are behind this tap and no other.
+    let [(id, title, body, _), (work, _, named, choices)] = &notes[..] else { panic!("two notes: {notes:?}") };
     assert_eq!((*id, *title), ("said-m1", "No file of the change was shown."));
     assert!(body[1].contains("file 10 ") && !body[1].contains("n.txt"), "{body:?}");
+    assert_eq!((*work, &choices[..]), ("work-m1", &["Show me", "Keep it", "Toss it"][..]));
+    assert!(named.last().is_some_and(|names| names.starts_with("a.txt, b.txt")), "{named:?}");
     assert_eq!(w.everything(&repo), before);
 }
 

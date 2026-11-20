@@ -213,6 +213,22 @@ fn the_page_says_a_wish_is_being_worked_on_and_its_work_still_shows_itself_when_
     assert_eq!(again, "null");
 }
 
+/// Each answer said only "The change was kept." or "thrown away": three of them on a page told nobody which was
+/// of which wish. The answer to a tap takes the place of what was said of another wish's work.
+#[test]
+fn one_answer_stands_on_the_page_and_it_is_of_the_work_just_kept_or_tossed() {
+    let w = day();
+    assert_eq!((ended(&w, "edits", "completed"), ended(&w, "edits", "completed")), ("m1".into(), "m2".into()));
+    let acts = ["look", "choose:work-m2:2", "run", "look", "look", "look", "look", "choose:work-m1:1", "run"];
+    let lines = w.taps("logs", &acts).ended();
+    let [.., turn, at_once, kept] = &lines[..] else { panic!("nine lines: {lines:#?}") };
+    // The older work comes under the eyes with the toss's answer still there: a look takes no answer away.
+    assert_eq!(ids(&scene(turn).expect("the older wish's work has its turn")), ["work-m1", "said-m2"]);
+    assert_eq!(ids(&scene(at_once).expect("a tap on Keep it")), ["busy-m1", "said-m2"]);
+    let kept = scene(kept).expect("core's answer");
+    assert_eq!((ids(&kept), title(&kept, "said-m1")), (vec!["said-m1"], KEPT));
+}
+
 #[test]
 fn of_work_that_waited_when_the_window_opened_the_newest_is_shown_and_the_older_has_its_turn() {
     let w = day();

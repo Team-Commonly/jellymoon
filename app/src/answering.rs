@@ -1,6 +1,7 @@
 //! What is typed under a made wish (F54): an answer to the question its run asks, and a follow-up to work that
-//! waits or was kept. The rules and every sentence are core's. Whether a wish asks, and what, is the `question`
-//! core keeps with it; whether a follow-up may be made of it is `jellymoon_core::followable`; an answer is
+//! waits or was kept, or to a run that changed nothing. The rules and every sentence are core's. Whether a wish
+//! asks, and what, is the `question` core keeps with it; whether a follow-up may be made of it, and of its work or
+//! of a run with none, is `jellymoon_core::followable`; an answer is
 //! `answer_run`, a follow-up `wish_after`, and what either refuses is said in core's words under a title of this
 //! file. Here a field is put under the note core's words are in, and what is typed in it is carried to core off
 //! the window's thread, as a wish typed in the entry is. No GPUI.
@@ -28,6 +29,8 @@ pub const MORE: &str = "More like this";
 
 const MORE_HINT: &str = "Type what to do next, then Enter";
 const ANSWER_HINT: &str = "Type your answer, then Enter";
+/// The start of the key of a follow-up's field.
+const MORE_KEY: &str = "more-";
 
 /// The title of the note for an answer core did not take. Its body is core's reason.
 pub const UNANSWERED: &str = "That answer was not taken.";
@@ -55,25 +58,30 @@ pub(crate) fn with_question(note: Note, wish: &str, question: Option<&str>) -> N
     fielded(note, question, Field { offer: String::new(), hint: ANSWER_HINT.to_string(), most: 0, key })
 }
 
-/// Whether a note has a field to answer in: a field under no offer (`with_question`). The field under the
-/// offer of a follow-up is not one.
+/// Whether a note has a field to answer in: a field under no offer (`with_question`) that is not a follow-up's
+/// by its key. The field under the offer of a follow-up is not one, nor the one under none (`with_go_on`).
 pub(crate) fn asks(note: &Note) -> bool {
-    matches!(note, Note::Text { field: Some(field), .. } if field.offer.is_empty())
+    matches!(note, Note::Text { field: Some(field), .. } if field.offer.is_empty() && !field.key.starts_with(MORE_KEY))
 }
 
 /// A note of the wish `wish` with the offer of a follow-up and its field, when core says one may be made of the
 /// wish. The field's key is the wish's, not the note's: what is typed in it is the kit's to keep while another
 /// note of the wish stands in this one's place, and is there under the next note that offers the same.
 pub(crate) fn with_more(note: Note, wish: &str, follows: bool) -> Note {
-    // Core keeps a question with a wish only while its run asks, and lets a follow-up be made only of work that
-    // waits or was kept, so it never gives one wish both. If it did, this field would take the question's place.
-    let field =
-        Field { offer: MORE.to_string(), hint: MORE_HINT.to_string(), most: MADE_SAID_MAX, key: more_key(wish) };
-    if follows { fielded(note, "", field) } else { note }
+    // Core keeps a question with a wish only while its run asks, and lets a follow-up be made only of a run that
+    // finished, so it never gives one wish both. If it did, this field would take the question's place.
+    if follows { fielded(note, "", more(wish, MORE)) } else { note }
 }
 
-fn more_key(wish: &str) -> String {
-    format!("more-{wish}")
+/// A note of the made wish `wish` with the field of a follow-up under no offer, when core says one may be made
+/// of the wish's run, which changed nothing: there is no work to make more of. The field is `More like this`'s.
+pub(crate) fn with_go_on(note: Note, wish: &str, goes_on: bool) -> Note {
+    if goes_on { fielded(note, "", more(wish, "")) } else { note }
+}
+
+fn more(wish: &str, offer: &str) -> Field {
+    let (offer, hint, key) = (offer.to_string(), MORE_HINT.to_string(), format!("{MORE_KEY}{wish}"));
+    Field { offer, hint, most: MADE_SAID_MAX, key }
 }
 
 /// The field of the note `note` on a scene: where the note is, whose wish it is under, and whether the field
@@ -166,20 +174,21 @@ impl OnShow {
 mod tests {
     use super::*;
 
-    // The review of the third notes on F54, note 5. Only two offers are drawn today, so the third is made up: under
-    // it Enter was an answer, from a field that `asks` would never put back.
+    // The review of the third notes on F54, note 5: Enter under a made-up third field was an answer, from a field
+    // that `asks` would never put back. A follow-up's field under no offer is not one either.
     #[test]
     fn an_answer_is_sent_only_from_a_field_to_answer_in() {
-        let field = |offer: &str| Field { offer: offer.to_string(), hint: String::new(), most: 0, key: String::new() };
-        let note = |offer: &str| Note::Text {
+        let field = |(o, k): (&str, &str)| Field { offer: o.into(), hint: "".into(), most: 0, key: k.into() };
+        let note = |shape: (&str, &str)| Note::Text {
             id: "wish-m1".to_string(),
             title: String::new(),
             body: Vec::new(),
             options: Vec::new(),
             quoted: String::new(),
-            field: Some(field(offer)),
+            field: Some(field(shape)),
         };
-        let more = |offer: &str| field_of(&crate::scene::bare("2026-03-10", vec![note(offer)]), "wish-m1").unwrap().2;
-        assert_eq!((more(""), more(MORE), more("Another offer")), (false, true, true));
+        let more = |one| field_of(&crate::scene::bare("2026-03-10", vec![note(one)]), "wish-m1").unwrap().2;
+        let all = [("", ""), (MORE, ""), ("Another offer", ""), ("", "more-m1")].map(more);
+        assert_eq!(all, [false, true, true, true]);
     }
 }

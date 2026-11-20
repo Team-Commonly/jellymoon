@@ -642,6 +642,7 @@ branch and no record, and the wish can be run again once what refused it is mend
 |---|---|---|
 | waits | the commit the followed run's record names as its `end` | the followed run's branch is at that commit in the repo |
 | was kept | the commit the person's checkout stands on, as any run's | the checkout's history holds the commit the followed run's record names as `kept` |
+| is none: the followed run changed nothing | the commit the person's checkout stands on now, as any run's | nothing more: there is no work it must hold |
 
 In both, the folder the run would start in must be a checkout of the repo the followed run's record names. The
 commit is the follow-up's `start`, so `run show`, `run keep` and `run toss` of a follow-up compare its work with

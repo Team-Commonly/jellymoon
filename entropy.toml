@@ -416,7 +416,9 @@ max_file_lines = 400
 # a link, one try at the rename (`run/steps.rs`, 4 net) and the test of a path too long to be a name (14).
 # Its third gate raised core by 47: only the steps of a line that can stay kept are named, and a name cleaning
 # would refuse is refused before it is cleaned (`run/steps.rs`, 13 net), with a test of each (34).
-"crates/jellymoon-core" = 18481
+# Go on from an answer raised core by 19 (32 added, 13 removed): a run that changed nothing is followed with no work,
+# and refused only on work it follows that is not kept, and `followable` tells work from none (`run/follow.rs`).
+"crates/jellymoon-core" = 18500
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -652,7 +654,9 @@ max_file_lines = 400
 # wait it shares moved there: `fake_agent.rs` 3 shorter).
 # Its gate raised the binary by 11: `doing` against a record of another wish and another day (`tests/f39/steps.rs`).
 # Its second gate raised the binary by 3: that test first reads the record written again unchanged.
-"crates/jellymoon" = 29989
+# Go on from an answer raised the binary by 73, all tests: `tests/f53/answer.rs` (64), the refusal it replaced in
+# `tests/f53/refused.rs` (7 net) and its module line (2).
+"crates/jellymoon" = 30062
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -986,7 +990,10 @@ max_file_lines = 400
 # `tests/live_work.rs` (112) and the walk's picture of a run held mid-way (`tests/walk.rs`, 22).
 # Its gate raised the app by 27: no name with a blank on the pill (`src/live.rs`, 12 with its unit test's cases)
 # and its case in `tests/live_work.rs` (15).
-"app" = 15743
+# Go on from an answer raised the app by 139 (174 added, 35 removed): `tests/go_on_from_an_answer.rs` (124); the
+# field under no offer and the rule that tells it from an answer's (`src/answering.rs`, `src/working.rs`, 15 net);
+# its old pins in `tests/told_alone.rs` (0 net).
+"app" = 15882
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

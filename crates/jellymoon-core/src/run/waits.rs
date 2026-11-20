@@ -320,7 +320,7 @@ pub fn waiting(home: &Path, options: &RunOptions) -> Result<Waiting, Error> {
     let day = wish::day_of(options.day.as_deref())?;
     let made = wish::kept_of(home, &day)?;
     let one = |made: &wish::MadeWish| waits(home, &RunOptions { wish: made.id.clone(), ..options.clone() });
-    let follows = followable(home, &day);
+    let follows = followable(home, &day, true);
     Ok(Waiting { waits: made.iter().filter_map(one).collect(), follows, day })
 }
 

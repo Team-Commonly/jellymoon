@@ -1,6 +1,7 @@
 //! Every follow-up that is not made, and every one that is not started: nothing is kept, no copy is made, no
 //! harness is started, and nothing in the home, the repo or the harness's store is changed. A followed wish
-//! that is not there, has had no run, or whose run goes, asks, did not finish, changed nothing or was tossed;
+//! that is not there, has had no run, or whose run goes, asks, did not finish, was tossed, or changed nothing on
+//! work it follows that is not kept;
 //! a project named beside the wish to follow; a day that has its eight; made wishes that name a wish they
 //! cannot follow; and at the run, work that was tossed by then, a branch that was moved, another repo, and a
 //! keep or a toss at work.
@@ -53,11 +54,17 @@ fn a_follow_up_of_a_wish_that_is_not_there_or_has_no_finished_work_is_not_made()
     let ends = [
         ("asks", 0, "run {run} asks a question: there is no work of it to follow"),
         ("exit-3", 0, "run {run} did not finish: there is no work of it to follow"),
-        ("nothing", 0, "run {run} changed nothing: there is no work of it to follow"),
     ];
     for (script, number, why) in ends {
         played(script, number).unfollowed(why);
     }
+    // A follow-up that changed nothing in a copy of work that waits: its session saw files the checkout has not.
+    let waits = finished();
+    let (second, said) = waits.follows("follow", 2);
+    let on = Made { run: said["run"].as_str().unwrap().to_string(), wish: second, ..waits };
+    let before = on.all();
+    let why = "run {run} changed nothing on work that is not kept: follow the wish of that work instead";
+    on.unchanged(&follow(&on.w, &on.wish), &before, why);
     // Work that was tossed cannot be followed; work that was kept can.
     let tossed = finished();
     assert_eq!(printed(&tossed.toss())["tossed"], true);

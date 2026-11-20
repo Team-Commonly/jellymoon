@@ -388,7 +388,8 @@ and writes nothing:
 
 - **`follows`.** The ids of the day's made wishes a follow-up may be made of now, in the day's order (F54,
   `run/follow.rs`, `followable`): the wishes `jellymoon wish --after` would not refuse for the wish they name
-  ([wish.md](wish.md), "A follow-up"), which is work that waits and work that was kept. It is read from the
+  ([wish.md](wish.md), "A follow-up") that have work: work that waits and work that was kept. A wish whose run
+  changed nothing may be followed too, and is not listed here. It is read from the
   home alone, whatever `--repo` and `--logs` say, and the app offers `More like this` under these wishes and
   no other ([app.md](app.md#a-question-answered-and-more-like-this-appsrcansweringrs)). The day's eight are
   not counted here: a ninth wish is refused when it is made.

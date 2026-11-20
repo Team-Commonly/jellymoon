@@ -545,10 +545,15 @@ that fit and counts the rest in a last line, `+N more`.
   what they asked, and what the run said of it. The note is the one above, and its sentences start with "Nothing
   in your folder was changed." (the app's). Core has no file to check a `change` against, so a `change` is
   dropped and counted, and the note then ends with the sentence that something could not be checked. There is
-  no `work-<wish>`, no choice, and no field: core does not let a follow-up be made of such a wish. A tap on the
+  no `work-<wish>` and no choice. When core lets a follow-up be made of the wish (`jellymoon_core::followable`
+  with no work), the wish's note has the field of `More like this` under no offer: the hint "Type what to do
+  next, then Enter", the key `more-<wish>`, and Enter there is a follow-up as under work ("A follow-up", below);
+  the run goes on in the same conversation, and the follow-up's wish is drawn working. With a field the note is
+  in the person's hand, as every note with one is (`working::in_hand`): while it is on show no look puts another
+  wish's work over it. A tap on the
   character shows both notes again; a look shows them once, as work that waits; `layout` does not print them.
   A run that said nothing that passed, or did not finish, has no such note: core keeps no result of a run that
-  failed. `app/tests/told_alone.rs`.
+  failed. `app/tests/told_alone.rs`, and the field `app/tests/go_on_from_an_answer.rs`.
 - **`layout`** has no tap, so it prints the note of every made wish whose work waits, first among the notes,
   and then the note of every made wish whose run asks or whose work was kept.
 - **A tap on a choice** (`OnShow::working`) puts `busy-<wish>` in the note's place at once, with what core says is
@@ -663,7 +668,7 @@ where core says, carries what is typed to core off the window's thread, and draw
   start of the words and core's reason: the page has its 8 made wishes, the words are not a wish, the work was
   tossed meanwhile. The field keeps what was typed.
 - **Which call an Enter is.** The kit gives the note's id with the words. The field on show under that note
-  says the rest: one to answer in, under no offer, is an answer, any other a follow-up. An Enter for a note
+  says the rest: one to answer in, by its key `answer-<wish>-<question>`, is an answer, any other a follow-up. An Enter for a note
   with no field on show is nothing. A field's words go when its offer changes: what was typed as an answer is
   never there to be sent as a follow-up under the same note.
 - **A page closed and shown again.** The page's view outlives its window (F57), and a field's words are the

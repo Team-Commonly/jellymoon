@@ -602,7 +602,8 @@ that fit and counts the rest in a last line, `+N more`.
 - **`Keep it` and `Toss it`** end in one note, `said-<wish>`, in core's plain words (`run/waits/plain.rs`): "The
   change was kept." and that it is in the folder now, or that the folder had it already and nothing was changed,
   and the wish stays done with its star; or "The change was thrown away." and that the folder is as it was, and
-  the wish is drawn let go. One such note stands on a page: an answer names no wish, so it takes the place of
+  the wish is drawn let go, with no star and no row under "came true today" (core keeps the star: its run did
+  report it finished). One such note stands on a page: an answer names no wish, so it takes the place of
   what was said of another wish's work (`app/src/placing.rs`), and a look takes no answer away. A refused tap
   ("The change was not kept.") says first what the person can do next, then core's reason. The command line's
   `why` is not said, but where the keep's folder was switched while it was at work or a `.gitattributes` stayed,
@@ -908,7 +909,7 @@ and Cmd-Q are the system's and are not run by a test.
 |---|---|
 | a wish | a character with the wish's label, in page order; the kit places let-go ones last |
 | its state | working: busy bubble; done: idle; needs you: badge; let go: dimmed, label struck |
-| each star | a star on its wish's character (the kit draws at most 4) and a row in the list note "came true today" |
+| each star | a star on its wish's character (the kit draws at most 4) and a row in the list note "came true today"; none of a made wish that was let go, whose change was thrown away |
 | a clash | a choice note `clash-<n>` with both quotes, each drawn whole; `settled` strikes the first |
 | `read` | the footer: how many things were typed, in which projects, and that the reading is unedited |
 | the day's made wishes | a character each, like any wish, and one whole list note, "wished here today", after the clashes: each made wish's own words after the mark of its state, drawn to the last word or counted in the note's last line, `+N more`, never cut. The footer adds "N made wishes are in your own words."; on a day not read yet that is all the footer says |

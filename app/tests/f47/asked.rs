@@ -4,7 +4,7 @@
 
 use std::fs;
 
-use sticker_kit::State;
+use sticker_kit::{Note, State};
 
 use super::{CHOICES, IN_FOLDER, KEPT, WORK, branches, drawn, holds, lines, persons, quoted, texts, waits};
 use crate::support::day::DAY;
@@ -78,7 +78,10 @@ fn toss_it_removes_the_work_and_the_wish_is_drawn_let_go() {
     let tossed = tossed.as_ref().unwrap();
     let thrown = "The change was thrown away, and your folder alpha is as it was.";
     assert_eq!(texts(tossed), [("said-m1", "The change was thrown away.", vec![thrown], vec![])]);
-    assert_eq!(drawn(tossed, "m1"), Some((State::Dimmed, 1)), "the wish is drawn let go");
+    // Its run reported it finished, and core keeps that star. The change was thrown away, so the page draws none
+    // and lists nothing as come true.
+    assert_eq!(drawn(tossed, "m1"), Some((State::Dimmed, 0)), "the wish is drawn let go, with no star");
+    assert!(!tossed.notes.iter().any(|note| matches!(note, Note::List { .. })), "{:?}", tossed.notes);
     let said = quoted(SAID);
     assert_eq!(texts(stands.as_ref().unwrap()), [("wish-m1", "This wish was let go.", vec![said.as_str()], vec![])]);
 

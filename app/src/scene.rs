@@ -40,24 +40,30 @@ pub fn scene(page: &Page) -> Scene {
 }
 
 /// The page as the kit's pieces: a hero, one little one per wish in page order with one star per finished job, a list
-/// of what came true, one choice note per clash, and a plain note for each thing the app has no piece for. When the
-/// file held more than the app draws, the first note says how much was left out. `standing` holds, clash by clash,
-/// what core says of it: its two statements as a ruling would carry them, and the side the person chose with a tap.
+/// of what came true (a made wish that was let go has no star and is not listed), one choice note per clash, and a
+/// plain note for each thing the app has no piece for. When the file held more than the app draws, the first note
+/// says how much was left out. `standing` holds, clash by clash, what core says of it: its two statements as a
+/// ruling would carry them, and the side the person chose with a tap.
 /// A clash core says is no choice (its statements are the same once cleaned, or one is empty) is a plain note.
 /// The page's last `made` wishes are the person's made wishes. A reading's wish has a title the model wrote; a made
 /// wish has only the person's words, so one note after the clashes lists them, each whole or counted, never cut.
 /// While a run of the made wishes goes, the first note says so ([`going`]), on a page with no clash.
 pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let data = &page.data;
-    let made = &data.wishes[data.wishes.len().saturating_sub(made)..];
+    let first = data.wishes.len().saturating_sub(made);
+    let made = &data.wishes[first..];
+    // A made wish that was let go had its change thrown away: what its run reported did not come true, so its star
+    // is not drawn and not listed. A reading's wish that was let go keeps the stars of the jobs that finished.
+    let came = |index: usize, wish: &Wish| index < first || wish.state != WishState::LetGo;
     // A page with a clash has none: a made wish moves and shrinks nothing a person rules on (F37).
     let says = going(made).filter(|_| data.clashes.is_empty());
     let mut notes: Vec<Note> = left_out(page.left_out).into_iter().chain(says).collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
         notes.push(Note::Plain { title: NOTHING.to_string(), body: NOTHING_HERE.to_string() });
     }
+    let true_of = data.wishes.iter().enumerate().filter(|(index, wish)| came(*index, wish));
     let came_true: Vec<(String, String)> =
-        data.wishes.iter().flat_map(|wish| wish.stars.iter().map(|star| (star.clone(), wish.label.clone()))).collect();
+        true_of.flat_map(|(_, wish)| wish.stars.iter().map(|star| (star.clone(), wish.label.clone()))).collect();
     if !came_true.is_empty() {
         notes.push(Note::List { title: "came true today".to_string(), rows: came_true });
     }
@@ -85,8 +91,12 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let read = footer(data, made.len());
     // A footer that says nothing of a reading says nothing at all: every wish on the page is the person's own.
     let read = if read.is_empty() { read } else { [read, own(made.len())].join(" ").trim_end().to_string() };
+    let drawn = |(index, wish): (usize, &Wish)| {
+        let one = little_one(index, wish);
+        if came(index, wish) { one } else { Character { stars: 0, ..one } }
+    };
     Scene {
-        characters: data.wishes.iter().enumerate().map(|(index, wish)| little_one(index, wish)).collect(),
+        characters: data.wishes.iter().enumerate().map(drawn).collect(),
         footer: if blank { String::new() } else { read },
         legend: if blank { Vec::new() } else { legend(!data.wishes.is_empty()) },
         ..bare(&data.day, notes)

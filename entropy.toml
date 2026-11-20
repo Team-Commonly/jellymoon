@@ -1017,7 +1017,9 @@ max_file_lines = 400
 # One answer on the page raised it by 28: an answer takes the place of what was said of another wish's work
 # (`src/placing.rs`, which holds the two placing functions moved out of `src/working.rs`, 12), with its test
 # (`tests/work_shows.rs`, 16).
-"app" = 16325
+# A tossed change is no star raised it by 22: a made wish that was let go draws no star and is not listed as come
+# true (`src/scene.rs`, 10), with its tests (`src/scene/tests.rs`, 9, and `tests/f47/asked.rs`, 3).
+"app" = 16347
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

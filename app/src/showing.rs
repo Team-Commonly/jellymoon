@@ -253,9 +253,9 @@ impl Showing {
     /// after the page left the hand, the person chose or typed or core answered them: then the work waits its
     /// turn. Of several, the first in core's order is shown. The first look shown also finds the work that
     /// waited when the window opened: it shows the newest wish's, and the others have their turn after it, as
-    /// work of a run that ended under this window does, so a keep or a toss is followed by the next that waits. What a run that changed nothing says it did (told
-    /// alone) is shown the same way, but only when no wish asked has work that waits: the look asks on past
-    /// it, and a wish passed over so keeps its turn.
+    /// work of a run that ended under this window does, so a keep or a toss is followed by the next that waits.
+    /// What a run that changed nothing says it did (told alone) is shown the same way, but only when no wish
+    /// asked has work that waits: the look asks on past it, and a wish passed over so keeps its turn.
     pub fn look(&self) -> Option<Look> {
         self.with(|on| {
             let Some(asks) = self.2.borrow_mut().asks(&on.scene) else { return on.look() };

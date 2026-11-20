@@ -484,7 +484,7 @@ that fit and counts the rest in a last line, `+N more`.
     A page with nothing new is looked at as before: the notes and characters on show are gone through, and no
     call is added.
   - *Work that waited when the window opened.* The first look that is free to shows the newest done wish's
-    work that waits, asking the done wishes from the newest. Once a window. It asks on past the work it shows,
+    work that waits, asking the done wishes from the newest, once a window. It asks on past the work it shows,
     and every older wish whose work waits has its turn after it, as a run that ended under this window has: so
     a keep or a toss is followed by the next change that waits, past the looks held back, and nobody is left
     to believe a change is in the folder that is not.

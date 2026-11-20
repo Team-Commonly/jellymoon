@@ -221,6 +221,27 @@ fn work_is_kept_as_one_new_commit_by_the_person_on_top_of_their_own_commits_sinc
     );
 }
 
+/// A person who never told git who they are is not refused the second of two changes made together: the one
+/// new commit is Jellymoon's own, as a run's commit is where the repo names nobody. It is never half theirs.
+#[test]
+fn where_git_names_nobody_the_new_commit_is_jellymoon_s_own_and_the_work_is_kept() {
+    let own = "Jellymoon <jellymoon@localhost> / Jellymoon <jellymoon@localhost>";
+    // Unset; set to nothing; and what git would cut down to nothing: spaces, the marks it takes off a name's ends.
+    let nothing = [None, Some(""), Some(" \t "), Some("< >"), Some(",;:\"'")];
+    for (at, nothing) in nothing.into_iter().enumerate() {
+        let (made, missing) = (finished(), ["user.name", "user.email"][at % 2]);
+        made.moved_on();
+        match nothing {
+            Some(nothing) => made.git(&["config", missing, nothing]),
+            None => made.git(&["config", "--unset", missing]),
+        };
+        let ran = made.keep(&[]);
+        kept(&made, &ran, &made.w.commit(&made.repo, "main"), "main", JOINED);
+        let who = made.git(&["log", "-1", "--format=%an <%ae> / %cn <%ce>", "main"]);
+        assert_eq!(who.trim_end(), own, "{missing} as {nothing:?}");
+    }
+}
+
 #[test]
 fn what_the_person_has_unsaved_beside_the_work_stays_as_it_is() {
     let made = finished();

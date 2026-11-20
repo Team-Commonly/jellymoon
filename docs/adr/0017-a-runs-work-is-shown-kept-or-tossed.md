@@ -404,6 +404,25 @@ The whole account, with every sentence and what is not closed, is `docs/developm
    - a count of the shape `more` is refused wherever it stands in a name, and so is a name like `7 morels`. Such
      work is kept from the command line. Narrower would be a guess at how a note wraps.
 
+## Found on a walk with three wishes (2026-11-20)
+
+Three wishes were made together in a repo whose git config named nobody, each run in its own copy. The first
+keep moved the branch forward to the run's commit, which is by Jellymoon's fallback name (decision 7). The
+second had to make the one new commit of decision 4's second case, and was refused: "git has no name and
+address for this repo's commits (user.name and user.email), and Jellymoon makes none up". A person who never
+used git has no such name, cannot read that sentence, and has no way in the window to act on it; and the commit
+before it in their history was Jellymoon's already.
+
+**Decision 7 is changed.** Where git names nobody (either of `user.name` and `user.email` missing, or one git
+would cut down to nothing), the one new commit is by Jellymoon's own name and address, both of them, as a run's
+commit is. Nothing is half the person's. Where git names the person, nothing changed: the commit is theirs.
+
+What is given up: a commit over the person's own commits that is not by them, in a repo that names nobody. It
+says who made it, which is true. A person who sets a name later has it on every keep from then on; no earlier
+commit is rewritten.
+
+Deleted: the refusal, its sentence and its row in `keep.md`. Tested in `tests/f45.rs` ("where git names nobody").
+
 ## What comes after
 
 Each gets its own note before it is built.

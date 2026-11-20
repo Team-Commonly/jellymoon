@@ -604,8 +604,9 @@ that fit and counts the rest in a last line, `+N more`.
   and the wish stays done with its star; or "The change was thrown away." and that the folder is as it was, and
   the wish is drawn let go. One such note stands on a page: an answer names no wish, so it takes the place of
   what was said of another wish's work (`app/src/placing.rs`), and a look takes no answer away. A refused tap
-  ("The change was not kept.") says first what the person can do next, then core's reason. The command line's `why` is not said, but where the keep's folder was switched while it
-  was at work or a `.gitattributes` stayed, after the plain sentence.
+  ("The change was not kept.") says first what the person can do next, then core's reason. The command line's
+  `why` is not said, but where the keep's folder was switched while it was at work or a `.gitattributes` stayed,
+  after the plain sentence.
 - **Files the person's tools obey**: a page keeps one only when its name was drawn, whole, on the note the yes
   was given under. A count is not a name: the agent picks the files, so it picks which would fall behind a count.
   - The first `Keep it` changes nothing and shows `sure-<wish>`. It names every such file of the whole work,

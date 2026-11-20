@@ -8,10 +8,13 @@
 //! own, and says first that nothing in the folder was changed (told alone, `jellymoon_core::Alone`).
 //!
 //! The note first comes onto the page with no row of a change, so with no file's name and no changed line: one
-//! sentence says what core's check of them found. The rows come with a tap on `Show me` (`working.rs`, `notes_of`).
+//! sentence says what core's check of them found. The rows come with a tap on `Show me` (`working.rs`, `notes_of`),
+//! and a file of the work with each tap after it ([`in_turn`]).
 
 use jellymoon_core::{Alone, Piece, Told, Waits};
 use sticker_kit::{Note, ToldRow};
+
+use crate::working::FILE;
 
 /// The start of the id of the note, followed by the wish's id.
 pub(crate) const TOLD: &str = "told-";
@@ -50,6 +53,29 @@ fn changed(name: &str, made: bool, before: &[String], after: &[String]) -> ToldR
         block.marks.extend((0..lines.len()).map(|at| if at == 0 { side.to_string() } else { String::new() }));
     }
     block
+}
+
+/// Whether a note is one of what a run says it did with the rows of its changes on it, as `Show me` brings them.
+pub(crate) fn rows_shown(note: &Note) -> bool {
+    matches!(note, Note::Told { rows, .. } if rows.iter().any(|row| !row.name.is_empty()))
+}
+
+/// An answer to `Show me` in the order a page with room for two of a wish's notes needs, so that every tap
+/// brings something the page draws. `seen`: the rows of the changes, or a file, were on show before the tap. The
+/// first tap brings the rows and the names, and no file where a change has its row. Each tap after it brings a
+/// file under the work's choices, and the result goes after them, where the kit gives it the room they leave.
+/// An answer with no file in it, or with no result, is as it was.
+pub(crate) fn in_turn(mut notes: Vec<Note>, seen: bool) -> Vec<Note> {
+    let is_file = |note: &Note| matches!(note, Note::Text { id, .. } if id.starts_with(FILE));
+    if !matches!(notes.first(), Some(Note::Told { .. })) || !notes.iter().any(is_file) {
+        return notes;
+    }
+    if seen || !rows_shown(&notes[0]) {
+        notes.rotate_left(1);
+    } else {
+        notes.retain(|note| !is_file(note));
+    }
+    notes
 }
 
 /// The note of what the run of `waits` says it did, when core printed a piece of it that passed. None when there is

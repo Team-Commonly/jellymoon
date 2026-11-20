@@ -18,7 +18,7 @@ use crate::answering::{with_go_on, with_more, with_question};
 use crate::read::Page;
 use crate::taps::OnShow;
 use crate::today::Today;
-use crate::told::{TOLD, told, told_alone};
+use crate::told::{TOLD, in_turn, rows_shown, told, told_alone};
 use crate::wishing::Seen;
 
 /// The starts of the ids of this file's notes, each followed by the wish's id: work that waits with its choices,
@@ -29,7 +29,7 @@ const BUSY: &str = "busy-";
 const SAID: &str = "said-";
 const WISH: &str = "wish-";
 /// The start of the id of a file's note: `file-3-m1` is file 3 of the work of the made wish `m1`.
-const FILE: &str = "file-";
+pub(crate) const FILE: &str = "file-";
 
 /// What core answered to a tap on a choice: the scene it was asked from, the scene to show, and the notes to say.
 pub struct Worked {
@@ -356,6 +356,7 @@ impl OnShow {
         let at = self.scene.notes.iter().position(|one| id_of(one) == Some(note))?;
         let Note::Text { body, options, field, .. } = &self.scene.notes[at] else { return None };
         let after = self.scene.notes.iter().find_map(|one| file_of(one, &wish)).unwrap_or(0);
+        let seen = after > 0 || self.scene.notes.iter().any(|one| of(one, &wish) && rows_shown(one));
         let tap = WorkTap::of(options.get(index)?, body, after)?;
         // The field of `More like this` is the wish's, by its key: the kit keeps what is typed in it.
         let (field, mut doing) = (field.clone(), text(format!("{BUSY}{wish}"), tap.doing(), Vec::new(), Vec::new()));
@@ -367,7 +368,7 @@ impl OnShow {
         let work = move || {
             let (failed, shows) = (tap.failed(), matches!(tap, WorkTap::Show { .. }));
             let asked = || {
-                let mut notes = notes_of(&wish, ask(&today, &wish, tap));
+                let mut notes = in_turn(notes_of(&wish, ask(&today, &wish, tap)), seen);
                 // A `Show me` that showed no file still brings the names and the rows: no other tap does.
                 let unshown = shows && notes.iter().all(|note| id_of(note).is_some_and(|id| id.starts_with(SAID)));
                 notes.extend(unshown.then(|| today.work_notes(&wish, true)).flatten().into_iter().flatten());

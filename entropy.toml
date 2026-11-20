@@ -993,7 +993,9 @@ max_file_lines = 400
 # Go on from an answer raised the app by 139 (174 added, 35 removed): `tests/go_on_from_an_answer.rs` (124); the
 # field under no offer and the rule that tells it from an answer's (`src/answering.rs`, `src/working.rs`, 15 net);
 # its old pins in `tests/told_alone.rs` (0 net).
-"app" = 15882
+# The wait in plain words lowered it by 3: the pill and the note say a stage, no file's name, so the per-tool words,
+# the rows and the blank rule went from `src/live.rs` (21 fewer), and `tests/live_work.rs` checks each stage (18 more).
+"app" = 15879
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

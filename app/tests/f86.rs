@@ -19,7 +19,7 @@ use support::worked::{finished, tree};
 
 const TITLE: &str = "What it says it did";
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
-const CHECKED: &str = "The lines it quotes match the copy.";
+const CHECKED: &str = "The changed lines it reported match the copy.";
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
 const SIZES: [&str; 2] = ["1440x900", "960x640"];
@@ -171,8 +171,8 @@ fn at_1440x900_a_typical_result_reads_what_it_did_and_after_show_me_the_whole_ch
     assert_eq!(reads(&w.placed(), &first, &[CHECKED, NOTHING_RUN]), 2, "what it did and what it decided are read");
     let placed = shown(&w);
     let rows = vec![
-        ("", vec![text(0)]),
         ("Changed in a.txt before after", vec!["a.txt as it was".to_string(), "edited by the run".to_string()]),
+        ("", vec![text(0)]),
         ("Decided", vec![text(2)]),
     ];
     assert!(reads(&placed, &rows, &[NOTHING_RUN]) >= 2, "what it did and the whole change are read");

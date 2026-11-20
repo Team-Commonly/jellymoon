@@ -17,7 +17,7 @@ use support::Piece;
 use support::day::DAY;
 use support::wished::{SAID, World, quiet};
 
-const CHECKED: &str = "The lines it quotes match the copy.";
+const CHECKED: &str = "The changed lines it reported match the copy.";
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 const READY: &str = "It is in a copy: Keep it puts it in; Toss it throws it away.";
@@ -162,7 +162,8 @@ fn show_me_brings_the_rows_of_the_changes_and_the_names_as_they_were() {
         marks: own(&["before", "after"]),
     };
     let made = ToldRow { name: "n.txt".to_string(), ..row("New file", "new from the run") };
-    let rows = vec![row("", DID), changed, made, row("Decided", DECIDED), row("Not sure about", UNSURE)];
+    // The changes come first: they are what the tap asked for, and the room is cut from the end.
+    let rows = vec![changed, made, row("", DID), row("Decided", DECIDED), row("Not sure about", UNSURE)];
     assert_eq!(told(&shown), (rows, own(&[NOTHING_RUN])), "the rows, and no sentence in their place");
     assert_eq!(work(&shown), own(&[READY, &format!("“{SAID}”"), COUNTED, "a.txt, b.txt, n.txt"]));
     // The change is drawn: its lines are quote pieces of the told note.

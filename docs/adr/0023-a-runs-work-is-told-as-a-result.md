@@ -237,5 +237,6 @@ Under it is the work's note as above, with `files made 1, changed 0, removed 0` 
   with no file's name and no changed line, because following and trusting a wish must not take reading a file. One
   fixed sentence of the app's stands for every change that passed core's check, and the work's note keeps core's
   count. The rows of the changes and the names come with a tap on `Show me`, drawn as decision 4 and "Found while
-  building F86" say. What core checks, cleans and prints is unchanged: the app chooses when to draw it
+  building F86" say, and placed before the note's other rows: a walk with a real harness found that a result of
+  two changes showed one changed line after the tap, since the rows that do not fit are left out from the end. What core checks, cleans and prints is unchanged: the app chooses when to draw it
   ([app.md](../development/app.md), "The result in plain words").

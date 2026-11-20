@@ -6,12 +6,13 @@ before and after) and the work's note with every file's name. Following and trus
 Now the first view of both notes names no file and holds no changed line:
 
 - "What it says it did": the run's own sentence, `Decided`, `Not sure about`, then the app's last sentences. In
-  the place of every change's row one fixed sentence, "The lines it quotes match the copy.", said only when at
+  the place of every change's row one fixed sentence, "The changed lines it reported match the copy.", said only when at
   least one change passed core's check. It starts the paragraph "Nothing was run to try this. ..." and adds none of
   its own; as a paragraph of its own it took the room of the run's own sentence at 960x640.
 - the work's note: core's count ("1 new file, 1 changed, 1 removed.") and no name.
-- a tap on `Show me` brings the change rows and the names, drawn as before, and the checked sentence is not said
-  beside the rows.
+- a tap on `Show me` brings the change rows and the names, each drawn as before, and the checked sentence is not
+  said beside the rows. The change rows come first, before what the run did: found by a walk with a real harness
+  (two files changed, one line each), where the tap showed one changed line and counted the other as "+2 more".
 
 The first view is what a look, a tap on the wish's character and `layout` show; only the answer to `Show me`
 (`working.rs`, `notes_of`) asks for the rows. No state was added: a look leaves the notes on show as they are.
@@ -42,4 +43,6 @@ change, as it should: those rows are drawn as they were.
 ## Open
 No real window and no real harness were used; Windows and Linux not run here. The whole workspace's tests and the
 smoke chain were not run, only the app's. `Show me` on a result with more rows than the room still counts the
-rest ("+N more"), as before. A tap on the wish's character shows the first view, not the rows.
+rest ("+N more"), as before. Found by the walk and not fixed here: at 1440x900 the note of `Show me`'s file is
+itself left out and counted ("+3 more of 5 notes") whenever a result's note is on the page, so the tap's lines are
+the result's rows alone. A tap on the wish's character shows the first view, not the rows.

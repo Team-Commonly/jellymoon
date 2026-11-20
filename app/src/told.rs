@@ -25,7 +25,7 @@ const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits fi
 /// quotes is a whole line the work took from its file or put in it. Not said of a change core left out or dropped.
 /// It starts the paragraph of [`NOTHING_RUN`] and so adds none of its own: at 960x640 what the run did is still
 /// read (`tests/f86.rs`).
-const CHECKED: &str = "The lines it quotes match the copy.";
+const CHECKED: &str = "The changed lines it reported match the copy.";
 /// Said last when core dropped a piece that failed its check.
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 /// Said first of a run that finished and changed nothing.
@@ -66,23 +66,27 @@ pub(crate) fn told_alone(wish: &str, alone: &Alone) -> Option<Note> {
 }
 
 /// The note of `told` of the wish `wish`, its sentences after `first`, when one is given. With `shown` a change
-/// is its row, and without it no row: then the changes are said once, among the last sentences.
+/// is its row, and without it no row: then the changes are said once, among the last sentences. The rows of the
+/// changes come before every other: they are what the tap asked for, and the kit leaves out the rows that do not
+/// fit from the end.
 fn note(wish: &str, told: &Told, first: Option<&str>, shown: bool) -> Option<Note> {
     if told.pieces.is_empty() {
         return None;
     }
-    let (mut rows, mut decided, mut unsure, mut checked) = (Vec::new(), Vec::new(), Vec::new(), None);
+    let (mut changes, mut rows, mut checked) = (Vec::new(), Vec::new(), None);
+    let (mut decided, mut unsure) = (Vec::new(), Vec::new());
     for piece in &told.pieces {
         match piece {
-            // What it did has no label: the title is its label, and it is read first.
+            // What it did has no label: the title is its label, and it is read first, or after the changes' rows.
             Piece::Did { text } => rows.push(row("", std::slice::from_ref(text))),
             Piece::Change { .. } if !shown => checked = Some(CHECKED),
-            Piece::Change { name, made, before, after, .. } => rows.push(changed(name, *made, before, after)),
+            Piece::Change { name, made, before, after, .. } => changes.push(changed(name, *made, before, after)),
             Piece::Decided { text } => decided.push(text.clone()),
             Piece::Unsure { text } => unsure.push(text.clone()),
         }
     }
     let grouped = [(DECIDED, decided), (UNSURE, unsure)];
+    let mut rows: Vec<ToldRow> = changes.into_iter().chain(rows).collect();
     rows.extend(grouped.into_iter().filter(|(_, texts)| !texts.is_empty()).map(|(label, texts)| row(label, &texts)));
     let run = checked.map_or(NOTHING_RUN.to_string(), |checked| format!("{checked} {NOTHING_RUN}"));
     let mut end: Vec<String> = first.map(str::to_string).into_iter().chain([run]).collect();

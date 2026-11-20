@@ -986,7 +986,9 @@ max_file_lines = 400
 # `tests/live_work.rs` (112) and the walk's picture of a run held mid-way (`tests/walk.rs`, 22).
 # Its gate raised the app by 27: no name with a blank on the pill (`src/live.rs`, 12 with its unit test's cases)
 # and its case in `tests/live_work.rs` (15).
-"app" = 15743
+# The wait in plain words lowered it by 3: the pill and the note say a stage, no file's name, so the per-tool words,
+# the rows and the blank rule went from `src/live.rs` (21 fewer), and `tests/live_work.rs` checks each stage (18 more).
+"app" = 15740
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

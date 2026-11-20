@@ -15,6 +15,7 @@ use jellymoon_core::{Alone, RunOptions, Waits, Wish, WishState, WorkDone, WorkTa
 use sticker_kit::{Note, Scene};
 
 use crate::answering::{with_go_on, with_more, with_question};
+use crate::placing::{over, put};
 use crate::read::Page;
 use crate::taps::OnShow;
 use crate::today::Today;
@@ -25,8 +26,8 @@ use crate::wishing::Seen;
 /// the same asked once more, what is being done, what was done, and a wish with no work waiting.
 const WORK: &str = "work-";
 const SURE: &str = "sure-";
-const BUSY: &str = "busy-";
-const SAID: &str = "said-";
+pub(crate) const BUSY: &str = "busy-";
+pub(crate) const SAID: &str = "said-";
 const WISH: &str = "wish-";
 /// The start of the id of a file's note: `file-3-m1` is file 3 of the work of the made wish `m1`.
 pub(crate) const FILE: &str = "file-";
@@ -50,7 +51,7 @@ fn text(id: String, title: &str, body: Vec<String>, options: Vec<&str>) -> Note 
     Note::Text { id, title: title.to_string(), body, options, quoted: String::new(), field: None }
 }
 
-fn id_of(note: &Note) -> Option<&str> {
+pub(crate) fn id_of(note: &Note) -> Option<&str> {
     match note {
         Note::Text { id, .. } | Note::Told { id, .. } => Some(id),
         _ => None,
@@ -101,17 +102,6 @@ pub(crate) fn told_on(scene: &Scene) -> bool {
     has(TOLD) && !has(WORK)
 }
 
-/// `notes` over the scene `from`, as the notes of an opened wish go: what core is at work on stays, and every
-/// other note of an opened wish gives way to these. With `said`, what was done with work stays too: the answer
-/// to a person's own tap is not taken away by a look.
-fn over(from: &Scene, notes: Vec<Note>, said: bool) -> Scene {
-    let stays = |id: &str| id.starts_with(BUSY) || said && id.starts_with(SAID);
-    let mut now = from.clone();
-    now.notes.retain(|one| !ours(one) || id_of(one).is_some_and(stays));
-    now.notes.splice(0..0, notes);
-    now
-}
-
 /// The number of a file's note of `wish`.
 fn file_of(note: &Note, wish: &str) -> Option<usize> {
     let (n, of) = id_of(note)?.strip_prefix(FILE)?.split_once('-')?;
@@ -119,7 +109,7 @@ fn file_of(note: &Note, wish: &str) -> Option<usize> {
 }
 
 /// Whether a note is of `wish`: any of this file's but the one of a wish with no work waiting.
-fn of(note: &Note, wish: &str) -> bool {
+pub(crate) fn of(note: &Note, wish: &str) -> bool {
     let named = |start: &&str| id_of(note).and_then(|id| id.strip_prefix(*start)) == Some(wish);
     [WORK, SURE, BUSY, SAID, TOLD].iter().any(named) || file_of(note, wish).is_some()
 }
@@ -199,14 +189,6 @@ pub fn notes_of(wish: &str, done: WorkDone) -> Vec<Note> {
         WorkDone::Asks(waits) => vec![waiting(&waits, true, false)],
         WorkDone::Said(title, body) => vec![text(format!("{SAID}{wish}"), title, body, Vec::new())],
     }
-}
-
-/// `notes` in place of every note of `wish` on the scene, where the first of those was.
-fn put(scene: &mut Scene, wish: &str, notes: Vec<Note>) {
-    let at = scene.notes.iter().position(|note| of(note, wish)).unwrap_or(0);
-    scene.notes.retain(|note| !of(note, wish));
-    let at = at.min(scene.notes.len());
-    scene.notes.splice(at..at, notes);
 }
 
 impl Today {

@@ -68,6 +68,7 @@ pub mod jelly;
 pub mod jellyfish;
 pub mod lines;
 mod live;
+mod placing;
 pub mod popup;
 pub mod read;
 pub mod scene;

@@ -170,19 +170,23 @@ fn busy(scene: &Scene, wish: &str) -> bool {
     scene.notes.iter().any(|note| id_of(note).and_then(|id| id.strip_prefix(BUSY)) == Some(wish))
 }
 
-/// The note of work that waits, in core's words, with core's choices under it.
-fn waiting(waits: &Waits, sure: bool) -> Note {
+/// The note of work that waits, in core's words, with core's choices under it. Before `Show me` (`shown`) it names
+/// no file: core is asked of the same work with every name among those it only counts, and says the same but them.
+fn waiting(waits: &Waits, sure: bool, shown: bool) -> Note {
     if sure {
         let (title, body) = waits.asks();
         return text(format!("{SURE}{}", waits.wish), title, body, waits.choices(true));
     }
-    text(format!("{WORK}{}", waits.wish), waits.title(), waits.lines(), waits.choices(false))
+    let counted = Waits { names: Vec::new(), more: waits.more + waits.names.len(), ..waits.clone() };
+    let lines = if shown { waits.lines() } else { counted.lines() };
+    text(format!("{WORK}{}", waits.wish), waits.title(), lines, waits.choices(false))
 }
 
 /// The notes of work that waits: what its run says it did, when core printed a piece of it, and the work's own
-/// note, with core's choices, after it.
-pub fn waiting_notes(waits: &Waits) -> Vec<Note> {
-    told(waits).into_iter().chain([waiting(waits, false)]).collect()
+/// note, with core's choices, after it. `shown`: the person tapped `Show me`, so the changes have their rows and
+/// the files their names; a look, a tap on the wish's character and `layout` show neither (ADR 0023).
+pub fn waiting_notes(waits: &Waits, shown: bool) -> Vec<Note> {
+    told(waits, shown).into_iter().chain([waiting(waits, false, shown)]).collect()
 }
 
 /// The notes that say what core answered to a tap on a choice of `wish`.
@@ -190,9 +194,9 @@ pub fn notes_of(wish: &str, done: WorkDone) -> Vec<Note> {
     match done {
         WorkDone::Shown(waits, file) => {
             let file = text(format!("{FILE}{}-{wish}", file.n), &file.title(), file.lines(), Vec::new());
-            waiting_notes(&waits).into_iter().chain([file]).collect()
+            waiting_notes(&waits, true).into_iter().chain([file]).collect()
         }
-        WorkDone::Asks(waits) => vec![waiting(&waits, true)],
+        WorkDone::Asks(waits) => vec![waiting(&waits, true, false)],
         WorkDone::Said(title, body) => vec![text(format!("{SAID}{wish}"), title, body, Vec::new())],
     }
 }
@@ -224,8 +228,8 @@ impl Today {
     pub fn with_work(&self, mut shown: Scene) -> Scene {
         let waits = jellymoon_core::waiting(&self.home, &self.run_of("")).map(|day| day.waits).unwrap_or_default();
         let work = |waits: &Waits| {
-            let work = with_more(waiting(waits, false), &waits.wish, self.follows(&waits.wish));
-            told(waits).into_iter().chain([work])
+            let work = with_more(waiting(waits, false, false), &waits.wish, self.follows(&waits.wish));
+            told(waits, false).into_iter().chain([work])
         };
         let mut notes: Vec<Note> = waits.iter().flat_map(work).collect();
         let made = jellymoon_core::made(&self.home, &self.date);
@@ -261,8 +265,8 @@ impl Today {
     /// choices and the offer of a follow-up. None when no work of it waits.
     fn work_notes(&self, id: &str) -> Option<Vec<Note>> {
         let waits = jellymoon_core::waits(&self.home, &self.run_of(id))?;
-        let work = with_more(waiting(&waits, false), id, self.follows(id));
-        Some(told(&waits).into_iter().chain([work]).collect())
+        let work = with_more(waiting(&waits, false, false), id, self.follows(id));
+        Some(told(&waits, false).into_iter().chain([work]).collect())
     }
 
     /// [`Today::note_of`], with what the run says it did before the note of its work that waits.

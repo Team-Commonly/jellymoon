@@ -68,7 +68,8 @@ pub fn waits(w: &World, repo: &Path) -> Option<serde_json::Value> {
 }
 
 /// What the note of work that waits says under its title, in core's words, with `counted` the count of its files.
-/// No run's id is among them.
+/// The last text names the files: the note has it once `Show me` was tapped, and not before (the result in plain
+/// words). No run's id is among them.
 pub fn lines(w: &World, repo: &Path, counted: &str) -> Vec<String> {
     let waits = waits(w, repo).expect("the work waits");
     let names: Vec<&str> = waits["names"].as_array().unwrap().iter().map(|name| name.as_str().unwrap()).collect();
@@ -90,11 +91,12 @@ fn layout_prints_one_note_for_work_that_waits_with_the_wish_s_words_its_files_an
     let said = note.said();
     let run = w.kept()["run"].as_str().unwrap().to_string();
     // What is true first: the folder is not changed yet, and what each choice does to it. Then how much, as a
-    // person counts it, and the files' names. The run's id is not on the note.
-    let parts = [WORK, READY, &quoted(SAID), "1 new file, 1 changed, 1 removed.", "a.txt, b.txt, n.txt"];
+    // person counts it. No file is named before `Show me`, and the run's id is not on the note.
+    let parts = [WORK, READY, &quoted(SAID), "1 new file, 1 changed, 1 removed."];
     for part in parts {
         assert!(said.contains(part), "{part:?} is not in {said:?}");
     }
+    assert!(!said.contains(".txt"), "a file is named: {said:?}");
     let at = |part: &str| said.find(part).unwrap();
     assert!(at(WORK) < at(READY) && at(READY) < at(&quoted(SAID)), "the plain sentence comes first: {said:?}");
     assert!(!said.contains(&run), "{said:?}");
@@ -134,8 +136,10 @@ fn show_me_draws_one_file_of_the_work_as_text_and_the_next_tap_the_next_file_and
 
     let work = lines(&w, &repo, "3 new files, 1 changed, 1 removed.");
     let work: Vec<&str> = work.iter().map(String::as_str).collect();
+    // Opened, the note counts the files and names none: the names come with the first file shown.
+    let unnamed = ("work-m1", WORK, work[..3].to_vec(), CHOICES.to_vec());
     let note = ("work-m1", WORK, work, CHOICES.to_vec());
-    assert_eq!(texts(opened.as_ref().unwrap()), std::slice::from_ref(&note));
+    assert_eq!(texts(opened.as_ref().unwrap()), std::slice::from_ref(&unnamed));
     assert_eq!(texts(reading.as_ref().unwrap()), [("busy-m1", "That work is being read.", vec![], vec![])]);
     // The file's text is the note's body, a line of it each, cleaned as `run show` cleans it: nothing in it is a
     // page, a link, a colour or a command to anything here.
@@ -147,8 +151,8 @@ fn show_me_draws_one_file_of_the_work_as_text_and_the_next_tap_the_next_file_and
     assert_eq!(texts(one.as_ref().unwrap()), shown);
     let shown = [note.clone(), ("file-2-m1", "File 2 of the work: CLAUDE.md", second.lines().collect(), vec![])];
     assert_eq!(texts(two.as_ref().unwrap()), shown);
-    // A tap on the little one again shows the work alone.
-    assert_eq!(texts(closed.as_ref().unwrap()), [note]);
+    // A tap on the little one again shows the work alone, as it was opened.
+    assert_eq!(texts(closed.as_ref().unwrap()), [unnamed]);
 
     assert_eq!(w.everything(&repo), before, "a show wrote something");
     let ran =

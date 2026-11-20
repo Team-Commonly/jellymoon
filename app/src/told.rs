@@ -6,6 +6,9 @@
 //! is without a result: every choice and every rule of the yes stay there. No file of the work is opened or run.
 //! A run that finished and changed nothing has no work's note: its result's note stands alone over the wish's
 //! own, and says first that nothing in the folder was changed (told alone, `jellymoon_core::Alone`).
+//!
+//! The note first comes onto the page with no row of a change, so with no file's name and no changed line: one
+//! sentence says what core's check of them found. The rows come with a tap on `Show me` (`working.rs`, `notes_of`).
 
 use jellymoon_core::{Alone, Piece, Told, Waits};
 use sticker_kit::{Note, ToldRow};
@@ -18,6 +21,11 @@ const DECIDED: &str = "Decided";
 const UNSURE: &str = "Not sure about";
 /// Said on every such note: a run cannot run a command, so nothing it says was tried.
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
+/// Said in the place of every change's row before `Show me`, when a change passed core's check: each line it
+/// quotes is a whole line the work took from its file or put in it. Not said of a change core left out or dropped.
+/// It starts the paragraph of [`NOTHING_RUN`] and so adds none of its own: at 960x640 what the run did is still
+/// read (`tests/f86.rs`).
+const CHECKED: &str = "The lines it quotes match the copy.";
 /// Said last when core dropped a piece that failed its check.
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 /// Said first of a run that finished and changed nothing.
@@ -44,28 +52,31 @@ fn changed(name: &str, made: bool, before: &[String], after: &[String]) -> ToldR
 }
 
 /// The note of what the run of `waits` says it did, when core printed a piece of it that passed. None when there is
-/// no result, or when every piece of it was dropped.
-pub(crate) fn told(waits: &Waits) -> Option<Note> {
-    note(&waits.wish, waits.result.as_ref()?, None)
+/// no result, or when every piece of it was dropped. `shown`: the person tapped `Show me`, and each change has its
+/// row; else [`CHECKED`] stands for them all.
+pub(crate) fn told(waits: &Waits, shown: bool) -> Option<Note> {
+    note(&waits.wish, waits.result.as_ref()?, None, shown)
 }
 
 /// The note of what the run of the made wish `wish` says it did, when it finished and changed nothing and core
 /// printed a piece of it that passed. None of any other end.
 pub(crate) fn told_alone(wish: &str, alone: &Alone) -> Option<Note> {
     let Alone::Unchanged(Some(told)) = alone else { return None };
-    note(wish, told, Some(UNCHANGED))
+    note(wish, told, Some(UNCHANGED), false)
 }
 
-/// The note of `told` of the wish `wish`, its sentences after `first`, when one is given.
-fn note(wish: &str, told: &Told, first: Option<&str>) -> Option<Note> {
+/// The note of `told` of the wish `wish`, its sentences after `first`, when one is given. With `shown` a change
+/// is its row, and without it no row: then the changes are said once, among the last sentences.
+fn note(wish: &str, told: &Told, first: Option<&str>, shown: bool) -> Option<Note> {
     if told.pieces.is_empty() {
         return None;
     }
-    let (mut rows, mut decided, mut unsure) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut rows, mut decided, mut unsure, mut checked) = (Vec::new(), Vec::new(), Vec::new(), None);
     for piece in &told.pieces {
         match piece {
             // What it did has no label: the title is its label, and it is read first.
             Piece::Did { text } => rows.push(row("", std::slice::from_ref(text))),
+            Piece::Change { .. } if !shown => checked = Some(CHECKED),
             Piece::Change { name, made, before, after, .. } => rows.push(changed(name, *made, before, after)),
             Piece::Decided { text } => decided.push(text.clone()),
             Piece::Unsure { text } => unsure.push(text.clone()),
@@ -73,7 +84,8 @@ fn note(wish: &str, told: &Told, first: Option<&str>) -> Option<Note> {
     }
     let grouped = [(DECIDED, decided), (UNSURE, unsure)];
     rows.extend(grouped.into_iter().filter(|(_, texts)| !texts.is_empty()).map(|(label, texts)| row(label, &texts)));
-    let mut end: Vec<String> = first.into_iter().chain([NOTHING_RUN]).map(str::to_string).collect();
+    let run = checked.map_or(NOTHING_RUN.to_string(), |checked| format!("{checked} {NOTHING_RUN}"));
+    let mut end: Vec<String> = first.map(str::to_string).into_iter().chain([run]).collect();
     end.extend((told.dropped > 0).then(|| UNCHECKED.to_string()));
     Some(Note::Told { id: format!("{TOLD}{wish}"), title: TITLE.to_string(), rows, end })
 }

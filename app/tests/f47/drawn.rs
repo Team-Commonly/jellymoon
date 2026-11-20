@@ -147,7 +147,7 @@ fn work_of_more_such_files_than_a_note_names_or_of_a_name_not_printed_as_it_is_h
             let drawn = lines.iter().find(|line| line.starts_with('[')).unwrap();
             let note = if first.is_empty() { "work-m1" } else { "sure-m1" };
             let (said, options) = placed(drawn, note);
-            // The work's own note names the first six of all its files; the one that asks names none.
+            // The work's own note counts its files and names none before `Show me`; the one that asks names none.
             assert!(said.ends_with(&bare(if first.is_empty() { OVER } else { "Nothing was changed." })), "{said}");
             assert!(said.contains(&bare(OVER)) && (first.is_empty() || !said.contains("CLAUDE.md")), "{acts:?}");
             // The work's note says what its one choice that changes something does, and of no keep.

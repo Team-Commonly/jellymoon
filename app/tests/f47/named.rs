@@ -52,11 +52,10 @@ fn every_file_the_person_s_tools_obey_in_work_of_more_files_than_are_listed_is_n
     let showed = window.showed();
     let [opened, _, asks, _, kept] = &showed[..] else { panic!("five lines") };
 
-    // 236 files, of which a list holds 200: the counts are of those, six are named, and the rest is counted.
+    // 236 files, of which a list holds 200: the counts are of those. None is named before `Show me`.
     let said = quoted(SAID);
     let counted = "198 new files, 1 changed, 1 removed, counted in the first 200 files.";
-    let names = "CLAUDE.md, a.txt, b.txt, f000.txt, f001.txt, f002.txt, and 230 more";
-    let note = ("work-m1", WORK, vec![READY, said.as_str(), counted, names], CHOICES.to_vec());
+    let note = ("work-m1", WORK, vec![READY, said.as_str(), counted], CHOICES.to_vec());
     assert_eq!(texts(opened.as_ref().unwrap()), [note]);
     // Two of the three are past the list, and all three are named, each in a text of its own.
     let obeyed = vec!["CLAUDE.md", "zz/.claude/settings.json", "zz/.envrc", TOLD];

@@ -107,7 +107,7 @@ fn a_keep_core_refuses_leaves_one_plain_note_with_core_s_reason_and_the_work_sti
 
     assert_eq!((persons(&w, &repo), branches(&w, &repo)), before, "a refused keep changed something");
     let work = lines(&w, &repo, "1 new file, 1 changed, 1 removed.");
-    let work: Vec<&str> = work.iter().map(String::as_str).collect();
+    let work: Vec<&str> = work[..3].iter().map(String::as_str).collect();
     assert_eq!(texts(again.as_ref().unwrap()), [("work-m1", WORK, work, CHOICES.to_vec())], "the work still waits");
 }
 

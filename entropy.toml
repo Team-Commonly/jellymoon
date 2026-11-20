@@ -1006,7 +1006,10 @@ max_file_lines = 400
 # page meanwhile (`src/wishing.rs`, `src/answering.rs`, 11), with its test (`tests/go_on_from_an_answer.rs`, 19).
 # The walk's `say` step raised it by 52: Enter in a note's field, its words counted and never printed, also in a
 # failure's line (`examples/walk.rs`, 32), with its test (`tests/walk.rs`, 20).
-"app" = 15984
+# The result in plain words raised it by 220: the first view of a result draws no change's row and names no file,
+# and `Show me` brings them (`src/told.rs`, `src/working.rs`, 16), with its test (`tests/result_in_plain_words.rs`,
+# 189) and the older pins of the first view (`tests/f86.rs`, `tests/f47*`, `examples/snapshot.rs`, 15).
+"app" = 16204
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

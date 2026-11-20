@@ -2,7 +2,9 @@
 //! Jellymoon's (ADR 0023, decisions 3 to 6). The wish is made and run by the `jellymoon` command with the made-up
 //! agent of F39's tests, and its result is written into the run's folder by hand, which core checks as it checks
 //! the run's own (`crates/jellymoon/tests/f85.rs`). What `layout` prints is read here, and the taps are carried by
-//! the made-up window of F47 (`support/tapper.rs`). Nothing here starts the real Claude Code or opens a window.
+//! the made-up window of F47 (`support/tapper.rs`). `layout` prints the note as it first comes onto the page: a
+//! change has no row there, and one sentence says core checked it (`tests/result_in_plain_words.rs`). Nothing here
+//! starts the real Claude Code or opens a window.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -17,6 +19,7 @@ use support::worked::{finished, tree};
 
 const TITLE: &str = "What it says it did";
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
+const CHECKED: &str = "The lines it quotes match the copy.";
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
 const SIZES: [&str; 2] = ["1440x900", "960x640"];
@@ -87,14 +90,12 @@ fn work(placed: &[Piece]) -> Vec<String> {
     of(placed, "work-m1").iter().map(moved).collect()
 }
 
-/// The rows of [`pieces`], each the note's own words in it and what it quotes, in the order they are read. A
-/// change is one row: its label, and the words "before" and "after" beside its sides.
+/// The rows of [`pieces`] as `layout` prints them, each the note's own words in it and what it quotes, in the
+/// order they are read. A change has no row before `Show me`.
 fn rows(decided: &[String], unsure: &[String]) -> Vec<(&'static str, Vec<String>)> {
     let one = |text: &str| vec![text.to_string()];
     vec![
         ("", one(DID)),
-        ("Changed in a.txt before after", [one("a.txt as it was"), one("edited by the run")].concat()),
-        ("New file n.txt", one("new from the run")),
         ("Decided", [&one("It kept the old name.")[..], decided].concat()),
         ("Not sure about", [&one("It could not try the new line.")[..], unsure].concat()),
     ]
@@ -128,9 +129,13 @@ fn layout_prints_the_told_note_before_the_work_s_with_every_text_of_the_run_a_qu
     let placed = w.placed();
     let first = |id: &str| placed.iter().position(|piece| piece.id() == id).unwrap();
     assert!(first("told-m1") < first("work-m1"), "the told note comes first");
-    assert!(reads(&placed, &rows(&[], &[]), &[NOTHING_RUN]) >= 1, "what the run did is read first");
+    let end = [CHECKED, NOTHING_RUN];
+    assert!(reads(&placed, &rows(&[], &[]), &end) >= 1, "what the run did is read first");
     let small = w.placed_with(&["--size", SIZES[1]]);
-    assert!(reads(&small, &rows(&[], &[]), &[NOTHING_RUN]) >= 1, "{}: what the run did is read first", SIZES[1]);
+    assert!(reads(&small, &rows(&[], &[]), &end) >= 1, "{}: what the run did is read first", SIZES[1]);
+    // No piece names a file the run did not name in its own sentence, or holds a line of the work.
+    let held = |word: &str| placed.iter().chain(&small).any(|piece| piece.0.to_string().contains(word));
+    assert!(!["b.txt", "as it was", "edited by the run", "new from the run", "Changed in"].into_iter().any(held));
     // Every run of a quote is in the tone for quoted words, and no text of the run is on the sheet.
     let quoted = of(&placed, "told-m1").into_iter().filter(|piece| piece.kind() == "quote");
     assert!(quoted.flat_map(Piece::roles).all(|role| role == "quoted"));
@@ -146,8 +151,14 @@ fn layout_prints_the_told_note_before_the_work_s_with_every_text_of_the_run_a_qu
 /// A typical result (`shown-told-typical.json`): a did of two lines, one change, a decided, nothing dropped.
 const TYPICAL: &str = include_str!("../../crates/jellymoon-core/tests/fixtures/shown-told-typical.json");
 
+/// The pieces placed of the opened wish once `Show me` was tapped: the rows of the changes come with that tap.
+fn shown(w: &World) -> Vec<Piece> {
+    let lines = w.taps("logs", &["poke:m1", "choose:work-m1:0", "run", "placed"]).ended();
+    serde_json::from_str::<Vec<Value>>(&lines[3]).unwrap().into_iter().map(Piece).collect()
+}
+
 #[test]
-fn at_1440x900_a_typical_result_reads_what_it_did_and_the_whole_change_before_the_work_s_note() {
+fn at_1440x900_a_typical_result_reads_what_it_did_and_after_show_me_the_whole_change_before_the_work_s_note() {
     let (w, _) = finished("edits");
     let typical: Value = serde_json::from_str(TYPICAL).unwrap();
     let said = typical["result"]["pieces"].as_array().unwrap();
@@ -156,7 +167,9 @@ fn at_1440x900_a_typical_result_reads_what_it_did_and_the_whole_change_before_th
     let change =
         json!({"type": "change", "file": "a.txt", "before": ["a.txt as it was"], "after": ["edited by the run"]});
     result(&w, &json!([said[0], change, said[2]]));
-    let placed = w.placed();
+    let first = [("", vec![text(0)]), ("Decided", vec![text(2)])];
+    assert_eq!(reads(&w.placed(), &first, &[CHECKED, NOTHING_RUN]), 2, "what it did and what it decided are read");
+    let placed = shown(&w);
     let rows = vec![
         ("", vec![text(0)]),
         ("Changed in a.txt before after", vec!["a.txt as it was".to_string(), "edited by the run".to_string()]),
@@ -185,7 +198,7 @@ fn at_960x640_a_did_too_long_for_the_room_draws_no_row_at_all_and_the_work_s_not
     let mut rows = rows(&[], &[]);
     rows[0].1 = vec![long];
     let placed = small(&w);
-    assert_eq!(reads(&placed, &rows, &[NOTHING_RUN]), 0, "a row was drawn");
+    assert_eq!(reads(&placed, &rows, &[CHECKED, NOTHING_RUN]), 0, "a row was drawn");
     assert_eq!(work(&placed), work(&alone), "the work's note is whole");
     let options: Vec<String> =
         of(&placed, "work-m1").iter().filter(|piece| piece.kind() == "option").map(|o| o.said()).collect();
@@ -218,7 +231,7 @@ fn rows_that_do_not_fit_are_left_out_and_counted_and_none_is_cut() {
     result(&w, &Value::Array(all));
     let rows = rows(&(3..6).map(long).collect::<Vec<_>>(), &(0..3).map(long).collect::<Vec<_>>());
     for size in SIZES {
-        let drawn = reads(&w.placed_with(&["--size", size]), &rows, &[NOTHING_RUN]);
+        let drawn = reads(&w.placed_with(&["--size", size]), &rows, &[CHECKED, NOTHING_RUN]);
         assert!(size == SIZES[0] || drawn < rows.len(), "{size}: no row was left out");
     }
 }
@@ -230,10 +243,8 @@ fn a_dropped_piece_ends_the_note_with_the_sentence_that_something_could_not_be_c
     let mut said = pieces().as_array().unwrap().clone();
     said[2] = unchecked();
     result(&w, &Value::Array(said));
-    let mut rows = rows(&[], &[]);
-    rows.retain(|(label, _)| *label != "New file n.txt");
     for size in SIZES {
-        reads(&w.placed_with(&["--size", size]), &rows, &[NOTHING_RUN, UNCHECKED]);
+        reads(&w.placed_with(&["--size", size]), &rows(&[], &[]), &[CHECKED, NOTHING_RUN, UNCHECKED]);
     }
     // Every piece dropped, and no result at all: no told note, and the work's note as it is.
     result(&w, &json!([unchecked()]));

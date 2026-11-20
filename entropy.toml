@@ -1012,7 +1012,9 @@ max_file_lines = 400
 # view and of a `Show me` with no file (`tests/f86.rs`, `tests/f47*`, `examples/snapshot.rs`, 17).
 # `Show me` in turn raised it by 48: the first tap brings the rows with no file and each later tap a file the page
 # draws (`src/told.rs`, `src/working.rs`, 27), with its test (`tests/result_in_plain_words.rs`, 21).
-"app" = 16272
+# The next change in turn raised it by 25: the first look tells of every older wish whose work waits, so each
+# comes after a keep or a toss of the one shown (`src/showing.rs`, 16), with its test (`tests/work_shows.rs`, 9).
+"app" = 16297
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

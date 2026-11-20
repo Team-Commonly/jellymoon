@@ -41,7 +41,7 @@ fn core_is_asked_of_a_wish_once_for_an_end_of_its_run_and_never_while_it_goes() 
     // The look that draws the run's end asks, and is told there is no work.
     let (asks, whom) = asked(&mut turns, &going, &ended).expect("nothing is in hand");
     assert_eq!(whom, ["m1"]);
-    asks.none("m1".to_string());
+    Asks::tell(&asks.none, "m1".to_string());
     // No look after it asks again, and the wish asked of at the opening is not asked of again either.
     for _ in 0..3 {
         assert_eq!(asked(&mut turns, &ended, &ended).map(|(_, whom)| whom), Some(Vec::new()));

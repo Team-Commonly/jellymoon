@@ -27,7 +27,8 @@ pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>, Rc<
 /// Whose work that waits a look may show with no tap. Kept on the window's thread.
 #[derive(Default)]
 struct Turns {
-    /// The work that waited when the window opened is looked for by one look that is shown, and by no other.
+    /// The work that waited when the window opened is looked for by one look that is shown, and by no other. It
+    /// shows the newest wish's, and every other wish it finds work of has its turn after it (`later`).
     first: First,
     /// The made wishes of the last look. None before the first: a wish there then is not new to this window.
     known: Option<BTreeSet<String>>,
@@ -35,6 +36,8 @@ struct Turns {
     turn: BTreeSet<String>,
     /// The wishes a look asked core of that have no work waiting, told from the look's thread.
     none: Arc<Mutex<Vec<String>>>,
+    /// The wishes the first look found work of and did not show, told from its thread: their turn is to come.
+    later: Arc<Mutex<Vec<String>>>,
     /// The looks still to be made before one may show work: [`HOLD`] after a tap on an option, an Enter in a
     /// field, core's answer to either, and a look made while a note was in hand.
     hold: usize,
@@ -60,6 +63,7 @@ struct Asks {
     /// The made wishes of the scene the look was made of: no other wish's work is put on it.
     made: BTreeSet<String>,
     none: Arc<Mutex<Vec<String>>>,
+    later: Arc<Mutex<Vec<String>>>,
 }
 
 /// The characters of the day's made wishes: the last of the page's, one for each row of the note of them.
@@ -87,6 +91,9 @@ impl Turns {
         }
         let all: BTreeSet<String> = ids(&|_| true).into_iter().collect();
         self.known = Some(all.clone());
+        if let Ok(mut later) = self.later.lock() {
+            self.turn.extend(later.drain(..));
+        }
         if let Ok(mut none) = self.none.lock() {
             for id in none.drain(..) {
                 self.turn.remove(&id);
@@ -111,7 +118,8 @@ impl Turns {
         if first {
             self.first = First::Asked;
         }
-        Some(Asks { first, turn: self.turn.clone(), made: all, none: self.none.clone() })
+        let (none, later) = (self.none.clone(), self.later.clone());
+        Some(Asks { first, turn: self.turn.clone(), made: all, none, later })
     }
 
     /// The person tapped an option or pressed Enter in a field, or core answered one: no look shows work until
@@ -157,10 +165,11 @@ impl Asks {
         whom
     }
 
-    /// The wish `id` has no work waiting: it is not asked of again for this end of its run.
-    fn none(&self, id: String) {
-        if let Ok(mut none) = self.none.lock() {
-            none.push(id);
+    /// Tells the window's thread of the wish `id`. In `none`: it has no work waiting, and is not asked of again
+    /// for this end of its run. In `later`: the first look found its work and shows another's, so its turn comes.
+    fn tell(list: &Mutex<Vec<String>>, id: String) {
+        if let Ok(mut list) = list.lock() {
+            list.push(id);
         }
     }
 }
@@ -243,23 +252,30 @@ impl Showing {
     /// wish asked of once. Not while a note on the page is in the person's hand, and not in the [`HOLD`] looks
     /// after the page left the hand, the person chose or typed or core answered them: then the work waits its
     /// turn. Of several, the first in core's order is shown. The first look shown also finds the work that
-    /// waited when the window opened, the newest wish's. What a run that changed nothing says it did (told
-    /// alone) is shown the same way, but only when no wish asked has work that waits: the look asks on past
-    /// it, and a wish passed over so keeps its turn.
+    /// waited when the window opened: it shows the newest wish's, and the others have their turn after it, as
+    /// work of a run that ended under this window does, so a keep or a toss is followed by the next that waits.
+    /// What a run that changed nothing says it did (told alone) is shown the same way, but only when no wish
+    /// asked has work that waits: the look asks on past it, and a wish passed over so keeps its turn.
     pub fn look(&self) -> Option<Look> {
         self.with(|on| {
             let Some(asks) = self.2.borrow_mut().asks(&on.scene) else { return on.look() };
             let (today, page, from) = (on.today.clone(), on.page.clone(), on.scene.clone());
             Box::new(move || {
                 let (mut now, mut shown) = (today.again(page.as_ref(), &from), None);
+                let mut found = false;
                 for id in asks.whom(&now) {
                     match today.waiting_over(page.as_ref(), &now, &id) {
+                        // The first look asks on past the work it shows, for the work that waits its turn.
+                        Some((_, true)) if found => Asks::tell(&asks.later, id),
                         Some((work, true)) => {
-                            shown = Some(work);
-                            break;
+                            (shown, found) = (Some(work), true);
+                            if !asks.first {
+                                break;
+                            }
                         }
-                        Some((alone, false)) => shown = shown.or(Some(alone)),
-                        None => asks.none(id),
+                        Some((alone, false)) if !found => shown = shown.or(Some(alone)),
+                        Some(_) => {}
+                        None => Asks::tell(&asks.none, id),
                     }
                 }
                 now = shown.unwrap_or(now);

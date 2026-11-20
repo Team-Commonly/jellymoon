@@ -410,7 +410,9 @@ max_file_lines = 400
 # Live work raised core by 437: `run/steps.rs` (190: the five tools, a name only inside the copy, the kept file and
 # `doing`), its tests of the kept file (42), the stream reader's step tests (`run/stream/steps.rs`, 171), and the
 # reader's handover (`stream.rs`, `child.rs`, `answer.rs`, `follow.rs`, the exports: 34 net). Nothing was deleted.
-"crates/jellymoon-core" = 18353
+# Its gate raised core by 63: no name through a link and the steps file written without a flush (`run/steps.rs`,
+# 35 net, `hook::put` no longer used there) and the test of a link in the place (`run/steps/tests.rs`, 28).
+"crates/jellymoon-core" = 18416
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -644,7 +646,8 @@ max_file_lines = 400
 # Live work raised the binary by 82, all tests: the e2e of a run held between two steps (`tests/f39/steps.rs`, 43,
 # with its lines in `f39.rs`, 3) and the made-up agent's `steps` script (`support/fake_agent/steps.rs`, 39, with the
 # wait it shares moved there: `fake_agent.rs` 3 shorter).
-"crates/jellymoon" = 29975
+# Its gate raised the binary by 11: `doing` against a record of another wish and another day (`tests/f39/steps.rs`).
+"crates/jellymoon" = 29986
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -810,7 +813,8 @@ max_file_lines = 400
 # Open a wish raised the kit by 3: a legend line with no mark (`Mark::Plain`, its room and its empty drawing).
 # Live work raised the kit by 83: what a busy character says (`Character::says`, `PieceKind::Says`, the pill shared
 # with the label in `layout/grid.rs`, its drawing: 27 net) and its test (`tests/says.rs`, 56).
-"crates/sticker-kit" = 11181
+# Its gate raised the kit by 7: the pill cut in its middle (`layout/grid.rs`, 5) and its test (`tests/says.rs`, 2).
+"crates/sticker-kit" = 11188
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -975,7 +979,9 @@ max_file_lines = 400
 # Its old pins raised the app by 5 (11 added, 6 removed): the read wishes' notes in `tests/f43.rs`.
 # Live work raised the app by 257: `src/live.rs` (118, with its unit test), the two calls and the module lines (5),
 # `tests/live_work.rs` (112) and the walk's picture of a run held mid-way (`tests/walk.rs`, 22).
-"app" = 15716
+# Its gate raised the app by 27: no name with a blank on the pill (`src/live.rs`, 12 with its unit test's cases)
+# and its case in `tests/live_work.rs` (15).
+"app" = 15743
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

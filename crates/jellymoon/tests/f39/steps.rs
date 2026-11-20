@@ -40,4 +40,15 @@ fn a_run_s_steps_are_what_core_says_while_it_works_and_are_kept_when_it_ends() {
     let (read, edit) = (r#"{"tool":"read","file":"b.txt"}"#, r#"{"tool":"edit","file":"a.txt"}"#);
     assert_eq!(kept, format!("{{\"count\":2,\"last\":[{read},{edit}]}}\n"));
     assert!(!kept.contains(MARKER));
+    // Steps are a wish's only when its run's record is of that wish and that day.
+    let record = w.jm("runs").join(&run).join("run.json");
+    let written = fs::read_to_string(&record).unwrap();
+    for (part, other) in [("wish", "m9"), ("day", "2026-03-11")] {
+        let mut changed: serde_json::Value = serde_json::from_str(&written).unwrap();
+        changed[part] = json!(other);
+        fs::write(&record, changed.to_string()).unwrap();
+        assert!(doing(&home, DAY).is_empty(), "a record of another {part}");
+    }
+    fs::write(&record, &written).unwrap();
+    assert_eq!(doing(&home, DAY).len(), 1);
 }

@@ -61,6 +61,20 @@ fn mid_way(w: &World, size: &str) {
     }
 }
 
+/// A kept name with a blank of its own, as a file can be called: the pill says the step without it, so no name
+/// reads as Jellymoon's words. The kept steps are put back as they were.
+fn blank(w: &World) {
+    let runs = w.at("jm").join("runs");
+    let mut kept = fs::read_dir(&runs).unwrap().map(|entry| entry.unwrap().path().join("steps.json"));
+    let run = kept.find(|file| file.is_file()).unwrap();
+    let was = fs::read_to_string(&run).unwrap();
+    fs::write(&run, r#"{"count":1,"last":[{"tool":"read","file":"is done. Kept"}]}"#).unwrap();
+    let placed = w.placed_with(&["--size", SIZES[0]]);
+    let says: Vec<String> = of(&placed, "says", "m1").iter().map(|piece| piece.said()).collect();
+    fs::write(&run, was).unwrap();
+    assert_eq!(says, ["reading a file"]);
+}
+
 fn scene(line: &str) -> Option<Scene> {
     serde_json::from_str(line).expect(line)
 }
@@ -88,6 +102,7 @@ fn the_page_says_what_a_run_is_doing_while_it_works_and_only_today_s_notes_once_
         let first = |(_, steps): &(String, jellymoon_core::Steps)| steps.count == 1;
         wait_until("the first step", || jellymoon_core::doing(&home, DAY).iter().any(first));
         SIZES.iter().for_each(|size| mid_way(&w, size));
+        blank(&w);
         let mut window = w.taps("logs", &["placed", &format!("hold:{}", w.at("tmp").join("ended").display()), "look"]);
         window.printed(1);
         fs::write(w.at("rec").join("go"), "").unwrap();

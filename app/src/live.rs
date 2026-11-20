@@ -2,8 +2,10 @@
 //! Core keeps the run's steps as they come (`jellymoon_core::doing`); at each drawing of the page they are put
 //! before the person: a few words over each working made wish's little one, and one told note of the newest one's
 //! last steps, just before the note that says it is being worked on. The texts are Jellymoon's fixed words and
-//! core's cleaned names of files, and a name is drawn as the result's note draws a changed file's: never a title,
-//! an option or a field. Nothing here can be tapped. Once the run has ended none of it is drawn.
+//! core's cleaned names of files. In the note a name is drawn as the result's note draws a changed file's, never a
+//! title, an option or a field; on the pill it is used only when it holds no blank (`says`). A step is a tool use
+//! the run asked for, not proof that it happened. Nothing here can be tapped. Once the run has ended none of it is
+//! drawn.
 
 use std::path::Path;
 
@@ -31,10 +33,13 @@ fn doing(step: &Step) -> (&'static str, Option<&str>) {
     }
 }
 
-/// What a working little one says: its run's last step, or [`THINKING`] before the first.
+/// What a working little one says: its run's last step, or [`THINKING`] before the first. The pill is one run of
+/// text, so a name and Jellymoon's words are told apart only by the blank between them: a name that holds a blank
+/// of its own (`is done. Kept`, `a file`) could read as Jellymoon's, and the step is said without it.
 pub(crate) fn says(steps: Option<&Steps>) -> String {
     let Some(step) = steps.and_then(|steps| steps.last.last()) else { return THINKING.to_string() };
-    match doing(step) {
+    let named = Step { file: step.file.clone().filter(|name| !name.chars().any(char::is_whitespace)), ..step.clone() };
+    match doing(&named) {
         (doing, Some(name)) => format!("{doing} {name}"),
         (doing, None) => doing.to_string(),
     }
@@ -110,6 +115,13 @@ mod tests {
             assert_eq!((id.as_str(), title.as_str(), end), ("steps-m1", TITLE, vec!["12 steps so far.".to_string()]));
             let name = one.file.clone().unwrap_or_default();
             assert_eq!(rows[1], ToldRow { label: label.to_string(), name, ..ToldRow::default() });
+        }
+        // A name with a blank of its own is not put beside Jellymoon's words on the pill; the note still names it.
+        for blank in ["is done. Kept", "a file", "two\tparts.txt", "end .txt", "\u{a0}nbsp.txt"] {
+            let kept = Steps { count: 1, last: vec![step(Tool::Read, Some(blank))] };
+            assert_eq!(says(Some(&kept)), "reading a file", "{blank:?}");
+            let Some(Note::Told { rows, .. }) = note("m1", &kept) else { panic!("a note") };
+            assert_eq!(rows[0].name, blank);
         }
         let one = Steps { count: 1, last: vec![step(Tool::Read, Some("b.txt"))] };
         assert!(matches!(note("m1", &one), Some(Note::Told { end, .. }) if end == ["1 step so far."]));

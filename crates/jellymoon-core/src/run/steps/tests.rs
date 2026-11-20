@@ -4,7 +4,7 @@ use super::*;
 fn read(text: &str) -> Steps {
     let dir = tempfile::tempdir().unwrap();
     let at = dir.path().join(FILE);
-    hook::put(&at, text, false).unwrap();
+    crate::hook::put(&at, text, false).unwrap();
     kept(&at)
 }
 
@@ -39,4 +39,32 @@ fn kept_steps_are_read_back_as_written_and_as_nothing_else() {
         assert_eq!(read(&text).last[0].file, None, "{text}");
     }
     assert_eq!(kept(&dir.path().join("none.json")), Steps::default());
+}
+
+// A link the repo tracks can lead out of the copy: a file named through one has no name. Unix only: a link cannot be
+// made on Windows without a right a test does not have.
+#[cfg(unix)]
+#[test]
+fn a_file_named_through_a_link_in_the_place_has_no_name() {
+    use std::os::unix::fs::symlink;
+    let dir = tempfile::tempdir().unwrap();
+    let (place, outside) = (dir.path().join("copy"), dir.path().join("outside"));
+    fs::create_dir_all(place.join("src")).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("secret.txt"), "not the run's\n").unwrap();
+    fs::write(place.join("src").join("real.txt"), "the run's\n").unwrap();
+    symlink(&outside, place.join("inner")).unwrap();
+    symlink(outside.join("secret.txt"), place.join("src").join("near.txt")).unwrap();
+    let places = [place.clone()];
+    let name = |within: &str| inside(&place.join(within).display().to_string(), &places);
+    assert_eq!(name("inner/secret.txt"), None, "a folder that is a link");
+    assert_eq!(name("src/near.txt"), None, "the file itself a link");
+    assert_eq!(name("inner"), None);
+    assert_eq!(name("src/real.txt").as_deref(), Some("src/real.txt"));
+    assert_eq!(name("src/new.txt").as_deref(), Some("src/new.txt"), "a file about to be made");
+    // The place itself may be reached through a link: only the parts under it are asked.
+    let through = dir.path().join("through");
+    symlink(&place, &through).unwrap();
+    let file = through.join("src").join("real.txt").display().to_string();
+    assert_eq!(inside(&file, &[through]).as_deref(), Some("src/real.txt"));
 }

@@ -6,7 +6,7 @@ use super::page::{BODY_BOTTOM, BODY_TOP, legend_top};
 use super::{Ctx, PieceKind, line_height, piece, run};
 use crate::geom::Rect;
 use crate::scene::{Character, Scene, State};
-use crate::text::Role;
+use crate::text::{Role, fit_middle};
 
 /// Reach of a character's art from its anchor, in body units (the body is
 /// 200 wide): stars above, the label below, the body to the left, the
@@ -147,7 +147,8 @@ fn says(cx: &mut Ctx, grid: &Grid, mid_x: f32, top: f32, index: usize, who: &Cha
 }
 
 /// One line of `text` on a pill `height` high, centred on `mid_x` from `top`, cut to fit and capped so that it
-/// cannot reach a neighbour's art, the paper's edge or the notes. Nothing when nothing of the text is left.
+/// cannot reach a neighbour's art, the paper's edge or the notes. Nothing when nothing of the text is left. What a
+/// character says is cut in its middle: it ends in a file's name, and two files of one folder are told apart there.
 fn pill(cx: &mut Ctx, grid: &Grid, at: (f32, f32, f32), of: (PieceKind, usize, &Character), said: (&str, Role)) {
     let ((mid_x, top, height), (kind, index, who), (text, role), pad) = (at, of, said, cx.px(13.0));
     let mut half = cx.px(cx.theme.labels.max_width) / 2.0;
@@ -155,7 +156,11 @@ fn pill(cx: &mut Ctx, grid: &Grid, at: (f32, f32, f32), of: (PieceKind, usize, &
         half = half.min(grid.gap - REACH_RIGHT * grid.unit - grid.rim - cx.px(4.0));
     }
     half = half.min(mid_x - cx.paper().x - cx.px(8.0)).min(cx.content_right() - mid_x);
-    let (text, width) = cx.line(text, role, 2.0 * (half - pad));
+    let room = (2.0 * (half - pad)).max(0.0);
+    let (text, width) = match kind {
+        PieceKind::Says => fit_middle(&cx.clean(text), room, role, cx.size(role), cx.measure),
+        _ => cx.line(text, role, room),
+    };
     if text.is_empty() {
         return;
     }

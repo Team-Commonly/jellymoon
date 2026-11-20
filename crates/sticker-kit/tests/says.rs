@@ -16,7 +16,7 @@ fn placed(characters: Vec<Character>, theme: &Theme, size: Viewport) -> Vec<Plac
 
 #[test]
 fn a_busy_character_says_one_line_over_itself_and_over_no_other_piece() {
-    let long = format!("changing {}", "a-very-long-folder/".repeat(12));
+    let long = format!("changing {}last.txt", "a-very-long-folder/".repeat(12));
     for theme in [Theme::sticker(), Theme::plain()] {
         for (count, size) in [1, 3, 8].into_iter().flat_map(|count| SIZES.map(|size| (count, size))) {
             let says = |n: usize| if n.is_multiple_of(2) { long.as_str() } else { "reading hours.txt" };
@@ -36,8 +36,10 @@ fn a_busy_character_says_one_line_over_itself_and_over_no_other_piece() {
                 let [run] = &piece.text[..] else { panic!("one line: {piece:?}") };
                 assert!(run.rect.inside(&piece.rect.grown(0.5)), "{count} at {size:?}: the line leaves its bubble");
                 let whole = says(piece.id[1..].parse().unwrap());
-                let start = run.text.trim_end_matches('…');
-                assert!(!start.is_empty() && whole.starts_with(start), "{count} at {size:?}: {}", run.text);
+                // Whole, or cut in its middle: its start and its end are left, so the file's name still shows.
+                let (start, end) = run.text.split_once('…').unwrap_or((run.text.as_str(), ""));
+                let cut = !start.is_empty() && !end.is_empty() && whole.starts_with(start) && whole.ends_with(end);
+                assert!(run.text == whole || cut, "{count} at {size:?}: {}", run.text);
                 let own = |other: &Placed| other.id == piece.id && other.piece == PieceKind::Character;
                 // The paper and its punched holes are under every piece; a label reaches over a hole as well.
                 let own = |other: &Placed| own(other) || matches!(other.piece, PieceKind::Paper | PieceKind::Hole);

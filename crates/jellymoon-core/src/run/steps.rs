@@ -6,15 +6,18 @@
 //! steps come and left as it was at the run's end. A page reads it with [`doing`]: it is a file's word, read as
 //! this shape and no other, with every name cleaned again.
 
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::process;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::obeyed::{named, plain};
 use super::record;
-use crate::{copy, hook, tap, wish};
+use crate::busy::retried;
+use crate::{copy, tap, wish};
 
 /// The most steps whose tool and name are kept: the last ones.
 pub(super) const KEPT: usize = 4;
@@ -68,6 +71,14 @@ impl Live {
     }
 }
 
+/// A line's `type` alone, read first: every other part is passed over unparsed, and a line of another type is not
+/// parsed again.
+#[derive(Deserialize)]
+struct Kind {
+    #[serde(rename = "type")]
+    kind: String,
+}
+
 /// The parts of an `assistant` line a step is read from. A line of another shape has no step.
 #[derive(Deserialize)]
 struct Said {
@@ -103,6 +114,9 @@ impl Steps {
     /// Takes the steps of one line, and says whether it had any: each block of an `assistant` line's
     /// `message.content` that is a `tool_use` whose `name` is one of the five.
     pub(super) fn took(&mut self, raw: &[u8], places: &[PathBuf]) -> bool {
+        if !serde_json::from_slice::<Kind>(raw).is_ok_and(|line| line.kind == "assistant") {
+            return false;
+        }
         let Some(said) = serde_json::from_slice::<Said>(raw).ok().filter(|said| said.kind == "assistant") else {
             return false;
         };
@@ -128,9 +142,19 @@ impl Steps {
 }
 
 /// A path as core names a file of the run's: relative to one of `places`, as [`own`] names it. None for a path
-/// outside every place, and for one [`own`] does not name.
+/// outside every place, for one [`own`] does not name, and for one with a part under the place, the last
+/// included, that is a link on disk: it may lead out of the place. A part is asked with `symlink_metadata`, which
+/// follows nothing and opens no file; a part that is not there is no link, so a file about to be made keeps its name.
 fn inside(path: &str, places: &[PathBuf]) -> Option<String> {
-    own(places.iter().find_map(|place| Path::new(path).strip_prefix(place).ok())?)
+    let (place, within) = places.iter().find_map(|place| Some((place, Path::new(path).strip_prefix(place).ok()?)))?;
+    let mut at = place.clone();
+    for part in within.components() {
+        at.push(part);
+        if fs::symlink_metadata(&at).is_ok_and(|meta| meta.file_type().is_symlink()) {
+            return None;
+        }
+    }
+    own(within)
 }
 
 /// A relative path as core names a file: its parts joined by `/`, printed so that a person reads it as it is
@@ -151,10 +175,21 @@ fn file(home: &Path, run: &str) -> PathBuf {
     copy::kept_at(home, run).join(FILE)
 }
 
-/// Writes the steps so far over the kept ones, whole or not at all. One that cannot be written is left as it was.
+/// Writes the steps so far over the kept ones, whole or not at all: a new file beside it, only its owner's, then
+/// renamed over it. Not flushed to the disk: it is written at every step, on the reader's thread, and a step lost
+/// to a crash is no harm. One that cannot be written is left as it was.
 pub(super) fn keep(file: &Path, steps: &Steps) {
-    if let Ok(written) = serde_json::to_string(steps) {
-        let _ = hook::put(file, &format!("{written}\n"), false);
+    let Ok(written) = serde_json::to_string(steps) else { return };
+    let mut name = file.as_os_str().to_os_string();
+    name.push(format!(".jellymoon-{}", process::id()));
+    let new = PathBuf::from(name);
+    let mut open = OpenOptions::new();
+    open.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
+    let wrote = open.open(&new).and_then(|mut made| made.write_all(format!("{written}\n").as_bytes()));
+    if wrote.and_then(|()| retried(|| fs::rename(&new, file))).is_err() {
+        let _ = fs::remove_file(&new);
     }
 }
 

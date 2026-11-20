@@ -67,7 +67,7 @@ made with `--after <id>` in place of `--project`:
   | names a run that was stopped | `run <run> was cancelled by a stop: there is no work of it to follow` |
   | names a run that was cut off | `run <run> was cut off before it ended: there is no work of it to follow` |
   | names a run that failed | `run <run> did not finish: there is no work of it to follow` |
-  | names a run that changed nothing in a copy of work it follows that is not kept | `run <run> changed nothing on work that is not kept: follow the wish of that work instead` |
+  | names a run that changed nothing in a copy of work that is not kept: the nearest run it follows that changed files, through runs that changed nothing, or a record on that way that is not there or is not such a run's | `run <run> changed nothing on work that is not kept: follow the wish of that work instead` |
   | had its work tossed | `the work of run <run> was tossed, so it cannot be followed` |
   | has a record from before F48 | `the record of run <run> is from before a run's record named its commits: its work is not followed by Jellymoon` |
 

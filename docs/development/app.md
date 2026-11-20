@@ -548,7 +548,7 @@ that fit and counts the rest in a last line, `+N more`.
   no `work-<wish>` and no choice. When core lets a follow-up be made of the wish (`jellymoon_core::followable`
   with no work), the wish's note has the field of `More like this` under no offer: the hint "Type what to do
   next, then Enter", the key `more-<wish>`, and Enter there is a follow-up as under work ("A follow-up", below);
-  the run goes on in the same conversation, and the follow-up's wish is drawn working. With a field the note is
+  the run goes on in the same conversation where the harness still keeps it (`run.md`, "A session the harness keeps no more"), and the follow-up's wish is drawn working. With a field the note is
   in the person's hand, as every note with one is (`working::in_hand`): while it is on show no look puts another
   wish's work over it. A tap on the
   character shows both notes again; a look shows them once, as work that waits; `layout` does not print them.

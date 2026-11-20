@@ -75,6 +75,15 @@ fn the_first_note_lists_every_star_with_its_wish() {
 }
 
 #[test]
+fn a_made_wish_that_was_let_go_has_no_star_and_a_reading_s_keeps_the_stars_of_its_jobs() {
+    let wishes = vec![wish("w1", WishState::LetGo, &["a"]), wish("m1", WishState::LetGo, &["b"])];
+    let scene = ruled(&page(wishes, vec![]), &[], 1);
+    let rows = vec![("a".to_string(), "Label of w1".to_string())];
+    assert_eq!(scene.notes[0], Note::List { title: "came true today".to_string(), rows });
+    assert_eq!(scene.characters.iter().map(|one| one.stars).collect::<Vec<_>>(), [1, 0]);
+}
+
+#[test]
 fn a_clash_is_a_choice_of_both_quotes_and_only_a_settled_one_is_struck() {
     let scene = scene(&page(vec![wish("w1", WishState::LetGo, &[])], vec![clash(true), clash(false)]));
     let choices: Vec<(&str, &[String], bool)> = scene

@@ -64,3 +64,16 @@ added, 10 removed). Deleted: `keep_named` left `run/keep.rs` for `run/keep/tappe
   and a follow-up is made again as a wish of its own.
 - Core does not ask git again whether the change still does not fit when `Make it again` is tapped.
 - A toss asked while any run's copy is being made is refused; that was so before, and `Toss it` has it too.
+
+## After the gate
+A gate by reading passed the first commit and found two endings a person can come to, fixed in a second commit:
+- With no installed command the run could not be started, and that was found only after the toss: neither the
+  old change nor a running wish was left. The command is now looked for before the wish is made
+  (`app/src/again.rs`); with none, nothing is made and nothing is tossed. Test, seen red first:
+  `with_no_installed_command_make_it_again_makes_no_wish_and_tosses_nothing`. The full-day test now names an
+  installed command, so that it comes to core's refusal of the wish.
+- A wish made again whose run core then refused was told only core's reason; it is now told a typed wish's
+  sentence for that first (`WorkDone::remade`, with a unit test).
+- Left as it is: `Make it again` beside a toss that was refused can be tapped again after a later `Keep it`,
+  and makes a second wish with the same words; every sentence is true then and nothing is lost.
+Core's cap 19536 to 19559, the app's 18975 to 18993.

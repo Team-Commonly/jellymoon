@@ -122,7 +122,8 @@ fn with_the_day_s_made_wishes_full_make_it_again_tosses_nothing_and_says_core_s_
     let w = two_that_clash();
     let held = w.at("tmp").join("full");
     let hold = format!("hold:{}", held.display());
-    let acts = [&KEEP_BOTH[..], &[hold.as_str(), "choose:said-m2:0", "run"][..]].concat();
+    let bin = format!("bin:{}", w.install().parent().unwrap().display());
+    let acts = [&[bin.as_str()][..], &KEEP_BOTH[..], &[hold.as_str(), "choose:said-m2:0", "run"][..]].concat();
     let mut window = w.taps("logs", &acts);
     window.printed(5);
     // The day has its eight made wishes before the tap.
@@ -140,6 +141,18 @@ fn with_the_day_s_made_wishes_full_make_it_again_tosses_nothing_and_says_core_s_
     assert_eq!(kept(&w).len(), 8);
     assert_eq!((w.everything(&w.at("work").join("alpha")).1, waiting(&w)), before, "nothing was tossed");
     assert!(before.1.contains(&"m2".to_string()), "the work that does not fit waits still: {:?}", before.1);
+}
+
+#[test]
+fn with_no_installed_command_make_it_again_makes_no_wish_and_tosses_nothing() {
+    let w = two_that_clash();
+    // No `bin:` act: the window knows no folder of an installed command, so no run could be started.
+    let lines = w.taps("logs", &[&KEEP_BOTH[..], &["choose:said-m2:0", "run"][..]].concat()).ended();
+    let (title, body, options) = said(lines.last().unwrap(), "said-m2").expect("core's answer");
+    assert_eq!((title.as_str(), options.len(), body.len()), ("That wish was not kept.", 0, 2), "{body:?}");
+    assert_eq!(body[1], NOT_TOSSED);
+    assert_eq!(kept(&w).len(), 2, "no wish was made");
+    assert!(waiting(&w).contains(&"m2".to_string()), "the work that does not fit waits still");
 }
 
 #[test]

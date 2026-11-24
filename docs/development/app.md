@@ -748,7 +748,9 @@ that fit and counts the rest in a last line, `+N more`.
   are compared first, `Showing::chose`), shows `busy-<wish>` with "That wish is being made again.", and then,
   off the window's thread (`Today::asked`):
   1. core is asked by the tap, and says the wish's own words and its project only while its work waits and is
-     read; else core's refusal is the answer and nothing is made;
+     read; else core's refusal is the answer and nothing is made; with no installed command to start a run
+     with (`jellymoon_core::installed_command`), a typed wish's "That wish was not kept." with core's reason
+     is the answer, and nothing is made or tossed;
   2. the wish is made by the call an Enter in the entry makes for a typed wish (`jellymoon_core::wish_offered`
      with the day as the page reads it). The words are not read again by the person's Claude Code first
      (`shaping.rs`), and a sharper wish the old one was made with is not carried over: the new wish is the

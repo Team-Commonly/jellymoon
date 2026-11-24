@@ -435,7 +435,8 @@ max_file_lines = 400
 # A change that no longer fits raised it by 124 (147 added, 23 removed): the reason of a keep a tap could not do,
 # carried typed (`run/keep/tapped.rs`), the window's sentences for two reasons and their test
 # (`run/waits/plain.rs`), and `Make it again` and its words (`run/waits/again.rs`, `run/waits.rs`).
-"crates/jellymoon-core" = 19536
+# After the gate 23 more: a wish made again with no run says so first, with its test (`run/waits/again.rs`).
+"crates/jellymoon-core" = 19559
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -1092,7 +1093,8 @@ max_file_lines = 400
 # A change that no longer fits raised the app by 205 (215 added, 10 removed): `Make it again` carried, the wish
 # made, the toss and then the run (`src/again.rs`), the note with its one choice (`src/working.rs`), and its
 # tests at the made-up window (`tests/a_change_that_no_longer_fits.rs`, 169; a pin of `tests/f47/asked.rs`).
-"app" = 18975
+# After the gate 18 more: the installed command is looked for before a wish is made again, with its test.
+"app" = 18993
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

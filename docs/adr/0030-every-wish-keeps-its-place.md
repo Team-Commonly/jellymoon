@@ -88,7 +88,9 @@ answer and two bare bubbles, and could not tell that the other two had finished.
 
     What a tap on `Make it again` does, in this order:
     1. Core is asked, and answers with the wish's own words and its project only while the wish's work waits
-       and was read from its repo. Nothing is changed.
+       and was read from its repo. Nothing is changed. The installed command a run is started with is looked
+       for next: with none, the page says so in the words a typed wish is refused in, and nothing is made or
+       tossed.
     2. A new made wish of that project is made with those words, by the call an Enter in the entry makes for a
        typed wish. Every check and limit of a typed wish holds: the day's eight, a project that is offered no
        more.
@@ -102,8 +104,10 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     old work waits as before, with its choices. The other way round costs at worst a new wish beside work that
     could not be tossed, which `Toss it` still throws away. The run comes after the toss because a toss asks
     where every copy of the repo stands and core refuses it while a run's copy is being made: started first,
-    the run made the toss fail when this was built. So a run that cannot be started (no installed command)
-    is found after the toss: the wish is kept with no run, as a typed one is, and the page says so.
+    the run made the toss fail when this was built. So a run that core refuses to start, which cannot be asked
+    before the toss, is found after it: the wish is kept with no run, as a typed one is, and the page says so
+    with a typed wish's sentence for that and core's reason. A missing installed command, the one such ending
+    that can be known before, is found first (step 1).
 
     It is offered only for the refusal that no later tap can get past: changes in the way go with a save, so
     their note points at `Keep it` again. The waiting note does not offer it: whether a change fits is asked

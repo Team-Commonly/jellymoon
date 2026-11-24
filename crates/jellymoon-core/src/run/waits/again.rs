@@ -24,15 +24,38 @@ impl WorkDone {
     }
 
     /// What a page says once the new wish was made: this, which is what the toss of the work that does not fit
-    /// came to, done or refused, and after it that the wish was made again, or `unstarted`, what a typed wish
-    /// that was kept and has no run is told.
-    pub fn remade(self, unstarted: Option<String>) -> WorkDone {
+    /// came to, done or refused, and after it that the wish was made again, or `unstarted`, the title and the
+    /// reason a typed wish that was kept and has no run is told, both.
+    pub fn remade(self, unstarted: Option<(&'static str, String)>) -> WorkDone {
         match self {
             WorkDone::Said(title, mut said) => {
-                said.push(unstarted.unwrap_or_else(|| MADE.to_string()));
+                match unstarted {
+                    Some((kept, why)) => said.extend([kept.to_string(), why]),
+                    None => said.push(MADE.to_string()),
+                }
                 WorkDone::Said(title, said)
             }
             other => other,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MADE, WorkDone};
+
+    #[test]
+    fn a_wish_made_again_that_has_no_run_is_told_so_before_the_reason() {
+        let tossed = || WorkDone::Said("The change was thrown away.", vec!["Your folder is as it was.".to_string()]);
+        let said = |texts: &[&str]| texts.iter().map(|text| text.to_string()).collect::<Vec<_>>();
+        let kept = "Your wish is kept, and no run was started for it.";
+        assert_eq!(
+            tossed().remade(Some((kept, "the reason".to_string()))),
+            WorkDone::Said("The change was thrown away.", said(&["Your folder is as it was.", kept, "the reason"]))
+        );
+        assert_eq!(
+            tossed().remade(None),
+            WorkDone::Said("The change was thrown away.", said(&["Your folder is as it was.", MADE]))
+        );
     }
 }

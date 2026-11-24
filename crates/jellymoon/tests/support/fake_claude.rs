@@ -12,6 +12,12 @@ fn main() {
     if env::args().nth(1).as_deref() == Some("--helper") {
         return;
     }
+    // Asked to shape a wish (F91), it says the wish is clear and leaves nothing: what it records is a reading's.
+    if env::args().any(|arg| arg == "--add-dir") {
+        let clear =
+            r#"{\"clear\":true,\"wish\":\"\",\"done_when\":\"\",\"not_touching\":\"\",\"why\":\"\",\"ask\":\"\"}"#;
+        return println!(r#"{{"type":"result","is_error":false,"result":"{clear}"}}"#);
+    }
     let rec = env::current_exe().unwrap().parent().unwrap().to_path_buf();
     if let Ok(helper) = fs::read_to_string(rec.join("needs")) {
         let started = process::Command::new(helper.trim()).arg("--helper").status();

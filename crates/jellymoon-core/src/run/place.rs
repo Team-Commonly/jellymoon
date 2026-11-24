@@ -40,16 +40,16 @@ impl From {
 
 /// The repo's folder. Its last name must be the wish's project.
 pub(super) fn folder(home: &Path, day: &str, wish: &MadeWish, options: &RunOptions) -> Result<PathBuf, Error> {
-    found(home, day, wish, options).map(|(folder, _)| folder)
+    found(home, day, &wish.project, options).map(|(folder, _)| folder)
 }
 
-/// [`folder`], and where it came from.
-pub(super) fn found(home: &Path, day: &str, wish: &MadeWish, options: &RunOptions) -> Result<(PathBuf, From), Error> {
+/// [`folder`] of the project `project`, and where it came from.
+pub(super) fn found(home: &Path, day: &str, project: &str, options: &RunOptions) -> Result<(PathBuf, From), Error> {
     if let Some(repo) = &options.repo {
         if !repo.is_absolute() {
             return Err(refused("--repo must be a full path, from the root"));
         }
-        let named = repo.file_name().is_some_and(|last| last == wish.project.as_str());
+        let named = repo.file_name().is_some_and(|last| last == project);
         let why = "--repo is not the folder the wish is for: its last name is not the wish's project";
         return if named { Ok((repo.clone(), From::Named)) } else { Err(refused(why)) };
     }
@@ -59,8 +59,8 @@ pub(super) fn found(home: &Path, day: &str, wish: &MadeWish, options: &RunOption
     let typed = if options.logs.is_some() { reader::typed_in(&read) } else { Err(unknown()) };
     let offer = Offer::of(&read, typed)?;
     let none = format!("no folder of the name the wish gives was typed in on {day}");
-    match offer.led(&wish.project) {
-        Led::Typed(repo) => resolved(&repo, &wish.project, day).map(|folder| (folder, From::Typed)),
+    match offer.led(project) {
+        Led::Typed(repo) => resolved(&repo, project, day).map(|folder| (folder, From::Typed)),
         Led::Listed(repo) => Ok((repo, From::Listed)),
         Led::Many(folders) => Err(refused(format!(
             "{folders} folders of the name the wish gives were typed in on {day}; name the one with --repo"

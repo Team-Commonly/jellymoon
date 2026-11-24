@@ -26,6 +26,8 @@
 //! - `enter:<note>:<words>` and `answer`: a `type` in two acts, so that a test can act between Enter and core's
 //!   answer. `enter` prints the scene shown at once, or `null`, and keeps what is to be asked of core; `answer`
 //!   asks it on another thread and prints `{"kept":…,"scene":…}`.
+//! - `enter:wish@<project>:<words>` and `type:wish@<project>:<words>`: the same for Enter in the entry, with
+//!   that project's chip chosen (F91): the scene shown at once says the wish is being read.
 //! - `start`: the oldest asking a `type` left, on another thread, and the scene it shows, or `null`.
 //! - `core:<wish>:<index>`: no window at all: core's own answer to a tap on that choice of the wish's work, as
 //!   `[title, body]`, or `null` when it is no sentence.
@@ -144,6 +146,10 @@ fn entered(
     note: &str,
     typed: &str,
 ) -> Option<(Option<Scene>, Wishing)> {
+    if let Some(project) = note.strip_prefix("wish@") {
+        let wishing = showing.wishing(typed, Some(project))?;
+        return Some((showing.scene(), wishing));
+    }
     let is = |piece: &Value| piece["kind"] == "field" && piece["id"] == note;
     placed(now, size).iter().any(is).then(|| showing.typing(note, typed)).flatten()
 }

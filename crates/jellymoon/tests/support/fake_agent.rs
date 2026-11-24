@@ -19,6 +19,8 @@ mod asks;
 mod follow;
 #[path = "fake_agent/gate.rs"]
 mod gate;
+#[path = "fake_agent/shape.rs"]
+mod shape;
 #[path = "fake_agent/steps.rs"]
 mod steps;
 

@@ -6,6 +6,7 @@
 //! added, and the hook.
 
 mod parse;
+mod shape;
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -24,6 +25,8 @@ const USAGE: &str = "usage:
   jellymoon settle --date <YYYY-MM-DD> --clash <n> --option <1|2>   (a tap on a clash of the kept page: that statement stands)
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]   (keeps a wish you make on the day's page; starts nothing)
   jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --run [--logs <dir>] [--skip <names>]   (keeps the wish and starts its run, which goes on after this command)
+  jellymoon shape --say <your words> --project <folder name> [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <names>]   (asks your Claude Code, which only reads, to say the wish more sharply; a sharper wish waits, and nothing is kept or started)
+  jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --shaped [--run [--logs <dir>] [--skip <names>]]   (keeps the wish with the sharper wish that waits for these same words; with none, as typed)
   jellymoon wish --say <your words> --after <id> [--date <YYYY-MM-DD>] [--run [--logs <dir>] [--skip <names>]]   (a follow-up: a wish made of the work of that made wish)
   jellymoon run --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (starts your Claude Code on a made wish, in a copy of its repo, and waits)
   jellymoon run stop --wish <id> [--date <YYYY-MM-DD>]   (stops that run: its copy is kept, and no star is added)
@@ -113,9 +116,16 @@ fn install_hook(settings: Option<PathBuf>, installed: bool) -> Result<jellymoon_
 /// `wish`: keeps the wish, and with `--run` starts its run as a `jellymoon run` of this same program, which goes
 /// on when this command has printed and ended. The wish is kept whatever comes of its run: a run that was not
 /// started is said in `why`, in core's words, and is no failure of this command.
-fn wish(date: Option<String>, say: &str, of: &WishOf, apart: Option<RunOptions>) -> Result<String, Failure> {
+fn wish(
+    date: Option<String>,
+    say: &str,
+    of: &WishOf,
+    apart: Option<RunOptions>,
+    shaped: bool,
+) -> Result<String, Failure> {
     let home = home()?;
     let made = match of {
+        WishOf::Project(project) if shaped => shape::wish(&home, date.as_deref(), say, project),
         WishOf::Project(project) => jellymoon_core::wish(&home, date.as_deref(), say, project),
         WishOf::After(after) => jellymoon_core::wish_after(&home, date.as_deref(), say, after),
     };
@@ -210,7 +220,10 @@ fn run() -> Result<String, Failure> {
         }
         Command::InstallHook { settings, installed } => Ok(format!("{}\n", install_hook(settings, installed)?)),
         Command::Settle { date, clash, option } => settle(&date, clash, option),
-        Command::Wish { date, say, of, apart } => wish(date, &say, &of, apart),
+        Command::Wish { date, say, of, apart, shaped } => wish(date, &say, &of, apart, shaped),
+        Command::Shape(options, say, project) => {
+            Ok(format!("{}\n", jellymoon_core::shape(&home()?, &options, &say, &project)))
+        }
         Command::Hear(options) => hear(options),
         Command::Voice => Ok(format!("{}\n", jellymoon_core::voice(&home()?).map_err(failed)?)),
         Command::Run(options) => Ok(format!("{}\n", jellymoon_core::run(&home()?, &options).map_err(failed)?)),

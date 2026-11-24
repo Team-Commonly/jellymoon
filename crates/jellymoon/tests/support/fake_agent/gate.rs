@@ -15,6 +15,7 @@ use super::{
 /// test's world leaves it as it is dropped, and waits for these locks (`tests/f39/guard.rs`). So a test that
 /// ended, by a panic too, leaves no agent, on a system with no signals as well.
 pub fn minded(rec: &Path) {
+    super::shape::asked(rec); // asked to shape a wish, it is no run: it answers and ends here
     let live = fs::File::create(rec.join(format!("live-{}", process::id()))).unwrap();
     live.lock().unwrap();
     let over = rec.join("over");

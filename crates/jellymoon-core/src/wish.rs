@@ -75,6 +75,9 @@ pub struct MadeWish {
     /// before it. Left out of every wish that follows none, and no page shows it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
+    /// The run's prompt of a wish kept from a shape (F91, `run/shape.rs`): one line, at most 1000 characters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shaped: Option<String>,
 }
 
 /// The made wishes of one day, `pages/<day>.wishes.json`.
@@ -188,7 +191,8 @@ fn own(at: usize, wish: MadeWish) -> Option<MadeWish> {
             run::kept_question(question) && wish.state == WishState::NeedsYou && wish.run.is_some()
         })
         && wish.answer.as_deref().is_none_or(|answer| run::kept_answer(answer) && wish.run.is_some())
-        && wish.after.as_deref().is_none_or(|after| (1..=at).any(|before| after == format!("m{before}")));
+        && wish.after.as_deref().is_none_or(|after| (1..=at).any(|before| after == format!("m{before}")))
+        && wish.shaped.as_deref().is_none_or(run::kept_shaped);
     own.then_some(MadeWish { said, ..wish })
 }
 
@@ -230,7 +234,7 @@ pub fn wish_after(home: &Path, day: Option<&str>, typed: &str, after: &str) -> R
 }
 
 /// A wish's words as they are kept, or why they are not.
-fn words(typed: &str) -> Result<String, Error> {
+pub(crate) fn words(typed: &str) -> Result<String, Error> {
     let said = cleaned(typed).map_err(|why| match why {
         Unkept::Long => refused(LONG),
         Unkept::Changing => refused(CHANGING),
@@ -257,7 +261,8 @@ fn keep(home: &Path, day: &str, said: String, project: String, after: Option<Str
     let _lock = behind(home, day, Duration::ZERO, "this wish was not kept")?;
     let mut wishes = room()?;
     let (id, state, stars) = (format!("m{}", wishes.len() + 1), WishState::Working, Vec::new());
-    let wish = MadeWish { id, said, project, state, stars, run: None, why: None, question: None, answer: None, after };
+    let (run, why, question, answer, shaped) = (None, None, None, None, None);
+    let wish = MadeWish { id, said, project, state, stars, run, why, question, answer, after, shaped };
     wishes.push(wish.clone());
     write(home, day, wishes)?;
     Ok(Wished { wish, run: None, why: WHY.to_string() })

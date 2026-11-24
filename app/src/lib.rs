@@ -73,6 +73,7 @@ pub mod popup;
 pub mod read;
 pub mod scene;
 #[cfg(feature = "window")]
+pub mod shaping;
 pub mod shell;
 pub mod showing;
 pub mod starting;

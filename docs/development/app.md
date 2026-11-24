@@ -287,6 +287,30 @@ what core keeps.
 one, for a caller with none); `app/tests/f42.rs` and `f42/notes.rs` follow them, and `f42/run.rs` the run, through
 a made-up window that is a program of its own.
 
+## A wish read before its run (`app/src/shaping.rs`)
+
+Enter in the entry does not keep the wish at once (F91, [ADR 0025](../adr/0025-the-wish-is-shaped-before-a-run.md)).
+`Showing::wishing` is `OnShow::shaping`: the scene shown at once begins with the text note `shaping`, titled
+"Reading your wish…", with the start of the typed words as its quote, and core's `shape` is the work for the other
+thread. With no project chosen nothing is read, and the Enter is a typed wish's.
+
+- **`clear` and `as_typed`.** The same work goes on to `OnShow::wishing`: the wish is kept and its run asked for as
+  before, the note goes, and nothing more is said. A bad answer, a call that takes too long and no harness all
+  end here.
+- **`shaped`.** Nothing is kept. The entry is emptied, and two notes stand where the reading's stood:
+  `shape-said`, the kit's told note titled "Your wish, sharper", with a row for each text that is not empty under
+  the labels "The wish", "Done when", "Not touching", "Why" and "Only you know"; and under it the text note
+  `shape`, titled "What you typed", with the typed words as its quote and exactly two options, "Go with this" and
+  "Go with what I typed". Every word of the model's is a quote of a row. Every other word is fixed here.
+- **A tap** on either option is one arm of `stopping::chose` and an ordinary `Chosen::Work`: both notes go at
+  once, and the work asks core's `wish_of_shape` to keep the wish, with the shape or as typed, then asks for its
+  run as a typed wish's is asked for. Core keeps it only while that shape still waits for those words; what it
+  refuses, and a run that was not started, are said in the notes a typed wish has for them.
+- **Enter while they stand** takes the pair away and reads the new words: a page holds one reading or one pair.
+  A look leaves them (`working::names`).
+
+`app/tests/shape_first.rs` follows all of it through the made-up window (`support/tapper.rs`, `enter:wish@<project>:…`).
+
 ## A project given in the window (`app/src/starting.rs`)
 
 ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project add` and `jellymoon project new`

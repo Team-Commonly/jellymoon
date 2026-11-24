@@ -79,10 +79,10 @@ const _: () = assert!(SAID_KEPT >= 4 * (SAID_MAX + WINDOW));
 
 /// `--output-format json`: one object, the model's text in `result`.
 #[derive(Deserialize)]
-struct Reply {
-    is_error: bool,
+pub(crate) struct Reply {
+    pub is_error: bool,
     #[serde(default)]
-    result: String,
+    pub result: String,
 }
 
 pub(crate) struct Output {

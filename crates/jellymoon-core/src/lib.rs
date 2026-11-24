@@ -46,10 +46,10 @@ pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
 pub use ruling::{deliver, rule};
 pub use run::{
-    ANSWER_READ, Alone, FileChange, FileKind, KeepOptions, Kept, Piece, Ran, RunOptions, RunOutcome, Shown, ShownEntry,
-    ShownFile, Started, Step, Steps, Told, Tool, Tossed, Waiting, Waits, WorkDone, WorkState, WorkTap, answer_run,
-    doing, ended_alone, followable, keep_run, run, run_apart, show_file, show_run, stands, stop_run, toss_run, waiting,
-    waits, work_tapped,
+    ANSWER_READ, Alone, FileChange, FileKind, KeepOptions, Kept, Piece, Ran, RunOptions, RunOutcome, SHAPE_MODEL,
+    Shape, ShapeOutcome, Shaped, Shown, ShownEntry, ShownFile, Started, Step, Steps, Told, Tool, Tossed, Waiting,
+    Waits, WorkDone, WorkState, WorkTap, answer_run, doing, ended_alone, followable, keep_run, run, run_apart, shape,
+    show_file, show_run, stands, stop_run, toss_run, waiting, waits, wish_of_shape, wish_shaped, work_tapped,
 };
 pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, ReaderTurn, Ruling, Wish, WishState};
 pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};

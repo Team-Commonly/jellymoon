@@ -73,11 +73,15 @@ the heart of the decision.
 8. **In the window** Enter shows at once that the wish is being read. `clear` and `as_typed` go on as a typed
    wish always did. `shaped` keeps nothing and shows the sharper wish, every word of the model's a quote under a
    label of Jellymoon's, with `Go with this` and `Go with what I typed` (`docs/development/app.md`).
-   Amended 2026-11-24: the rows are "The wish", "Done when", "Not touching" and, last, "Only you know". The
-   model's reason is not drawn: it is its unchecked claim, it was wrong twice ("Measured"), and no run is given
-   it. When there is a question, the note of the two choices has a field under them, and Enter in it with words
-   keeps the wish with the sharper wish and the answer and starts its run as `Go with this` does. With no
-   question there is no field.
+   Amended 2026-11-24: the rows are "The wish", "Done when" and "Not touching". The model's reason is not
+   drawn: it is its unchecked claim, it was wrong twice ("Measured"), and no run is given it. When there is a
+   question, the note of the two choices is the question's: it is titled "Only you know", the question is its
+   quote, and under the choices is a field, named "Answer". Enter in it with words keeps the wish with the
+   sharper wish and the answer and starts its run as `Go with this` does. The person's typed words are not
+   drawn then; the window holds them, and core still checks that the shape waits for them. With no question
+   the note is titled "What you typed", quotes the typed words, and has no field. (The same day, after a walk
+   with a real harness: the question first stood as a last row of the sharper wish, a whole note and a quote
+   of the typed words away from the field it is answered in, under a sentence for an offer.)
 
 ## Measured
 

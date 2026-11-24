@@ -81,25 +81,26 @@ fn text(id: &str, title: &str, quoted: &str, options: &[&str]) -> Note {
     Note::Text { id: id.into(), title: title.into(), body: Vec::new(), options, quoted: quoted.into(), field: None }
 }
 
-/// The note of the two choices under the words `said`, and when the sharper wish `asks`, the field its question
-/// is answered in, under them.
+/// The note of the two choices. When the sharper wish `asks`, it is the question's: titled as Jellymoon names a
+/// question, the question its quote, and the field it is answered in under the choices; the words `said` are
+/// not on it. With no question it is titled for the typed words, which are its quote.
 fn choice(said: &str, asks: bool) -> Note {
     let most = jellymoon_core::MADE_SAID_MAX;
     let field = Field { offer: ANSWER.into(), hint: ANSWER_HINT.into(), most, key: String::new() };
     let options = [GO, GO_TYPED].map(str::to_string).to_vec();
-    let (id, title, quoted) = (SHAPE.into(), TYPED.into(), said.into());
+    let (title, quoted) = if asks { ("Only you know", ASK) } else { (TYPED, said) };
+    let (id, title, quoted) = (SHAPE.into(), title.into(), quoted.into());
     Note::Text { id, title, body: Vec::new(), options, quoted, field: asks.then_some(field) }
 }
 
-/// The two notes of the sharper wish for the words `said`: every word of the model's is a quote, and its reason
-/// is not among them. The question only the person can answer is the last row, right over the note it is
-/// answered in.
-fn pair(said: &str) -> Vec<Note> {
-    let rows = LABELS.iter().zip([WISH, DONE, LEFT, ASK]);
+/// The two notes of the sharper wish that asks, whatever words it was made of: every word of the model's is a
+/// quote, and its reason is not among them. The question stands on the note it is answered in.
+fn pair() -> Vec<Note> {
+    let rows = LABELS.iter().zip([WISH, DONE, LEFT]);
     let rows =
         rows.map(|(label, text)| ToldRow { label: label.to_string(), quotes: vec![text.into()], ..ToldRow::default() });
     let sharper = Note::Told { id: SHARPER_ID.into(), title: SHARPER.into(), rows: rows.collect(), end: Vec::new() };
-    vec![sharper, choice(said, true)]
+    vec![sharper, choice("", true)]
 }
 
 fn wishes(w: &World) -> std::path::PathBuf {
@@ -138,15 +139,15 @@ fn a_sharper_wish_is_shown_as_quotes_with_two_choices_and_nothing_is_kept() {
     let printed = acted(&w, &[SAID], &["look"], &[]);
     assert_eq!(printed[1]["kept"], true, "the entry is emptied: its words stand on the note");
     let shown = scene(&printed[1]["scene"]);
-    assert_eq!((&shown.notes[..2], shaping(&shown)), (&pair(SAID)[..], pair(SAID)));
+    assert_eq!((&shown.notes[..2], shaping(&shown)), (&pair()[..], pair()));
     assert!(!wishes(&w).exists() && w.starts() == 0, "no wish is kept and no run is started");
     // Core reads the model's reason and checks it, and the page does not draw it.
-    assert_eq!(LABELS[..], ["The wish", "Done when", "Not touching", "Only you know"]);
+    assert_eq!(LABELS[..], ["The wish", "Done when", "Not touching"]);
     assert!(!printed[1].to_string().contains(WHY), "{}", printed[1]);
     // A look leaves the notes: it shows nothing new, or a scene that still begins with them.
-    assert!(printed[2].is_null() || scene(&printed[2]).notes[..2] == pair(SAID)[..], "{}", printed[2]);
-    // A row whose text is empty is left out. With no question there is no row for one and no field: the note
-    // of the choices is as it was, and Enter under it is nothing.
+    assert!(printed[2].is_null() || scene(&printed[2]).notes[..2] == pair()[..], "{}", printed[2]);
+    // A row whose text is empty is left out. With no question there is no field: the note of the choices has
+    // the typed words as its quote, and Enter under it is nothing.
     let mut answer = sharper();
     (answer["ask"], answer["not_touching"]) = (json!(""), json!(" "));
     says(&w, &answer);
@@ -157,6 +158,26 @@ fn a_sharper_wish_is_shown_as_quotes_with_two_choices_and_nothing_is_kept() {
     assert_eq!(unasked.notes[1], choice(SAID, false));
     assert_eq!((acted_on(&printed[2]), &printed[3]), (vec!["option", "option"], &Value::Null));
     assert!(!wishes(&w).exists() && w.starts() == 0, "no wish is kept and no run is started");
+}
+
+#[test]
+fn a_question_is_the_quote_of_the_note_it_is_answered_in_and_the_typed_words_are_on_neither_note() {
+    let w = ready();
+    says(&w, &sharper());
+    let shown = scene(&acted(&w, &[SAID], &[], &[])[1]["scene"]);
+    let [Note::Told { rows, .. }, Note::Text { id, title, quoted, options, field: Some(field), .. }] =
+        &shown.notes[..2]
+    else {
+        panic!("{:?}", shown.notes)
+    };
+    assert_eq!(
+        rows.iter().map(|row| row.label.as_str()).collect::<Vec<_>>(),
+        ["The wish", "Done when", "Not touching"]
+    );
+    assert_eq!((id.as_str(), title.as_str(), quoted.as_str()), (SHAPE, "Only you know", ASK));
+    assert_eq!((options[..].to_vec(), field.offer.as_str()), (vec![GO.to_string(), GO_TYPED.to_string()], "Answer"));
+    assert_eq!((field.hint.as_str(), ANSWER, ANSWER_HINT), ("Type your answer, then Enter", "Answer", &*field.hint));
+    assert!(!format!("{:?}", &shown.notes[..2]).contains(SAID), "{:?}", shown.notes);
 }
 
 /// The kinds of the pieces a person acts on under the note of the choices, in the order they are placed.
@@ -200,7 +221,7 @@ fn an_answer_core_refuses_keeps_nothing_and_leaves_the_pair_with_core_s_reason()
     let refused = &printed[2];
     assert_eq!(refused["kept"], false, "the field keeps its words");
     let (at_once, after) = (scene(&refused["at_once"]), scene(&refused["scene"]));
-    assert_eq!((shaping(&at_once), shaping(&after)), (vec![], pair(SAID)), "the pair is back, to answer again");
+    assert_eq!((shaping(&at_once), shaping(&after)), (vec![], pair()), "the pair is back, to answer again");
     let why = "an answer is at most 200 characters, and this one is longer, so nothing was kept.";
     let says = |note: &Note| matches!(note, Note::Plain { title, body } if title == UNKEPT && body.ends_with(why));
     assert!(after.notes.iter().any(says), "{:?}", after.notes);
@@ -232,10 +253,13 @@ fn enter_while_a_sharper_wish_stands_shapes_the_new_words_in_its_place() {
     let w = ready();
     says(&w, &sharper());
     let next = "make the uploader retry three times";
-    let printed = acted(&w, &[SAID, next], &[], &[]);
+    let printed = acted(&w, &[SAID, next], &["choose:shape:1", "run"], &[]);
     assert_eq!(shaping(&scene(&printed[2])), [text(SHAPING, READING, next, &[])], "the old pair goes at once");
-    assert_eq!(shaping(&scene(&printed[3]["scene"])), pair(next), "one pair, of the new words");
-    assert!(!wishes(&w).exists() && w.starts() == 0, "no wish is made of the old words");
+    assert_eq!(shaping(&scene(&printed[3]["scene"])), pair(), "one pair");
+    // The pair is of the new words: a tap keeps one wish, of those, and none of the old.
+    let kept = w.kept();
+    assert_eq!((&kept["said"], &kept["id"]), (&json!(next), &json!("m1")), "{kept}");
+    w.ended();
 }
 
 #[test]
@@ -329,7 +353,7 @@ fn a_sharper_wish_that_waits_and_the_choice_on_it_are_not_under_that_note_either
     says(&w, &sharper());
     let enter = format!("enter:wish@alpha:{SAID}");
     let printed = window(&w, &[enter.as_str(), "answer", "column", "choose:shape:1", "run", "column"]);
-    assert_eq!(shaping(&scene(&printed[2])), pair(SAID));
+    assert_eq!(shaping(&scene(&printed[2])), pair());
     assert!(!says_nothing(&printed[2]), "{}", printed[2]);
     // The tap takes both notes away at once, and the wish is kept only after it: the scene shown at once.
     assert!(shaping(&scene(&printed[3])).is_empty() && !says_nothing(&printed[3]), "{}", printed[3]);

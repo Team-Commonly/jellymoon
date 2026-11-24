@@ -149,7 +149,7 @@ fn opened(args: &[String]) -> (Today, Scene, Showing, &[String]) {
         }
         _ => acts,
     };
-    let showing = Showing::of(Some(OnShow { today: today.clone(), page, scene: scene.clone() }));
+    let showing = Showing::of(Some(OnShow { today: today.clone(), page, scene: scene.clone(), typed: None }));
     (today, scene, showing, acts)
 }
 

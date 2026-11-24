@@ -95,7 +95,7 @@ impl Walk {
         let today = Today::from_env(Asked { logs, ..Asked::default() })?;
         let (scene, page) = today.first();
         let mut later = Some(today.clone().later(page.clone()));
-        let shown = Showing::of(Some(OnShow { today, page, scene }));
+        let shown = Showing::of(Some(OnShow { today, page, scene, typed: None }));
         let mut walk = Walk { shown, entry: None, typed: String::new(), chosen: 0, size, folder };
         walk.set_entry(walk.shown.offering().and_then(|offering| offering()));
         while let Some(work) = later.take().and_then(|step| walk.shown.reading(step)) {

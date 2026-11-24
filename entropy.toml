@@ -1131,7 +1131,10 @@ max_file_lines = 400
 # The question gets an answer raised the app by 124 (144 added, 20 removed): the field under the choices and
 # Enter in it, with the row of the model's reason gone (`src/shaping.rs`, 46; `src/answering.rs`, 4), and their
 # tests at the made-up window (`tests/shape_first.rs`, 74).
-"app" = 19930
+# After the walk, the question moved to the note it is answered in raised the app by 48 (130 added, 82 removed): the typed words held by
+# the page on show and the note of a question (`src/shaping.rs`, `src/taps.rs`, `src/wishing.rs`), and their
+# tests at the made-up window (`tests/shape_first.rs`).
+"app" = 19978
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

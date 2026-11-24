@@ -31,7 +31,7 @@ fn left_on_show() -> (World, OnShow) {
         bin: None,
     };
     let (scene, page) = today.first();
-    let mut on = OnShow { today, page, scene };
+    let mut on = OnShow { today, page, scene, typed: None };
     let options = CHOICES.map(str::to_string).to_vec();
     on.scene.notes.insert(
         0,

@@ -34,6 +34,9 @@ pub struct OnShow {
     pub today: Today,
     pub page: Option<Page>,
     pub scene: Scene,
+    /// The typed words the sharper wish on show was made of (`shaping.rs`): held from when its two notes are
+    /// shown until they go, and what a tap or an answer under them carries to core.
+    pub typed: Option<String>,
 }
 
 impl OnShow {

@@ -120,7 +120,8 @@ fn today(home: &std::path::Path) -> crate::today::Today {
 #[test]
 fn a_look_in_flight_when_the_person_taps_an_option_is_dropped_whole_and_what_it_was_given_is_owed() {
     let going = page(&[State::Busy, State::Idle], Vec::new());
-    let shown = Showing::of(Some(OnShow { today: today("none".as_ref()), page: None, scene: going.clone() }));
+    let shown =
+        Showing::of(Some(OnShow { today: today("none".as_ref()), page: None, scene: going.clone(), typed: None }));
     // A look is made, and is in flight with the other wish's work on its scene.
     assert!(shown.look().is_some());
     let mut late = going.clone();
@@ -151,7 +152,8 @@ fn an_act_on_a_wish_s_note_holds_that_wish_and_gives_it_the_offer_and_a_tap_on_a
         {"id": "w2", "label": "b", "said": "b", "project": "beta", "state": "working", "stars": []}],
         "clashes": [{"a": "w1", "b": "w2", "quote_a": "x", "quote_b": "y", "settled": false}]}"#;
     let scene = page(&[State::Idle, State::Idle], vec![asks, clash]);
-    let on = || OnShow { today: today(home.path()), page: crate::read::page(file).ok(), scene: scene.clone() };
+    let on =
+        || OnShow { today: today(home.path()), page: crate::read::page(file).ok(), scene: scene.clone(), typed: None };
     let held = |shown: &Showing| shown.2.borrow_mut().asks(&scene).1;
     let shown = Showing::of(Some(on()));
     assert!(shown.typing("wish-m1", "yes").is_some_and(|(at_once, _)| at_once.is_some()));
@@ -181,7 +183,8 @@ fn a_wish_made_by_an_enter_or_by_core_s_answer_to_a_choice_tucks_the_settled_wis
     let notes = || vec![text("kept-m1", &["Undo it"]), text("wish-m2", &[])];
     let (before, after) =
         (page(&[State::Idle, State::Idle], notes()), page(&[State::Idle, State::Idle, State::Busy], notes()));
-    let opened = || Showing::of(Some(OnShow { today: today(home.path()), page: None, scene: before.clone() }));
+    let opened =
+        || Showing::of(Some(OnShow { today: today(home.path()), page: None, scene: before.clone(), typed: None }));
     let seen = |now: &Scene| Seen { from: before.clone(), now: now.clone() };
     let on = |shown: &Showing, scene: &Scene| -> Vec<String> {
         let column = shown.column(scene);

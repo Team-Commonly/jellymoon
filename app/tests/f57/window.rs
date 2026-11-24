@@ -52,7 +52,7 @@ fn opened_in(cx: &mut TestAppContext, room: Room, day: Option<Day>, quit_after: 
         Some((today, named, clock)) => {
             let (scene, page) = today.first();
             let nothing: Later = Box::new(|| None);
-            (Some((OnShow { today, page, scene }, nothing)), named, clock)
+            (Some((OnShow { today, page, scene, typed: None }, nothing)), named, clock)
         }
         None => (None, false, Arc::new(|| None) as Clock),
     };

@@ -42,7 +42,7 @@ fn main() {
         bin: Some(PathBuf::from(bin)),
     };
     let (scene, page) = today.first();
-    let mut shown = OnShow { today, page, scene };
+    let mut shown = OnShow { today, page, scene, typed: None };
     if then == "unready" {
         return show(&shown.unready(project));
     }

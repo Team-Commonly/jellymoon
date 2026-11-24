@@ -66,3 +66,21 @@ Core +203 (233 added, 30 removed), cap 19757 to 19960. The app +124 (144 added, 
   when the command made another for the same words meanwhile.
 - The answer is nowhere on the page after Enter: the wish's bubble shows the typed words.
 - Not run: a real window, a real harness, Windows, Linux.
+
+## After the walk
+
+A walk with a real harness (not by this unit) found that the answer reached the run and the run obeyed it, and
+that the page was the fault: the field stood a whole note and a quote of the typed words away from its
+question, under a sentence for an offer. A second commit, in the app only:
+
+- With a question, "Your wish, sharper" has three rows ("The wish", "Done when", "Not touching"), and the note
+  `shape` is the question's: titled "Only you know", the question its quote, the two choices, then the field
+  with the offer "Answer" and the hint "Type your answer, then Enter". The typed words are on neither note.
+- With no question both notes are as before the first commit, but for the reason, which stays undrawn: `shape`
+  is titled "What you typed" and quotes the typed words, with no field.
+- The typed words are held by the page on show (`OnShow::typed`), set when the pair is shown and cleared when
+  it goes, and both taps and the field take them from there. Nothing reads them back from a note. Core's check
+  that the shape waits for those words is as it was.
+- Red first: five of the eleven tests of `shape_first`. One mutation, the typed words taken from the note's
+  quote, was seen killed.
+- Not proved: a real window, a real harness on this head, Windows, Linux. The picture is the headless example's.

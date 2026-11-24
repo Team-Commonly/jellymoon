@@ -44,7 +44,7 @@ pub fn on_show(world: &World) -> OnShow {
     let today = today(world);
     let page = today.kept().expect("the day's page is kept");
     let scene = today.draw(&page);
-    OnShow { today, page: Some(page), scene }
+    OnShow { today, page: Some(page), scene, typed: None }
 }
 
 /// The day read and kept, with nothing left of the reading call's record.

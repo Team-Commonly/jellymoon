@@ -147,9 +147,19 @@ impl Open {
         crate::column::column(&passed(scene, &open, self.1.borrow().as_deref(), &away))
     }
 
-    /// Core answered that a wish was made again and is being worked on: the answer is kept with that wish.
-    pub(crate) fn remade(&self, remade: Option<Box<Remade>>) {
+    /// Core answered a tap on a choice of the made wish `wish` that a wish was made again and is being worked
+    /// on: the answer is kept with that wish. When the old work was tossed too, `wish` steps aside: it is
+    /// tucked away at once (`Tucked::aside`), though the answer is under it and the new wish is the newest.
+    pub(crate) fn remade(&self, wish: &str, remade: Option<Box<Remade>>) {
+        if remade.as_ref().is_some_and(|one| one.tossed) {
+            self.2.aside(wish);
+        }
         self.3.keep(remade);
+    }
+
+    /// The answer on `scene` under the made wish `wish` that says a wish was made again (`Again::under`).
+    pub(crate) fn answer(&self, scene: &Scene, wish: &str) -> Option<Note> {
+        self.3.under(scene, wish)
     }
 
     /// A tap on a note of the made wish `wish`, on its picture, or on its little one or its typed words: the

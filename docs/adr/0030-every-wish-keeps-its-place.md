@@ -131,6 +131,15 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     drawn ending "Your wish was made again." (`app/src/again.rs`). The sentence is made shorter and not taken
     away: a second wish with the same words is on the page, and the answer is what says why. No sentence is
     matched, nothing is asked of core for it, and neither decision 6 nor decision 11 changes.
+
+    Amended a third time 2026-11-24: walked in a window, one wish made again held three cards and its words
+    three times: the old wish's bubble, a card that it was let go, the answer, and then the new wish's bubble
+    with the same words. So when all four steps worked (the wish made, the old work tossed, the run started)
+    the old wish steps aside: it is tucked away at once, as decision 11 says of it. Whether the work was
+    tossed is asked of core after the toss: core keeps the old wish as let go, which a toss writes last, once
+    everything else of it was done. No sentence of the answer is read. Where the wish was not made, the toss
+    was refused or left unfinished, or no run was started, nothing steps aside and the answer is on the page
+    as before: it says something the person has to know. What each step does, and their order, is unchanged.
 11. **Finished wishes tuck away.** Decision 2 put the notes of every ended wish on the page at once. After
     three wishes the column was several screens of cards, most of them about wishes that need nothing from
     the person, and the wish being made was under all of them. So a made wish that is settled has none of
@@ -151,6 +160,17 @@ answer and two bare bubbles, and could not tell that the other two had finished.
       since the last look and has no note on the scene yet: its result was never drawn, so it stays until
       the wish after. And when the window opens on a day that has made wishes: every settled wish but the
       newest.
+    - *A remade wish steps aside* (amended 2026-11-24; decision 10). One wish is tucked away at another
+      moment: the wish `Make it again` made again, once its old work was tossed and the new wish's run was
+      started, at core's answer (`Tucked::aside`, from `Open::remade`). The rule above keeps the wish an
+      answer is under on the page so that the answer is read; here the answer only repeats what the new
+      wish, right under it with the same words and at work, already shows. The two rules sit side by side:
+      the making of a wish still tucks every other settled wish away and still leaves one whose result was
+      never drawn, and this one names a single wish, for its own reason, whether or not a note of it was
+      drawn. It is hidden only while it is settled, as every tucked wish is, and the same tap brings it
+      back, until the next wish is made. That tap's notes are made again from core and would leave the
+      answer out, so the answer that a wish was made again is put back under them (`Showing::poked`): it
+      ends "Your wish was made again." once the new wish is at work no more.
     - *Why at the making of the next wish, and not when a wish settles.* A wish settles by itself: its run
       ends, its change lands. Tucked away then, the result of what the person asked for would go from the
       page as it came. It stays until they ask for the next thing, which is when they have stopped

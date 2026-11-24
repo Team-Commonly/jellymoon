@@ -677,7 +677,9 @@ that fit and counts the rest in a last line, `+N more`.
     a tucked wish's little one or bubble brings its notes back, made again from core, until the next wish is
     made; a tucked wish that is settled no more comes back by itself (`Tucked::away`). It is the window's own
     state, in `drawing::Open`, applied in `drawing::passed`: the scene the app keeps holds every note, core
-    is asked nothing, and `layout` prints every wish's notes.
+    is asked nothing, and `layout` prints every wish's notes. One wish is tucked away at another moment: the
+    wish `Make it again` made again, once its old work was tossed (`Tucked::aside`; *A change that no longer
+    fits*, below).
 
   `app/tests/several_wishes.rs` holds these at the made-up window (two at work, two kept by themselves, a keep
   and a toss on two wishes, `Show me` on one of two, the looks that ask nothing, a wish of the reading),
@@ -800,6 +802,15 @@ that fit and counts the rest in a last line, `+N more`.
   becomes the shorter one and does not go: a new wish has appeared on the page under the same words, and
   the answer is what says why. The scene the app keeps holds the answer as core gave it.
 
+  When all of it worked (the wish made, the old work tossed, the run started) the old wish steps aside: at
+  core's answer it is tucked away (`Open::remade`, `Tucked::aside`; decision 11), so the page has its bubble
+  with its greyed little one and, under it, the new wish at work, and none of the old wish's notes. Whether
+  the work was tossed is asked of core after the toss (`Today::asked`): core keeps the old wish as let go
+  (`WishState::LetGo`), which a toss writes last. No sentence is read for it. A wish that was not made, a
+  toss that was refused or left unfinished, and a wish with no run started tuck nothing away: that answer is
+  on the page as before. A tap on the old wish brings its notes back as for any tucked wish, and the answer
+  with them (`Showing::poked` puts it back under the notes the tap made again), until the next wish is made.
+
   The run is started after the toss and not before it: a toss asks git where every copy of the repo stands, and
   core refuses it while a new run's copy is being made (measured: with the run started first, the toss was
   refused with "could not be read from the repo"). When core refuses the wish (the day has its eight, the
@@ -809,8 +820,10 @@ that fit and counts the rest in a last line, `+N more`.
   note says what the toss came to and then the sentence a typed wish has then, and the wish stays kept, as a
   typed one does.
   `app/tests/a_change_that_no_longer_fits.rs` follows it at the made-up window with real git: the plain note
-  and its one choice, the new wish with the old words and the old work tossed, the answer while the new
-  wish's run goes and once it has ended, a full day that tosses nothing,
+  and its one choice, the new wish with the old words and the old work tossed, the old wish tucked away at
+  the answer and brought back by a tap, the answer while the new wish's run goes and once it has ended, a
+  full day and a missing command that toss nothing and tuck nothing away, a toss core refuses (a follow-up's
+  run stands on the work) whose answer stays,
   a tap that carries other words, changes in the way, and another reason told as before. Not proved: a run that
   could not be started after its wish was kept; the tap in a real window.
 - **Files the person's tools obey**: a page keeps one only when its name was drawn, whole, on the note the yes

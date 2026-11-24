@@ -61,6 +61,13 @@ impl Tucked {
         away.clone()
     }
 
+    /// The made wish `wish` steps aside: it is tucked away now, though core's answer is under it and no wish
+    /// was kept after that answer. `Make it again` made it again and tossed its work, so the new wish under it
+    /// is the answer (`again.rs`). As every tucked wish, it is hidden only while it is settled.
+    pub(crate) fn aside(&self, wish: &str) {
+        self.0.borrow_mut().insert(wish.to_string());
+    }
+
     /// A tap on the made wish `wish`: whether it was tucked away. It is no longer.
     pub(crate) fn back(&self, wish: &str) -> bool {
         self.0.borrow_mut().remove(wish)
@@ -153,6 +160,19 @@ mod tests {
         // A scene that does not hold a wish says nothing of it.
         assert_eq!(tucked.away(&Scene::default()), set(&["m2"]));
         assert!(tucked.back("m2") && !tucked.back("m2") && tucked.away(&scene).is_empty());
+    }
+
+    #[test]
+    fn a_wish_that_steps_aside_is_tucked_at_once_while_it_is_settled_and_a_tap_brings_it_back() {
+        let (scene, tucked) = (day(Vec::new()), Tucked::default());
+        tucked.aside("m2");
+        assert_eq!(tucked.away(&scene), set(&["m2"]), "no wish was kept after it, and it is tucked away");
+        let on = drawn(&scene, &["m2"]);
+        assert!(on.contains(&"typed-m2".to_string()) && !on.contains(&"said-m2".to_string()), "{on:?}");
+        assert!(tucked.back("m2") && tucked.away(&scene).is_empty());
+        // One whose work waits still is not settled: it is not hidden, and is tucked away no longer.
+        tucked.aside("m3");
+        assert!(tucked.away(&scene).is_empty() && !tucked.back("m3"));
     }
 
     #[test]

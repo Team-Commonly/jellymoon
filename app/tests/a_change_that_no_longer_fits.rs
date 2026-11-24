@@ -18,7 +18,7 @@ use std::fs;
 
 use runs::{day, ended, going, run, wish};
 use serde_json::Value;
-use sticker_kit::{Note, Scene};
+use sticker_kit::{Note, Scene, State};
 use support::day::DAY;
 use support::wished::{SAID, World, wait_until};
 
@@ -87,6 +87,24 @@ fn drawn(line: &str, id: &str) -> Option<(Vec<String>, Vec<String>)> {
         Note::Drawn { id: named, words, options, .. } if named == id => Some((words.clone(), options.clone())),
         _ => None,
     })
+}
+
+/// The ids of the notes under the bubble of `wish` in the column a line holds, to the next wish's bubble.
+fn under(line: &str, wish: &str) -> Vec<String> {
+    let scene: Scene = serde_json::from_str::<Option<Scene>>(line).expect(line).expect("a scene was shown");
+    let id = |note: &Note| match note {
+        Note::Text { id, .. } | Note::Told { id, .. } | Note::Said { id, .. } | Note::Drawn { id, .. } => id.clone(),
+        _ => String::new(),
+    };
+    let all: Vec<String> = scene.notes.iter().map(id).filter(|id| !id.is_empty()).collect();
+    let at = all.iter().position(|one| *one == format!("typed-{wish}")).expect("the wish's bubble");
+    all[at + 1..].iter().take_while(|one| !one.starts_with("typed-")).cloned().collect()
+}
+
+/// Whether the made wish `wish` is at work on the scene a line holds.
+fn at_work(line: &str, wish: &str) -> bool {
+    let scene: Scene = serde_json::from_str::<Option<Scene>>(line).expect(line).expect("a scene was shown");
+    scene.characters.iter().any(|one| one.id == wish && one.state == State::Busy)
 }
 
 /// Two made wishes in a world where a finished change is kept by itself, as it is outside the tests. Their runs
@@ -176,18 +194,19 @@ fn a_change_that_no_longer_fits_is_said_plainly_and_make_it_again_makes_the_wish
     let bin = format!("bin:{}", w.install().parent().unwrap().display());
     let held = w.at("tmp").join("ended");
     let hold = format!("hold:{}", held.display());
-    let again = ["choose:said-m2:0:Keep it", "choose:said-m2:0", "run", "column", hold.as_str(), "look", "column"];
+    let tap = ["choose:said-m2:0:Keep it", "choose:said-m2:0", "run", "column", "poke:m2", "column"];
+    let again = [&tap[..], &[hold.as_str(), "look", "column"][..]].concat();
     let mut window = w.taps("logs", &[&[bin.as_str()][..], &KEEP_BOTH[..], &again[..]].concat());
     // The window is on show while the new wish's run goes, and looks again once it has ended.
-    window.printed(9);
+    window.printed(11);
     fs::write(w.at("rec").join("go"), "").unwrap();
     wait_until("the new wish's run", || kept(&w).get(2).is_some_and(|made| made["run"].is_string()));
     let new = kept(&w)[2]["run"].as_str().unwrap().to_string();
     wait_until("the end of the run", || !w.at("jm").join("runs").join(&new).join("run.lock").exists());
     fs::write(held, "").unwrap();
     let lines = window.ended();
-    let [_, _, first, _, refused, stale, at_once, answer, going, _, since] = &lines[..] else {
-        panic!("eleven lines: {lines:#?}")
+    let [_, _, first, _, refused, stale, at_once, answer, aside, _, back, _, since] = &lines[..] else {
+        panic!("thirteen lines: {lines:#?}")
     };
     assert_eq!(said(first, "said-m1").map(|said| said.0), Some("The change was kept.".to_string()));
     // The plain note: the window's sentences, the one choice, and no run's id nor a word of the command line's.
@@ -208,9 +227,14 @@ fn a_change_that_no_longer_fits_is_said_plainly_and_make_it_again_makes_the_wish
     assert_eq!(made.len(), 3, "{made:?}");
     assert_eq!((&made[2]["said"], &made[2]["project"]), (&made[1]["said"], &made[1]["project"]));
     assert_eq!((made[2]["said"].as_str(), made[2].get("after")), (Some(SAID), None));
-    // While the new wish's run goes the answer says the wish is being worked on. Once that run has ended it
-    // says only that the wish was made again: the scene the window gives the kit's view (`column`).
-    assert_eq!(said(going, "said-m2"), Some(done), "{going}");
+    // All of it worked, so the old wish steps aside (decision 11): the column the window gives the kit's view
+    // has its bubble and none of its notes, and the new wish at work under it.
+    assert_eq!(under(aside, "m2"), [""; 0], "{aside}");
+    assert!(at_work(aside, "m3"), "{aside}");
+    // A tap on the old wish brings its notes back, with the answer. While the new wish's run goes it says the
+    // wish is being worked on, and once that run has ended only that the wish was made again.
+    assert!(under(back, "m2").contains(&"said-m2".to_string()), "{back}");
+    assert_eq!(said(back, "said-m2"), Some(done), "{back}");
     let made_again = texts(&[TOSSED[0], "Your wish was made again."]);
     assert_eq!(said(since, "said-m2"), Some(("The change was thrown away.".to_string(), made_again, vec![])));
     // The old work is tossed, core says, and the folder holds the first wish's change and nothing of the second's.
@@ -226,7 +250,8 @@ fn with_the_day_s_made_wishes_full_make_it_again_tosses_nothing_and_says_core_s_
     let held = w.at("tmp").join("full");
     let hold = format!("hold:{}", held.display());
     let bin = format!("bin:{}", w.install().parent().unwrap().display());
-    let acts = [&[bin.as_str()][..], &KEEP_BOTH[..], &[hold.as_str(), "choose:said-m2:0", "run"][..]].concat();
+    let tap = [hold.as_str(), "choose:said-m2:0", "run", "column"];
+    let acts = [&[bin.as_str()][..], &KEEP_BOTH[..], &tap[..]].concat();
     let mut window = w.taps("logs", &acts);
     window.printed(5);
     // The day has its eight made wishes before the tap.
@@ -241,6 +266,8 @@ fn with_the_day_s_made_wishes_full_make_it_again_tosses_nothing_and_says_core_s_
     let full = format!("the page of {DAY} has its 8 made wishes already, so this one was not kept.");
     assert!(body[0].ends_with(&full), "{body:?}");
     assert_eq!(body[1..], [NOT_TOSSED.to_string()]);
+    // No wish was made again, so the old wish does not step aside: what core said is on the page as drawn.
+    assert!(under(lines.last().unwrap(), "m2").contains(&"said-m2".to_string()), "{lines:#?}");
     assert_eq!(kept(&w).len(), 8);
     assert_eq!((w.everything(&w.at("work").join("alpha")).1, waiting(&w)), before, "nothing was tossed");
     assert!(before.1.contains(&"m2".to_string()), "the work that does not fit waits still: {:?}", before.1);
@@ -250,12 +277,39 @@ fn with_the_day_s_made_wishes_full_make_it_again_tosses_nothing_and_says_core_s_
 fn with_no_installed_command_make_it_again_makes_no_wish_and_tosses_nothing() {
     let w = two_that_clash();
     // No `bin:` act: the window knows no folder of an installed command, so no run could be started.
-    let lines = w.taps("logs", &[&KEEP_BOTH[..], &["choose:said-m2:0", "run"][..]].concat()).ended();
+    let lines = w.taps("logs", &[&KEEP_BOTH[..], &["choose:said-m2:0", "run", "column"][..]].concat()).ended();
     let (title, body, options) = said(lines.last().unwrap(), "said-m2").expect("core's answer");
     assert_eq!((title.as_str(), options.len(), body.len()), ("That wish was not kept.", 0, 2), "{body:?}");
     assert_eq!(body[1], NOT_TOSSED);
+    assert!(under(lines.last().unwrap(), "m2").contains(&"said-m2".to_string()), "nothing steps aside: {lines:#?}");
     assert_eq!(kept(&w).len(), 2, "no wish was made");
     assert!(waiting(&w).contains(&"m2".to_string()), "the work that does not fit waits still");
+}
+
+/// The wish is made again and the toss is refused: a follow-up's run stands on the work that does not fit, and
+/// core tosses that one first (ADR 0018, decision 9). The answer says so, and it stays on the page.
+#[test]
+fn a_wish_made_again_whose_old_work_was_not_tossed_does_not_step_aside() {
+    let w = two_that_clash();
+    w.play("hello");
+    let follows = w.jellymoon(&["wish", "--date", DAY, "--say", "and one more thing", "--after", "m2"]);
+    assert_eq!(follows["wish"]["id"], "m3", "{follows}");
+    assert_eq!(run(&w, "m3"), "completed");
+    let bin = format!("bin:{}", w.install().parent().unwrap().display());
+    // A window draws every scene it shows: the first `column` is the page as it opens and looks, where the
+    // wish whose work waits is not tucked away, though a newer wish, the follow-up, is on the day.
+    let open = [bin.as_str(), TALL, "look", "column"];
+    let acts = [&open[..], &KEEP_BOTH[2..], &["choose:said-m2:0", "run", "column"][..]].concat();
+    let lines = w.taps("logs", &acts).ended();
+    let column = lines.last().unwrap();
+    let (title, body, _) = said_of(column, "said-m2");
+    assert_eq!(title, "The change was not thrown away.", "{body:?}");
+    assert_eq!(body.last().map(String::as_str), Some(TOSSED[1]), "the wish was made again all the same");
+    assert!(under(column, "m2").contains(&"said-m2".to_string()), "{column}");
+    assert!(waiting(&w).contains(&"m2".to_string()), "the work that does not fit waits still");
+    wait_until("the new wish's run", || kept(&w).get(3).is_some_and(|made| made["run"].is_string()));
+    let new = kept(&w)[3]["run"].as_str().unwrap().to_string();
+    wait_until("the end of the run", || !w.at("jm").join("runs").join(&new).join("run.lock").exists());
 }
 
 #[test]

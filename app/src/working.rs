@@ -309,7 +309,7 @@ impl OnShow {
             let asked = || {
                 let (done, since) = today.asked(&wish, tap, &ask);
                 let said = notes_of(&wish, done);
-                let remade = since.and_then(|(new, since)| Remade::of(new, &said, notes_of(&wish, since)));
+                let remade = since.and_then(|(new, since, gone)| Remade::of(new, &said, notes_of(&wish, since), gone));
                 let mut notes = in_turn(said, seen);
                 // A `Show me` that showed no file still brings the names and the rows: no other tap does.
                 let unshown = shows && notes.iter().all(|note| id_of(note).is_some_and(|id| id.starts_with(SAID)));

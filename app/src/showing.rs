@@ -12,7 +12,7 @@ use sticker_kit::{Scene, Theme};
 
 use crate::drawing::Open;
 use crate::newer::Watch;
-use crate::placing::{made, whose};
+use crate::placing::{any_of, made, put, whose};
 use crate::scene::drawn_id;
 use crate::starting::{Given, Listed, Listing, Shown};
 use crate::stopping::Chosen;
@@ -193,16 +193,26 @@ impl Showing {
     /// it is also the tap that takes the offer of a follow-up under that wish and opens or closes the drawn note
     /// of its finished work (`drawing::Open`), which the scene it gives is drawn with. Of a made wish that was
     /// tucked away it brings the notes back: the scene on show is given to be drawn again even when core says
-    /// nothing new of the wish.
+    /// nothing new of the wish. Core's answer that the wish was made again, which that tap's notes leave out,
+    /// stays under them (`again.rs`).
     pub fn poked(&self, id: &str) -> Option<Look> {
         self.with(|on| {
             let back = made(&on.scene).iter().any(|one| one.id == id) && self.3.poked(&on.scene, id);
             let (look, from) = (on.poked(id), on.scene.clone());
-            if back {
-                Box::new(move || look().or_else(|| Some(Seen { now: from.clone(), from }))) as Look
-            } else {
-                look
+            if !back {
+                return look;
             }
+            // The answer that the wish was made again comes back with the notes: the new wish is under it.
+            let (said, id) = (self.3.answer(&from, id), id.to_string());
+            Box::new(move || {
+                let mut seen = look().unwrap_or_else(|| Seen { now: from.clone(), from });
+                if let Some(said) = said.filter(|said| !seen.now.notes.contains(said)) {
+                    let notes = seen.now.notes.iter().filter(|note| any_of(note, &id)).cloned().chain([said]);
+                    let notes = notes.collect();
+                    put(&mut seen.now, &id, notes);
+                }
+                Some(seen)
+            }) as Look
         })
     }
 
@@ -249,12 +259,13 @@ impl Showing {
     /// ended wish is owed its notes, and the next look makes them again; the answered wish's own are held, from
     /// here again, so an answer that was long in coming is read as long as a quick one. An answer that made a
     /// wish (a sharper wish gone with, `Make it again`) tucks every settled wish away but the answered one.
+    /// A wish that `Make it again` made again, its old work tossed, steps aside too (`Open::remade`).
     pub fn ended(&self, ended: Ended) -> Option<Scene> {
         self.with(|on| match ended {
             Ended::Stopped(stopped) => on.stopped(stopped),
             Ended::Worked(mut worked) => {
-                self.3.remade(worked.remade.take());
                 let wish = worked.wish.clone();
+                self.3.remade(&wish, worked.remade.take());
                 let fresh = made(&worked.seen.now).len() > made(&worked.seen.from).len();
                 let scene = self.3.showed(on.worked(worked));
                 if fresh {

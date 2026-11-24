@@ -158,6 +158,22 @@ pub enum Note {
     },
 }
 
+impl Scene {
+    /// The words of option `index` (from 0) of the first note whose id is `note`, as the scene holds them: what a
+    /// tap on that option carries ([`crate::draw::Tap`]). None of a note with no such option.
+    pub fn option(&self, note: &str, index: usize) -> Option<&str> {
+        let options = self.notes.iter().find_map(|one| match one {
+            Note::Choice { id, options, .. } | Note::Text { id, options, .. } | Note::Drawn { id, options, .. }
+                if id == note =>
+            {
+                Some(options)
+            }
+            _ => None,
+        })?;
+        options.get(index).map(String::as_str)
+    }
+}
+
 /// The place a tap on a drawn note's picture is reported at: the place of no option.
 pub const PICTURE_PLACE: usize = usize::MAX;
 

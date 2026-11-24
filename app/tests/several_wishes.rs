@@ -269,3 +269,29 @@ fn a_wish_of_the_reading_opens_and_goes_as_before_and_the_made_wishes_notes_stay
     let made = scene(made).expect("a tap on the made wish");
     assert!(options(&made, "wish-b").is_none() && choices(&made, "work-m1") == CHOICES, "{made:?}");
 }
+
+// A tap means what was seen. The made-up window's tap carries the words of a drawing before this one, as a click
+// does on a page that changed under the pointer: place 1 was `Toss it` on a note with two choices, and is
+// `Keep it` on the note on show.
+#[test]
+fn a_tap_that_carries_other_words_than_the_note_has_now_is_carried_nowhere_and_the_work_waits_still() {
+    let w = day();
+    assert_eq!(ended(&w, "edits", "completed"), "m1");
+    let made = w.at("work").join("alpha").join("n.txt");
+    let unseen = ["choose:work-m1:1:Toss it", "poke:m1", "choose:work-m1:2:Keep it"];
+    let lines = w.taps("logs", &[&[TALL, "look"][..], &unseen[..], &["choose:work-m1:1", "run"][..]].concat()).ended();
+    let [looked, tossed, asked, kept, at_once, answer] = &lines[..] else { panic!("six lines: {lines:#?}") };
+    let looked = scene(looked).expect("the first look");
+    assert_eq!(choices(&looked, "work-m1"), CHOICES);
+    // Nothing is carried to core and nothing is written: the scene on show is given back to be drawn again.
+    assert_eq!(scene(tossed), Some(looked.clone()), "the tap that carried `Toss it` to the place of `Keep it`");
+    // Core, asked by a tap on the wish's little one, says its work waits still, with every choice.
+    let asked = scene(asked).unwrap_or(looked);
+    assert_eq!(choices(&asked, "work-m1"), CHOICES);
+    assert_eq!(scene(kept), Some(asked), "the tap that carried `Keep it` to the place of `Toss it`");
+    // A tap that carries the words the note has at that place is carried as before, and the work was there to keep.
+    let at_once = scene(at_once).expect("a tap on Keep it");
+    assert!(ids(&of(&at_once, "m1")).contains(&"busy-m1".to_string()), "{at_once:?}");
+    assert_eq!(title(&scene(answer).expect("core's answer"), "said-m1"), "The change was kept.");
+    assert_eq!(fs::read_to_string(made).ok(), Some("new from the run\n".to_string()));
+}

@@ -131,7 +131,7 @@ fn a_look_in_flight_when_the_person_taps_an_option_is_dropped_whole_and_what_it_
     let (id, title, footer) = ("stop-m1".to_string(), String::new(), String::new());
     stop.notes.insert(0, Note::Choice { id, title, options, footer, struck_first: false, whole: false });
     assert!(shown.seen(Seen { from: going.clone(), now: stop }).is_some());
-    let (at_once, _) = shown.chose("stop-m1", 0).expect("the choice is on show");
+    let (at_once, _) = shown.chose("stop-m1", 0, crate::stopping::STOP).expect("the choice is on show");
     assert!(shown.seen(Seen { from: going, now: late }).is_none(), "the stale look is dropped");
     assert_eq!(shown.scene(), Some(at_once.clone()), "nothing of the look is on the page");
     assert_eq!(asked(&mut shown.2.borrow_mut(), &at_once), ["m2"], "the next look makes its notes");
@@ -158,6 +158,17 @@ fn an_act_on_a_wish_s_note_holds_that_wish_and_gives_it_the_offer_and_a_tap_on_a
     assert_eq!(held(&shown), ["m1"], "an Enter in a field under a note of the wish");
     // The tapped words are no side core has, so nothing is ruled or written; no wish is held for it.
     let shown = Showing::of(Some(on()));
-    assert!(shown.chose("clash-1", 0).is_some_and(|(_, after)| after.is_none()));
+    let refused = |note: &Note| matches!(note, Note::Plain { title, .. } if title == "That tap did nothing.");
+    let carried = shown.chose("clash-1", 0, "not a side");
+    assert!(carried.is_some_and(|(now, after)| after.is_none() && now.notes.first().is_some_and(refused)));
     assert_eq!(held(&shown), [""; 0], "a tap on a clash");
+    // A tap that carries other words than the note has at that place now is carried nowhere: the scene on show
+    // is given back as it is, and no wish is held for it.
+    let shown = Showing::of(Some(on()));
+    let unseen = shown.chose("clash-1", 0, "a side drawn before");
+    assert!(matches!(&unseen, Some((now, None)) if *now == scene), "{:?}", unseen.map(|(now, _)| now));
+    let gone = shown.chose("clash-9", 0, "not a side");
+    assert!(matches!(&gone, Some((now, None)) if *now == scene), "a note that is on show no more");
+    assert_eq!(shown.scene(), Some(scene.clone()), "nothing was carried: no note says a tap did nothing");
+    assert_eq!(held(&shown), [""; 0]);
 }

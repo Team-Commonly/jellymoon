@@ -9,7 +9,9 @@
 //!   only among the pieces it placed: so the scene on show is laid out here as `layout` lays it out, at the
 //!   window's size, and a tap on an option that is not placed is no tap, and prints `null`. The line is the
 //!   scene shown at once; what the tap left to do is kept for `run`, as the window's other thread would hold
-//!   it. Nothing of it has begun.
+//!   it. Nothing of it has begun. The tap carries the option's words as the view holds them, as the kit's does.
+//! - `choose:<note>:<index>:<words>`: the same tap carrying those words: the ones a drawing before this one had
+//!   at that place, for a click on a page that changed under the pointer.
 //! - `size:<W>x<H>`: the window's size from here on. It is 1440x900 until then.
 //! - `placed`: the pieces `layout` places of the scene on show at the window's size, as a list.
 //! - `column`: the scene on show as the window gives it to the kit's view (`Showing::column`): its drawn notes
@@ -73,6 +75,18 @@ fn shown(now: &mut Scene, scene: Option<Scene>) {
 fn tappable(scene: &Scene, size: Viewport, note: &str, index: usize) -> bool {
     let is = |piece: &Value| piece["kind"] == "option" && piece["id"] == note && piece["index"] == index;
     placed(scene, size).iter().any(is)
+}
+
+/// A tap on option `index` of `note`, when `layout` places it: the scene shown at once, and what the tap left to
+/// do. It carries the words `drawn`, or else the option's words as the view holds them.
+fn chose(showing: &Showing, now: &mut Scene, size: Viewport, tap: (&str, &str, Option<&str>)) -> Option<After> {
+    let (note, index, drawn) = tap;
+    let index = index.parse().unwrap();
+    let words = drawn.or(now.option(note, index)).unwrap_or_default().to_string();
+    let tapped = tappable(now, size, note, index).then(|| showing.chose(note, index, &words)).flatten();
+    let (scene, after) = tapped.unzip();
+    shown(now, scene);
+    after.flatten()
 }
 
 fn show<T: Serialize>(shown: &T) {
@@ -197,13 +211,8 @@ fn main() {
         match parts[..] {
             ["poke", id] => looked(&showing, &mut now, showing.poked(id).unwrap()),
             ["look"] => looked(&showing, &mut now, showing.look().unwrap()),
-            ["choose", note, index] => {
-                let index = index.parse().unwrap();
-                let tapped = tappable(&now, size, note, index).then(|| showing.chose(note, index)).flatten();
-                let (scene, after) = tapped.unzip();
-                left.extend(after.flatten());
-                shown(&mut now, scene);
-            }
+            ["choose", note, index] => left.extend(chose(&showing, &mut now, size, (note, index, None))),
+            ["choose", note, index, drawn] => left.extend(chose(&showing, &mut now, size, (note, index, Some(drawn)))),
             ["run"] => {
                 let after = left.pop_front().expect("a tap left work");
                 shown(&mut now, showing.ended(elsewhere(move || after.run())));

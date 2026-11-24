@@ -203,7 +203,7 @@ impl Walk {
         if !placed.lines().filter_map(|line| serde_json::from_str(line).ok()).any(is) {
             return Err(format!("{option:?} of {note:?} is not placed on the page"));
         }
-        if let Some((_, Some(after))) = self.shown.chose(id, index) {
+        if let Some((_, Some(after))) = self.shown.chose(id, index, option) {
             self.shown.ended(after.run());
         }
         Ok(())
@@ -266,7 +266,7 @@ impl Walk {
                     |one: &&Note| matches!(one, Note::Drawn { .. }) && (title(one) == rest || id_of(one) == Some(rest));
                 let id =
                     scene.notes.iter().find(named).and_then(id_of).ok_or_else(|| format!("no picture {rest:?}"))?;
-                self.shown.chose(id, sticker_kit::PICTURE_PLACE);
+                self.shown.chose(id, sticker_kit::PICTURE_PLACE, "");
             }
             "say" => {
                 let (note, words) = split(rest).ok_or("say:<note>:<words>")?;

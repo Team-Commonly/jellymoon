@@ -449,7 +449,25 @@ view. What each act does is `Showing`, the day on show behind the calls the wind
 | Enter | `wishing(words, chip's name)` | `answered(answer)`: what the entry is told, the scene, the asking |
 | the asking's end | | `asked(said)`: the scene, when there is something to say |
 | a tap on a character | `poked(id)`: of a made wish, it has the offer and its drawn note opens or closes | `seen(seen)` |
-| a tap on an option | `chose(note, index)`: the scene at once, and a stop or work for the wish of that note | `ended(ended)` |
+| a tap on an option | `chose(note, index, words)`: the scene at once, and a stop or work for the wish of that note | `ended(ended)` |
+
+**A tap means what was seen.** Every made wish keeps its notes on the page (ADR 0030), so the page can change
+between the frame a person saw and their click. Two things close that, and neither is a rule about a choice,
+which stay core's:
+
+- The kit's view takes no tap on a choice that has just moved in the column, or has just come where another
+  piece took a tap, for 400 ms (`sticker-kit`, `draw/settle.rs`; its README, "A tap means what was seen"). So a
+  result card that comes above `Keep it` / `Toss it` does not put another choice under a click already made.
+- The kit's tap carries the option's words as they were drawn, and `Showing::chose` acts only when the note of
+  that id on show now has those same words at that place. Otherwise (the note was made again with another list
+  of choices, or is gone) nothing is carried to core, nothing is written, and the scene on show is given back to
+  be drawn again; no note says so, and the person clicks what they see. A tap on a picture or its `?` carries no
+  words and is as before.
+
+The walk (`examples/walk.rs`) names an option by its words and the made-up window of the tests (`tests/support/
+tapper.rs`) carries the words of the scene its view holds, so both go through the same check; the tapper's
+`choose:<note>:<index>:<words>` is a click that carries the words of an older drawing
+(`tests/several_wishes.rs`). The window's line for a tap still names the id and the place, never a word.
 
 A page-data file has no day: every call gives nothing, and an Enter is still answered, not kept, so no entry waits
 for ever. The entry is told its words were kept only when core kept the wish. `app/tests/f43/showing.rs` makes these

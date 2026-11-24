@@ -180,11 +180,20 @@ impl Showing {
     /// A tap on an option: the scene to show at once, and, when it was the choice to stop a run or a choice of
     /// work that waits, core's part of it as work for another thread. None for a tap that is nothing. A tap on a
     /// drawn note's picture opens the note or closes it: the scene is the one on show, and core is not asked.
-    pub fn chose(&self, note: &str, index: usize) -> Option<(Scene, Option<After>)> {
+    ///
+    /// `words` are the option's as they were drawn when it was tapped (the kit's tap carries them). A tap means
+    /// what was seen: when the note of that id on show now has other words at that place, or is gone, the page
+    /// changed under the pointer, so nothing is carried to core, nothing is written, and the scene on show is
+    /// given back to be drawn again. A tap on a picture carries no words.
+    pub fn chose(&self, note: &str, index: usize, words: &str) -> Option<(Scene, Option<After>)> {
         if index == sticker_kit::PICTURE_PLACE {
             let wish = self.with(|on| whose(&on.scene, note)).flatten();
             wish.into_iter().for_each(|wish| self.3.offer(wish));
             return self.scene().filter(|scene| self.3.tapped(scene, note)).map(|scene| (scene, None));
+        }
+        let on_show = self.scene()?;
+        if on_show.option(note, index) != Some(words) {
+            return Some((on_show, None));
         }
         // A stop holds nothing: the stopped wish has the notes of an ended wish at the next look.
         let chosen = match self.with(|on| on.chose(note, index))? {

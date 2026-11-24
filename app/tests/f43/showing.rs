@@ -1,8 +1,8 @@
 //! The window's acts with no window: `Showing` is what `window.rs` calls, and here the same calls are made in the
 //! same order, the work between them run on this thread. No run is asked for here: an asking is never run.
 
-use jellymoon_app::showing::{Showing, entry_line, other_theme, switches_theme, tap_line};
-use jellymoon_app::stopping::{STOPPING, UNSTOPPED};
+use jellymoon_app::showing::{After, Showing, entry_line, other_theme, switches_theme, tap_line};
+use jellymoon_app::stopping::{STOP, STOPPING, UNSTOPPED};
 use jellymoon_app::today::{Next, waiting};
 use jellymoon_app::wishing::{UNKEPT, UNSTARTED};
 use sticker_kit::{Scene, State};
@@ -20,7 +20,7 @@ fn a_page_with_no_day_takes_every_act_as_nothing_and_still_answers_its_entry() {
     let none = Showing::of(None);
     assert!(none.offering().is_none() && none.look().is_none() && none.poked("m1").is_none());
     assert!(none.reading(Box::new(|| None)).is_none() && none.wishing(SAID, Some("alpha")).is_none());
-    assert!(none.chose("stop-m1", 0).is_none() && none.chose("clash-1", 0).is_none());
+    assert!(none.chose("stop-m1", 0, STOP).is_none() && none.chose("clash-1", 0, "").is_none());
     assert!(none.asked(Some((UNSTARTED, String::new()))).is_none());
     let entered = none.answered(None);
     assert!(!entered.kept && entered.scene.is_none() && entered.asking.is_none(), "the words stay, nothing is shown");
@@ -53,16 +53,20 @@ fn a_tap_on_an_option_shows_its_scene_at_once_and_only_a_choice_to_stop_leaves_w
     let (_world, mut on) = wished_alone();
     on.scene.notes.insert(0, planted("m1"));
     let showing = Showing::of(Some(on));
-    assert!(showing.chose("stop-m2", 0).is_none(), "a choice to stop that is not on show is nothing");
-    let (at_once, stop) = showing.chose("stop-m1", 0).unwrap();
+    // A choice that is not on show is carried nowhere: the scene on show is given back, and no work.
+    let on_show = showing.scene();
+    let unseen = |tapped: Option<(Scene, Option<After>)>| tapped.map(|(now, left)| (now, left.is_none()));
+    assert_eq!(unseen(showing.chose("stop-m2", 0, STOP)), on_show.clone().map(|now| (now, true)));
+    assert_eq!(unseen(showing.chose("stop-m1", 0, "Stop them all")), on_show.map(|now| (now, true)), "other words");
+    let (at_once, stop) = showing.chose("stop-m1", 0, STOP).unwrap();
     assert_eq!(title(&at_once), Some(STOPPING));
     // The wish has no run, so core refuses the stop: the page says so.
     let after = showing.ended(stop.expect("the stop is work for another thread").run()).unwrap();
     assert_eq!(title(&after), Some(UNSTOPPED));
-    assert!(showing.chose("stop-m1", 0).is_none(), "a second tap on the choice is nothing");
-    // Any other option is a tap for core: its scene, and no work after it.
-    let (tapped, stop) = showing.chose("clash-1", 0).unwrap();
-    assert!(stop.is_none() && !tapped.notes.is_empty());
+    assert_eq!(unseen(showing.chose("stop-m1", 0, STOP)), Some((after.clone(), true)), "a second tap on the choice");
+    // A tap on any other note that is not on show is carried nowhere either (one that is: `showing/tests.rs`).
+    let (tapped, stop) = showing.chose("clash-1", 0, "").unwrap();
+    assert!(stop.is_none() && tapped == after);
 }
 
 #[test]

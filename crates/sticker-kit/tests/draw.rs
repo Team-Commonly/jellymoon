@@ -77,10 +77,10 @@ fn a_click_on_an_option_reaches_the_callback() {
     cx.simulate_click(point(px(x), px(y)), Modifiers::default());
     cx.run_until_parked();
 
-    assert_eq!(
-        *taps.borrow(),
-        [Tap::Option { note_id: "picnic-place".into(), index: 1 }, Tap::Character { id: "kite".into() },]
-    );
+    // The option's words are the scene's own string, whole, and not the lines it was laid out in.
+    let words = "“the hill has the best view, let's eat up there”".to_string();
+    let option = Tap::Option { note_id: "picnic-place".into(), index: 1, words };
+    assert_eq!(*taps.borrow(), [option, Tap::Character { id: "kite".into() }]);
 }
 
 #[cfg(debug_assertions)]

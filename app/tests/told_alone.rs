@@ -154,7 +154,9 @@ fn a_run_that_changed_nothing_and_said_nothing_is_done_as_before() {
     let opened = w.taps("logs", &["poke:m1"]).showed().remove(0).expect("a tap opens the wish");
     assert_eq!(ids(&opened), ["wish-m1"]);
     assert_eq!(plain(&opened), (DONE.to_string(), vec![format!("“{SAID}”")], true));
-    assert_eq!(w.taps("logs", &["look"]).ended(), ["null"], "a look shows nothing of it");
+    // Every wish keeps its place (ADR 0030): a look shows the same note with no tap.
+    let looked = w.taps("logs", &["look"]).showed().remove(0).expect("a look shows the wish as it stands");
+    assert_eq!(looked.notes, opened.notes);
 }
 
 #[test]
@@ -169,7 +171,9 @@ fn a_run_that_did_not_finish_says_so_in_jellymoon_s_words_and_nothing_of_core_s_
     for word in ["`", "did not finish (", "last word", "its copy", "r0", "run r"] {
         assert!(!text.contains(word), "{word:?}: {text}");
     }
-    assert_eq!(w.taps("logs", &["look"]).ended(), ["null"], "a look does not open it");
+    // Every wish keeps its place (ADR 0030): a look shows the same note with no tap.
+    let looked = w.taps("logs", &["look"]).showed().remove(0).expect("a look shows the wish as it stands");
+    assert_eq!(looked.notes, opened.notes);
 }
 
 // A run that said it was done and what it did, and whose harness then exited with a failure, did not finish:
@@ -201,21 +205,30 @@ fn looked(line: &str) -> Vec<String> {
     shown(line).map_or(Vec::new(), |scene| ids(&scene).into_iter().map(str::to_string).collect())
 }
 
-// Told alone never takes the first look from work that waits: the older wish's work is shown, with its choices.
+/// [`looked`] in the order of the letters: which notes a page holds, whatever their order on the scene.
+fn held(line: &str) -> Vec<String> {
+    let mut ids = looked(line);
+    ids.sort_unstable();
+    ids
+}
+
+// Told alone takes nothing from work that waits: the first look shows the older wish's work, with its choices,
+// and the newer wish told alone, each under its own words (ADR 0030).
 #[test]
-fn the_first_look_shows_an_older_wish_s_work_that_waits_before_a_newer_wish_told_alone() {
+fn the_first_look_shows_an_older_wish_s_work_that_waits_and_a_newer_wish_told_alone() {
     let w = day();
     assert_eq!((edits(&w), told(&w, &done(), 0, "completed")), ("m1".to_string(), "m2".to_string()));
     let lines = w.taps("logs", &["look"]).ended();
     let first = shown(&lines[0]).expect("the first look shows the work that waits");
-    assert_eq!(ids(&first), ["work-m1"]);
+    assert_eq!(held(&lines[0]), ["told-m2", "wish-m2", "work-m1"]);
     assert_eq!(options(&first, "work-m1"), CHOICES);
 }
 
-// Two wishes end while the window looks, the one told alone first in core's order: the other's work is shown, and
-// the one passed over still has its turn once the person has chosen and the looks after it are held.
+// Two wishes end while the window looks, the one told alone first in core's order: both are shown at once, and
+// the one told alone stays as it is while the person chooses on the other's work (ADR 0030; the turn it waited
+// for before is no more).
 #[test]
-fn a_wish_told_alone_passed_over_for_work_that_waits_is_shown_after_the_person_chose() {
+fn a_wish_told_alone_and_work_that_waits_are_shown_together_and_a_choice_on_the_work_leaves_the_told_one() {
     let w = day();
     let made = w.at("tmp").join("made");
     let acts = ["look", &format!("hold:{}", made.display()), "look", "look", "choose:work-m2:2", "run"];
@@ -224,12 +237,14 @@ fn a_wish_told_alone_passed_over_for_work_that_waits_is_shown_after_the_person_c
     assert_eq!((told(&w, &done(), 0, "completed"), edits(&w)), ("m1".to_string(), "m2".to_string()));
     fs::write(&made, "").unwrap();
     let lines = window.ended();
-    let [_, drawn, work, busy, tossed, held @ .., last] = &lines[..] else { panic!("{lines:#?}") };
-    assert!(looked(drawn).iter().all(|id| !id.starts_with("work-") && !id.starts_with("told-")), "{drawn}");
-    assert_eq!(looked(work), ["work-m2"], "the work that waits, over the wish told alone");
-    assert_eq!((looked(busy), looked(tossed)), (vec!["busy-m2".to_string()], vec!["said-m2".to_string()]));
-    assert_eq!(held, ["null"; HOLD]);
-    assert_eq!(looked(last)[..2], ["told-m1", "wish-m1"], "the wish passed over has its turn");
+    let [_, both, again, busy, tossed, quiet @ .., last] = &lines[..] else { panic!("{lines:#?}") };
+    assert_eq!(held(both), ["told-m1", "wish-m1", "work-m2"], "the work that waits, and the wish told alone");
+    assert_eq!(again, "null");
+    assert_eq!(held(busy), ["busy-m2", "told-m1", "wish-m1"]);
+    assert_eq!(held(tossed), ["said-m2", "told-m1", "wish-m1"]);
+    assert_eq!(quiet, ["null"; HOLD]);
+    // Past the looks held after the toss its wish is drawn as it stands, over the answer; the told one stays.
+    assert_eq!(held(last), ["said-m2", "told-m1", "wish-m1", "wish-m2"]);
 }
 
 /// How core keeps the made wish `id`.
@@ -240,11 +255,11 @@ fn state(w: &World, id: &str) -> String {
     wishes.iter().find(|wish| wish["id"] == id).map_or(String::new(), |wish| wish["state"].as_str().unwrap().into())
 }
 
-// A note told alone, shown by a look, stays: another wish's work that ends meanwhile is not put over it. Its wish's
-// note has the field of a follow-up (go on from an answer), so it is in the person's hand as any field is, and
-// holds every look while it is on show, past the looks an answer to a choice holds.
+// A note told alone, shown by a look, stays, with its wish's note and the field of a follow-up (go on from an
+// answer): another wish's work that ends meanwhile comes under that wish's own words and takes nothing of it
+// away (ADR 0030; before, the field held every look and the work never came by itself).
 #[test]
-fn a_note_told_alone_shown_by_a_look_holds_the_looks_after_it() {
+fn a_note_told_alone_shown_by_a_look_stays_when_another_wish_s_work_comes() {
     let w = day();
     assert_eq!(told(&w, &done(), 0, "completed"), "m1");
     w.play("slow");
@@ -261,9 +276,11 @@ fn a_note_told_alone_shown_by_a_look_holds_the_looks_after_it() {
         fs::write(&ended, "").unwrap();
         window.ended()
     });
-    let [first, held @ ..] = &lines[..] else { panic!("{lines:#?}") };
-    assert_eq!((looked(first)[..2].to_vec(), held.len()), (vec!["told-m1".to_string(), "wish-m1".into()], HOLD + 2));
-    for line in held {
-        assert!(!looked(line).iter().any(|id| id == "work-m2"), "the told note was taken away: {line}");
-    }
+    let [first, ended, rest @ ..] = &lines[..] else { panic!("{lines:#?}") };
+    assert_eq!(held(first), ["told-m1", "wish-m1"], "{first}");
+    assert_eq!(held(ended), ["told-m1", "wish-m1", "work-m2"], "the work comes, and the told note stays: {ended}");
+    let note = |line: &str, id: &str| shown(line).map(|scene| note(&scene, id).clone());
+    assert_eq!(note(ended, "told-m1"), note(first, "told-m1"));
+    assert_eq!(note(ended, "wish-m1"), note(first, "wish-m1"));
+    assert_eq!(rest, ["null"; HOLD + 1], "and the looks after it have nothing new");
 }

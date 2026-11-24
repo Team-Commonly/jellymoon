@@ -54,8 +54,8 @@ keeps, compares and prints is as it was. From the top:
 |---|---|
 | the header | the date's tape, the title, and the footer as quiet lines under it |
 | a row a wish of the reading | its small character, its label, what it says; the ones let go last |
-| the day's own notes | every note of no made wish, in the scene's order: what was left out, what came true, the clashes, the plain notes, an opened wish of the reading |
-| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `kept-`, `file-`, `sure-`, `busy-`, `wish-`, `said-`. `steps-` and the note of work that waits are drawn notes (pictures, below), and `told-` is not on the page while that wish's drawn `work-` is closed |
+| the day's own notes | every note of no made wish, in the scene's order: what was left out, what came true of the reading's wishes, the clashes, the plain notes, an opened wish of the reading |
+| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `kept-`, `file-`, `sure-`, `busy-`, `wish-`, `said-`. `steps-` and the note of work that waits are drawn notes (pictures, below), and `told-` is not on the page while that wish's drawn `work-` is closed. Every made wish has its notes at once: a track while its run goes, its result when it has ended (ADR 0030, "Every wish keeps its place", below) |
 | a wish that is not made yet | the notes of `shaping.rs` (`shaping`, or `shape-said` and `shape`): the newest thing on the page, so the column's last, over the entry the words were typed in |
 
 The list "wished here today" that `scene::ruled` builds is not drawn: its rows are the words the bubbles carry.
@@ -68,7 +68,8 @@ sections below say: this changed where a note stands and nothing else. Where a s
 making room, giving way or being counted with the notes left out, the column has made that untrue, and the
 sentence has been changed to say so. What a card is bounded by is the kit's (`crates/sticker-kit/README.md`).
 `app/tests/one_column.rs` holds the order, that no card overlaps another, that eight notes are all placed, and
-that the entry is the lowest thing in the window whatever the column holds.
+that the entry is the lowest thing in the window whatever the column holds. A unit test of `column.rs` orders
+the notes of four wishes at once, two of them with ids one of which ends the other.
 
 A card stands under the cards before it, so a note that comes or goes higher up moves the cards under it down or
 up, whole. The window holds a page at its column's end while the reader is there, and where the reader left it
@@ -80,7 +81,7 @@ Two of a made wish's notes are pictures, the kit's `Note::Drawn`, where they wer
 
 | Note | Picture | Its words, on the page only while it is open |
 |---|---|---|
-| `steps-<wish>`, of the newest working made wish (`live.rs`) | a track: core's count of the run's steps as tallies, and the stage of the newest (thinking, looking, making). Never a file's name | the title and the body of the note that says the wish is being worked on, whose place it takes; then "Looking around your project." or "Making the change.", and "1 step so far." or "N steps so far.", each only when there is one |
+| `steps-<wish>`, of each working made wish (`live.rs`) | a track: core's count of the run's steps as tallies, and the stage of the newest (thinking, looking, making). Never a file's name | "Your wish is being worked on." and the line that names this one wish; then "Looking around your project." or "Making the change.", and "1 step so far." or "N steps so far.", each only when there is one |
 | `work-<wish>`, work that waits and was read (`working.rs`) | sheets: one for each file core counted as made, changed and removed, in a copy still, with core's choices under it in core's order | core's title, "Your folder is not changed yet.", and then core's lines |
 
 Everything else is a text note as it was: a note with a run's question, the keep asked once more (`sure-`),
@@ -89,9 +90,10 @@ refused. They hold someone else's words or a refusal, which a person must not ha
 
 A tap on a picture, or on the `?` beside it, opens its note, and another closes it. The kit reports it as the
 note's id at `PICTURE_PLACE`; `Showing::chose` answers it with the scene on show and asks core nothing. Which notes
-are open is the window's own (`drawing::Open`, one for each page's `Showing`); nothing is written. `drawing::pass`
+are open is the window's own (`drawing::Open`, one for each page's `Showing`); nothing is written. `drawing::passed`
 makes a scene as it is drawn with that state: each drawn note open or closed, and no `told-<wish>` while the drawn
 `work-<wish>` of that wish is on the scene and closed, so a finished wish is first one picture with its choices.
+The same pass leaves the field of a follow-up under one wish (`answering::one_offer`, ADR 0030).
 It is applied in one place, `drawing::column`, which then puts the scene in its column's order; every scene the
 window shows goes through it (`Showing::column`), and the scene the app keeps and compares is as it was.
 
@@ -339,7 +341,7 @@ what core keeps.
   is drawn with no tap and without opening the app again: the star, or the wish needing the person. A wish made
   or run in a terminal shows up the same way. A look can end a run that was cut off, as any look does
   ([run.md](run.md#a-run-that-was-cut-off)), which can take a few seconds; the next look waits for it.
-  A look that finds a run ended also shows the work of it that waits ("Work that waits shows itself", below).
+  A look that finds a run ended also makes the notes of every ended made wish again ("Every wish keeps its place", below).
 - **A look never takes a note away.** The plain notes the app put over the page (a reading that is going or
   failed, a tap that did nothing, a wish that was not kept or has no run, a stop) stay over what a look draws.
   A look made from a scene that is no longer on show is dropped.
@@ -371,7 +373,7 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   run as a typed wish's is asked for. Core keeps it only while that shape still waits for those words; what it
   refuses, and a run that was not started, are said in the notes a typed wish has for them.
 - **Enter while they stand** takes the pair away and reads the new words: a page holds one reading or one pair.
-  A look leaves them (`working::names`), and so does a tap on a wish's character (`placing::over`): they hold the
+  A look leaves them (`working::names`), and so does a tap on a wish's character (`Today::opened`): they hold the
   only copy of words the entry no longer has.
 - **A tap whose wish core refuses** (a busy day, a day with its eight): nothing is kept, with the shape or
   without it, and the note every refused wish gets says so. Core keeps a wish and its prompt in one write.
@@ -443,11 +445,11 @@ view. What each act does is `Showing`, the day on show behind the calls the wind
 | a key | `switches_theme(key, command key held)`, `other_theme(name)` | |
 | the first page | `offering()` | the entry is set |
 | a step of the reading | `reading(step)` | `read(&next)`: the scene, and the step's entry |
-| once a second | `look()`, which also asks core of a wish whose run ended | `seen(seen)`: the scene, or none for a look of a scene that is gone |
+| once a second | `look()`, which makes the ended wishes' notes again only when something changed (`showing/turns.rs`) | `seen(seen)`: the scene, or none for a look of a scene that is gone |
 | Enter | `wishing(words, chip's name)` | `answered(answer)`: what the entry is told, the scene, the asking |
 | the asking's end | | `asked(said)`: the scene, when there is something to say |
-| a tap on a character | `poked(id)` | `seen(seen)` |
-| a tap on an option | `chose(note, index)`: the scene at once, and a stop | `stopped(stopped)` |
+| a tap on a character | `poked(id)`: of a made wish, it has the offer and its drawn note opens or closes | `seen(seen)` |
+| a tap on an option | `chose(note, index)`: the scene at once, and a stop or work for the wish of that note | `ended(ended)` |
 
 A page-data file has no day: every call gives nothing, and an Enter is still answered, not kept, so no entry waits
 for ever. The entry is told its words were kept only when core kept the wish. `app/tests/f43/showing.rs` makes these
@@ -548,8 +550,9 @@ that fit and counts the rest in a last line, `+N more`.
   did not finish, and nothing in your folder was changed." (true of every failed run, whether it stopped early
   or had finished when its work could not be committed or its end recorded) and "You can type the wish again, or
   type it with what should be different." No run's id and no word of core's reason are on it. Either note can have a field under it ("A question answered, and
-  more like this", below). One wish is open at a time. A tap on no wish, or on a wish whose
-  note is on show, shows nothing. Nothing is written by any of it.
+  more like this", below). A made wish has these notes with no tap ("Every wish keeps its place", below), so the
+  tap makes them again from core, takes the offer of a follow-up under this wish, and opens or closes the drawn
+  note of its finished work. A tap on no wish shows nothing. Nothing is written by any of it.
 - **A wish of the reading** (open a wish). Jellymoon ran nothing for it: it is the model's reading of what was
   typed in Claude Code, and it is read-only, with no choice and no field. Its note, `wish-<wish>`, never says a
   run's state; its title is the reading's take, by state: "This looks unfinished.", "This looks done.", "This
@@ -560,62 +563,51 @@ that fit and counts the rest in a last line, `+N more`.
   It will start in <project>." The tap also chooses that chip, as a click on the chip does (`Showing::chip_of`,
   `window::poked`): what is typed stays, nothing starts, and the hold after a choice is not changed. A tap on a
   made wish, or on a wish whose project has no chip, chooses nothing (`app/tests/open_a_wish.rs`).
-- **Work that waits shows itself** (`Showing::look`, `app/src/showing.rs`). A look that finds a wish's run ended
-  puts the wish's work on the page with no tap: the notes a tap on its character gives (`told-<wish>` when there
-  is one, and `work-<wish>` with its choices), from the calls to core a tap makes, off the window's thread, in
-  the same look that draws the star. A run that finished and changed nothing, and said something that passed,
-  shows itself the same way, by the same rules: `told-<wish>` over the wish's own note (told alone, below),
-  but never in place of work that waits: the look asks on past it, shows the first wish's work that waits if
-  any, and only else the first told-alone note; a wish passed over so keeps its turn. A told-alone note put on
-  the page with no work under it holds the three looks after it (`HOLD`), as a choice's answer does, since it
-  has nothing to choose and is never in hand. The rules:
-  - *Whose work.* A made wish this window saw being worked on or saw made, whose run is not going now. Core is
-    asked of it once for that end: a wish with no work waiting is not asked of again until it is worked on
-    again, and work that was shown is not shown by itself again. A look whose scene was dropped is made again.
-    A page with nothing new is looked at as before: the notes and characters on show are gone through, and no
-    call is added.
-  - *Work that waited when the window opened.* The first look that is free to shows the newest done wish's
-    work that waits, asking the done wishes from the newest, once a window. It asks on past the work it shows,
-    and every older wish whose work waits has its turn after it, as a run that ended under this window has: so
-    a keep or a toss is followed by the next change that waits, past the looks held back, and nobody is left
-    to believe a change is in the folder that is not.
-  - *Never over a note in the person's hand.* While the scene on show, placed or not, holds a choice with an
-    option (a clash's, the one that turns delivery on, a stop's), a text note with an option or a field (work
-    that waits, the same asked once more, a question, a follow-up), or a note core's answer comes in the place
-    of (`busy-<wish>`, "That run is being stopped.", a wish's note that says it is being worked on), the look
-    is the plain one. The page's own first note that says a run goes ("Your wish is being worked on.") has no
-    option and no field and is none of these: work still shows itself under it. The work waits its turn, or
-    never comes when the person taps its character first. So a look moves no option and no field, and takes no
-    typed word; the characters stand where they stood, since the page had notes before. A page with a clash's
-    choice on it therefore opens no work by itself: a tap does.
-  - *Not right after the page left the hand.* Every look made while a note is in hand holds the three looks
-    after it (`HOLD`), however the page then leaves the hand: by a tap, or by a look that takes a stop's choice
-    away when the run ended by itself, or a clash's that a reading or a ruling made elsewhere took away. Work
-    comes no sooner than the fourth look after, never where `Stop it` stood a second before.
-  - *Not right after the person chose.* After a tap on an option of any note (keep, toss, show me, the second
-    yes, a stop, a clash's or delivery's choice), an Enter (a question's answer among them), and core's answer
-    to either, the next three looks (`HOLD`) show no work, so about three seconds pass with the answer on the
-    page. Without it, another wish's `Keep it` and `Toss it` came, within a second, where the tapped ones stood,
-    under a slow second tap. The looks are counted again from core's answer, so a slow keep is held as long as a
-    quick one. A turn held back is kept. A tap on a character is the person's own act and opens its work at
-    once. A look in flight when the person chooses is dropped whole, its scene being gone, and made again after
-    the hold.
-  - *Only wishes the page had.* A look puts on the page the work of a wish that was a made wish of the scene it
-    was made of. A wish made and ended elsewhere since has its turn at the next look, when its character is
-    drawn, so no look adds a first note and a new character at once.
-  - *What a look reads.* For each end of a run, once, a look now asks core whether work waits, and core reads
-    the run's record and then the repo through its git reads (the branch, the run's commit, what it changed):
-    the reads a tap on the character makes, where before this only a tap made them. Nothing is written, and a
-    look with no new end reads no repo.
-  - *Several ends at once.* One is shown, the first in core's order; the others wait behind its choices.
-  - *What stays.* The look's notes go before the others. What was said of work kept or tossed (`said-<wish>`)
-    stays under them, where a tap on a character takes it away: a run's end does not take away the answer to
-    the person's own tap. The hold above is what makes that safe: the answer has stood alone for three looks.
-    Every other note of an opened wish gives way, as to a tap.
+- **Every wish keeps its place** (`app/src/placing.rs`, `showing/turns.rs`, ADR 0030). Every made wish of the day
+  has its own notes under its own typed words, all at once, while the day's page is on show.
+  - *At work.* Each made wish whose run goes has its track, `steps-<wish>`, with core's count of its own steps;
+    one core has no step for is thinking, with none. A page with a clash has no track: a working wish there has
+    its pill only.
+  - *Ended.* A made wish whose run is not going has the notes a tap on its little one gives, with no tap: work
+    that waits as `told-<wish>` and the drawn `work-<wish>`, closed until tapped; a change kept by itself as
+    `told-<wish>` and `kept-<wish>`; else `wish-<wish>`, under what its run said when it changed nothing and said
+    something (told alone, below). A wish of the reading is as it was: its note comes with a tap, one at a
+    time, and a tap on any other character takes it away. No note of a made wish goes with it.
+  - *A tap goes to its note's wish.* A choice, the second yes and an Enter act on the wish whose id the note
+    carries (`placing::whose`). `busy-`, `sure-`, `file-` and `said-` stand under that wish and take nothing of
+    another wish away (`placing::put`). Under core's answer to an undo the work waits again, or the kept note
+    stands again when core refused; core's answer to a keep or a toss stands alone until the wish's hold is
+    over (below), and then how the wish stands is drawn over it. A tap on a made wish's little one or bubble
+    makes that wish's notes again as an opening gives them (`Today::opened`): its own `said-`, file notes and
+    `sure-` go, as they did with that tap before, and the tap does nothing while `busy-<wish>` is on show.
+  - *The offer of a follow-up* is drawn under one wish (`answering::offered`): the one tapped last (its little
+    one, its bubble, its picture, a choice or a field of its notes) while core says it may be followed, and
+    else the newest made wish that may. The scene the app keeps carries the field on every wish core allows;
+    `drawing::passed` leaves one where the scene is drawn, so moving the offer asks core nothing. A field to
+    answer a question in is never taken away, so two wishes that ask both have their field.
+  - *When core is asked.* A look is made once a second and shows the notes the scene has. The notes of an ended
+    wish are made again, by the calls a tap on its little one makes, off the window's thread: for every ended
+    wish at the window's first look; for every ended wish in the look that finds a made wish's run ended (or an
+    ended made wish new to the page), since a change that landed takes the undo of an older one away; for
+    every ended wish at the look after core answered a choice on any wish's work; and for one wish at a tap on
+    it. A look with nothing new asks core nothing of a wish that has ended.
+  - *Never over a note in hand, nor right after a choice.* A wish with `busy-`, `sure-`, a file's note or the
+    rows `Show me` brought on the page is not made again until that note is answered (`placing::in_hand`), and
+    it stays owed. After a tap on an option of a wish's note (but the choice to stop its run, which holds
+    nothing), an Enter under one, and core's answer to a choice, the next three looks (`HOLD`) leave that
+    wish's notes as they are, so the answer is read; the looks are counted again from core's answer. The hold is that wish's own: every other wish is made again meanwhile. A look in
+    flight when the person chooses is dropped whole, and the wishes it was given are owed their notes still.
+  - *A stale choice.* Between those moments a kept note may show a choice that no longer holds (an `Undo it`
+    after something landed outside this window). The tap goes to core, which refuses it in its own sentence,
+    and the notes are made again under it.
+  - *What stays.* What was said of work kept or tossed (`said-<wish>`) stays under its wish until that wish is
+    acted on again. A note made again stands where the wish's notes stood.
 
-  `app/tests/work_shows.rs` holds these with the made-up window's `look` act, and `app/src/showing/tests.rs`
-  the turns alone. Not proved: the kit's keeping of the entry's words and keys under a new scene, which is the
-  window's (`set_scene`, as every look).
+  `app/tests/several_wishes.rs` holds these at the made-up window (two at work, two kept by themselves, a keep
+  and a toss on two wishes, `Show me` on one of two, the looks that ask nothing, a wish of the reading), and
+  `app/src/showing/tests.rs` and `placing.rs` the rules alone. Not proved: the kit's keeping of the entry's words
+  and keys under a new scene, which is the window's (`set_scene`, as every look); a very long column in a real
+  window.
 - **What the run says it did** (F86, ADR 0023, `app/src/told.rs`): when core prints a `result` with a piece
   that passed, the work's note has one more note before it, `told-<wish>`, the kit's `Note::Told`. Its title is
   "What it says it did", which is also the label of what the run did: that text is the first thing under it.
@@ -665,10 +657,10 @@ that fit and counts the rest in a last line, `+N more`.
   no `work-<wish>` and no choice. When core lets a follow-up be made of the wish (`jellymoon_core::followable`
   with no work), the wish's note has the field of `More like this` under no offer: the hint "Type what to do
   next, then Enter", the key `more-<wish>`, and Enter there is a follow-up as under work ("A follow-up", below);
-  the run goes on in the same conversation where the harness still keeps it (`run.md`, "A session the harness keeps no more"), and the follow-up's wish is drawn working. With a field the note is
-  in the person's hand, as every note with one is (`working::in_hand`): while it is on show no look puts another
-  wish's work over it. A tap on the
-  character shows both notes again; a look shows them once, as work that waits; `layout` does not print them.
+  the run goes on in the same conversation where the harness still keeps it (`run.md`, "A session the harness keeps no more"), and the follow-up's wish is drawn working. The note stays with its field when another wish's work comes, which
+  stands under that wish's own words (ADR 0030); the field is drawn under one wish, the offer's. A tap on the
+  character shows both notes again; a look shows them with no tap, as it shows work that waits; `layout` does
+  not print them.
   A run that said nothing that passed, or did not finish, has no such note: core keeps no result of a run that
   failed. `app/tests/told_alone.rs`, and the field `app/tests/go_on_from_an_answer.rs`.
 - **`layout`** has no tap, so it prints the note of every made wish whose work waits, first among the notes,
@@ -735,12 +727,12 @@ first lines are drawn and the rest counted.
 A finished change is in the person's folder with no tap wherever core takes no yes
 ([keep.md](keep.md#kept-by-itself)). Its wish then has the note `kept-<wish>` where the work's note would be:
 core's title "Your folder has this change now.", core's count of its files, and the one choice `Undo it`, with
-the offer of a follow-up under it as under every finished wish. `layout` prints it; a tap on the wish's
-character opens it. In the column it stands where the work's note does (`column.rs`, `ORDER`).
+the offer of a follow-up under it when this is the wish that has the offer (ADR 0030). `layout` prints it; the
+window shows it with no tap, and a tap on the wish's character opens its words. In the column it stands where the work's note does (`column.rs`, `ORDER`).
 
 A tap on `Undo it` is carried as every tap on work is (`working.rs`): "That change is being undone." at once,
 and then core's answer as the note `said-<wish>`. Undone: "The change was undone.", and under it the work's own
-note `work-<wish>` is back with `Show me`, `Keep it` and `Toss it`. Refused: "The change was not undone.", what
+note `work-<wish>` is back (the notes an opening gives, `Today::notes_on_open`) with `Show me`, `Keep it` and `Toss it`. Refused: "The change was not undone.", what
 the person can do next and core's one sentence of why ([keep.md](keep.md#undone)), and under it the kept note
 again. The title and the choice are there only while core, asking the repo at that look, finds the folder
 on the change's branch at the change's commit: under later commits the note has no choice and says why, and
@@ -836,7 +828,7 @@ Not done, and not tested at a real window:
   page's window ends nothing: the app lives on and so does the run. Quit meanwhile cuts the run off, and the
   next look ends it as any run that was cut off.
 - A field takes at most 400 characters, the kit's cap on a line, where core takes an answer of 600.
-- One wish is open at a time in the window, so of two wishes that ask one is on show; `layout` prints both.
+- Every made wish has its notes at once (ADR 0030), so two wishes that ask both show their question and field.
 - A note left on show while its wish changed elsewhere keeps its field until the wish is opened again. An Enter
   there is refused by core, in its words. One case is not refused: a note left on show with one question while
   the run, answered elsewhere, now asks another gives its words to the new question.
@@ -1021,12 +1013,12 @@ and Cmd-Q are the system's and are not run by a test.
 |---|---|
 | a wish | a character with the wish's label, in page order: a row under the header, the let-go ones last; a made wish's stands at the end of its bubble |
 | its state | working: busy bubble; done: idle; needs you: badge; let go: dimmed, label struck |
-| each star | a star on its wish's character (the kit draws at most 4) and a row in the list note "came true today"; none of a made wish that was let go, whose change was thrown away |
+| each star | a star on its wish's character (the kit draws at most 4; none of a made wish that was let go, whose change was thrown away). A star of a wish of the reading is also a row in the list note "came true today". A made wish's star is no row there: its result is under its own typed words (ADR 0030). A list with no row is not drawn |
 | a clash | a choice note `clash-<n>` with both quotes, each drawn whole; `settled` strikes the first |
 | `read` | the footer: how many things were typed, in which projects, and that the reading is unedited |
 | the day's made wishes | a character each, like any wish, and, in the scene, one whole list note, "wished here today", after the clashes: each made wish's own words after the mark of its state. The column draws each as a bubble of its own instead, whole (`column.rs`). The footer adds "N made wishes are in your own words."; on a day not read yet that is all the footer says |
-| a made wish whose run goes, on a page with no clash | the first note (after "not everything is drawn"), a plain one: "Your wish is being worked on." over "“<the start of its words>”. What it did will show here when it is done." With more, one note for all: "Your wishes are being worked on." over "“<the newest's>”, the newest, and N more. What each did will show here when it is done." The wish is named as every note of a wish names it, by its first 40 characters as core cleans them. No time is promised. It goes with the last run, and a look never carries it over as the app's own. A page with a clash has none: it is a note planned before the made wishes' list, so it would move or shrink what a person rules on, which a made wish never does (F37) |
-| a made wish whose run goes, with steps (live work, `app/src/live.rs`) | its little one says on a small pill over it the stage its run is at, from the tool of its last step, in fixed words: "looking around" (`Read`, `Glob`, `Grep`), "making the change" (`Edit`, `Write`); "thinking" before the first step. On a page with the note that says it is being worked on, the newest working wish has a drawn note, `steps-<wish>`, in that note's place: a track of core's count of its steps at that stage ("A wish's work, drawn", above). Its words, on the page after a tap on the picture, are that note's title and body, then the stage as a sentence, "Looking around your project." or "Making the change.", and "1 step so far." or "N steps so far.". No file's name is drawn, on the pill, in the note or on an opened wish: a person who asked for something wants to know how far along it is, not which file is open. Core keeps the names (`runs/<id>/steps.json`); the page does not draw them. A pill is drawn only where the room over the little one holds one line and it has no star (stars stand there). A step is a tool use the run asked for, as its stream says, not proof that it happened. Only the picture can be tapped, for its words, and once the run has ended none of it is drawn: the notes are the ones they were |
+| a made wish whose run goes, on a page with no clash | a drawn note of its own, `steps-<wish>`, among the first notes (after "not everything is drawn"): a track ("A wish's work, drawn", above). Its first words are "Your wish is being worked on." and "“<the start of its words>”. What it did will show here when it is done." Each working wish has one, and each speaks of one wish: no note says "wishes" or counts the others (ADR 0030). The wish is named as every note of a wish names it, by its first 40 characters as core cleans them. No time is promised. It goes with its wish's run, and a look never carries it over as the app's own. A page with a clash has none: it is planned before the made wishes' list, so it would move or shrink what a person rules on, which a made wish never does (F37); a working wish has its pill there |
+| a made wish whose run goes, with steps (live work, `app/src/live.rs`) | its little one says on a small pill over it the stage its run is at, from the tool of its last step, in fixed words: "looking around" (`Read`, `Glob`, `Grep`), "making the change" (`Edit`, `Write`); "thinking" before the first step. Its track has core's count of its own steps at that stage. Its words, on the page after a tap on the picture, are the two sentences above, then the stage as a sentence, "Looking around your project." or "Making the change.", and "1 step so far." or "N steps so far.". No file's name is drawn, on the pill, in the note or on an opened wish: a person who asked for something wants to know how far along it is, not which file is open. Core keeps the names (`runs/<id>/steps.json`); the page does not draw them. A pill is drawn only where the room over the little one holds one line and it has no star (stars stand there). A step is a tool use the run asked for, as its stream says, not proof that it happened. Only the picture can be tapped, for its words, and once the run has ended none of it is drawn: the wish has the notes of an ended wish |
 | no wish, and nothing set aside | one plain note: "Nothing wished for yet today." |
 | more than the app draws | the first note, "not everything is drawn", with the counts (next section) |
 

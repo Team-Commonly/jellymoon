@@ -1071,7 +1071,10 @@ max_file_lines = 400
 # Joined with F92, the drawn work raised it by 4: the arm of F92's page test that reads a drawn note of work.
 # A change kept by itself is drawn raised it by 57: its note as sheets in the folder (`src/landing.rs`, 17), the
 # told note folded while it is closed (`src/drawing.rs`, 6), and its test (`src/drawing/tests.rs`, 34).
-"app" = 17868
+# Every wish keeps its place raised it by 438: its tests at the made-up window (`tests/several_wishes.rs`, 271) and
+# which wishes a look makes again (`src/showing/turns.rs`, 94), and 73 more in all across the files and tests
+# where the rules of one open wish were replaced.
+"app" = 18306
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

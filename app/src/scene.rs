@@ -23,9 +23,9 @@ pub const MADE: &str = "wished here today";
 /// The footer of a day with no session logs at all.
 const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
-/// The titles of the note that says the person's made wishes are being worked on: of one, and of more. Core's
-/// words for a wish at work are "is being worked on" too.
-pub(crate) const GOING: [&str; 2] = ["Your wish is being worked on.", "Your wishes are being worked on."];
+/// The first words of the track of a made wish whose run goes (`live.rs`). Each working wish has its own, and
+/// each says this of one wish. Core's words for a wish at work are "is being worked on" too.
+pub(crate) const GOING: &str = "Your wish is being worked on.";
 
 /// The title of the one note of a page with no wish on it, and its body when a project is on offer. With none,
 /// the body says to choose a folder first (`Today::draw`).
@@ -47,7 +47,9 @@ pub fn scene(page: &Page) -> Scene {
 /// A clash core says is no choice (its statements are the same once cleaned, or one is empty) is a plain note.
 /// The page's last `made` wishes are the person's made wishes. A reading's wish has a title the model wrote; a made
 /// wish has only the person's words, so one note after the clashes lists them, each whole or counted, never cut.
-/// While a run of the made wishes goes, the first note says so ([`going`]), on a page with no clash.
+/// While the run of a made wish goes the wish has its track ([`going`]), on a page with no clash. A made wish's
+/// stars are on its little one and in its own notes, under its typed words, so the list of what came true holds
+/// the reading's rows only, and is not drawn when it has none.
 pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let data = &page.data;
     let first = data.wishes.len().saturating_sub(made);
@@ -56,14 +58,13 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     // is not drawn and not listed. A reading's wish that was let go keeps the stars of the jobs that finished.
     let came = |index: usize, wish: &Wish| index < first || wish.state != WishState::LetGo;
     // A page with a clash has none: a made wish moves and shrinks nothing a person rules on (F37).
-    let says = going(made).filter(|_| data.clashes.is_empty());
-    let mut notes: Vec<Note> = left_out(page.left_out).into_iter().chain(says).collect();
+    let tracks = if data.clashes.is_empty() { going(made) } else { Vec::new() };
+    let mut notes: Vec<Note> = left_out(page.left_out).into_iter().chain(tracks).collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
         notes.push(Note::Plain { title: NOTHING.to_string(), body: NOTHING_HERE.to_string() });
     }
-    let true_of = data.wishes.iter().enumerate().filter(|(index, wish)| came(*index, wish));
-    let came_true: Vec<(String, String)> =
-        true_of.flat_map(|(_, wish)| wish.stars.iter().map(|star| (star.clone(), wish.label.clone()))).collect();
+    let rows = |wish: &Wish| wish.stars.iter().map(|star| (star.clone(), wish.label.clone())).collect::<Vec<_>>();
+    let came_true: Vec<(String, String)> = data.wishes[..first].iter().flat_map(rows).collect();
     if !came_true.is_empty() {
         notes.push(Note::List { title: "came true today".to_string(), rows: came_true });
     }
@@ -155,22 +156,16 @@ pub fn own(made: usize) -> String {
     }
 }
 
-/// The note that says the made wishes whose run goes are being worked on, one for all of them: the newest named
-/// by the start of its words, as every note of a wish names it, and the rest counted. It has no option and no
-/// field, so it is never in the person's hand (`working::in_hand`), and it goes with the last run. None when no
-/// run goes.
-fn going(made: &[Wish]) -> Option<Note> {
-    let working: Vec<&Wish> = made.iter().filter(|wish| wish.state == WishState::Working).collect();
-    let newest = working.last()?;
-    let named = format!("“{}”", jellymoon_core::wish_start(&newest.said, crate::wishing::NAMED_MAX));
-    let (title, body) = match working.len() {
-        1 => (GOING[0], format!("{named}. What it did will show here when it is done.")),
-        n => (
-            GOING[1],
-            format!("{named}, the newest, and {} more. What each did will show here when it is done.", n - 1),
-        ),
+/// The track of every made wish whose run goes, before its run's first step (`live::tracked` gives each core's
+/// count): its words say that one wish is being worked on, and name it by the start of its words, as every note
+/// of a wish names it. A track has no option and no field, and goes with its wish's run.
+fn going(made: &[Wish]) -> Vec<Note> {
+    let track = |wish: &Wish| {
+        let named = jellymoon_core::wish_start(&wish.said, crate::wishing::NAMED_MAX);
+        let body = format!("“{named}”. What it did will show here when it is done.");
+        crate::live::note(&drawn_id(&wish.id), None, (GOING, &body))
     };
-    Some(Note::Plain { title: title.to_string(), body })
+    made.iter().filter(|wish| wish.state == WishState::Working).map(track).collect()
 }
 
 /// The mark of a wish's state, on its row of the made wishes.

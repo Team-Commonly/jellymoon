@@ -1,5 +1,6 @@
 //! Work that waits shows itself: a look that finds a wish's run ended puts the wish's work on the page, as a tap on
-//! its character does, and never over a note a person may be about to tap or type in. The wishes are made and run
+//! its character does, under that wish's own words, and takes no note of another wish away (ADR 0030; the rules
+//! of several wishes at once are in `several_wishes.rs`). The wishes are made and run
 //! by the `jellymoon` command with the made-up agent of F39's tests, and the looks and taps are carried by the
 //! made-up window of F47 (`support/tapper.rs`), a process of its own. Nothing here starts the real Claude Code or
 //! opens a window.
@@ -19,7 +20,8 @@ use support::wished::{SAID, World};
 const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
 const TOSSED: &str = "The change was thrown away.";
 const KEPT: &str = "The change was kept.";
-/// The looks that show no work after a tap on an option or core's answer to it (`showing.rs`).
+/// The looks that leave a wish's notes as they are after a tap on an option of one or core's answer to it
+/// (`showing/turns.rs`).
 const HOLD: usize = 3;
 
 fn id_of(note: &Note) -> Option<&str> {
@@ -33,6 +35,14 @@ fn id_of(note: &Note) -> Option<&str> {
 /// The ids of the notes of a scene that have one, in their order.
 fn ids(scene: &Scene) -> Vec<&str> {
     scene.notes.iter().filter_map(id_of).collect()
+}
+
+/// [`ids`] in the order of the letters: which notes a page holds, whatever their order on the scene, which the
+/// column gives them anyway.
+fn held(scene: &Scene) -> Vec<&str> {
+    let mut ids = ids(scene);
+    ids.sort_unstable();
+    ids
 }
 
 fn note<'a>(scene: &'a Scene, id: &str) -> Option<&'a Note> {
@@ -130,9 +140,10 @@ fn a_look_that_finds_a_run_ended_shows_its_work_as_a_tap_does_and_once() {
     // The notes are the ones a tap on the character gives, in a window that never looked.
     let tapped = w.taps("logs", &["poke:m1"]).showed().remove(0).expect("a tap opens the wish");
     assert_eq!(shown.notes, tapped.notes);
-    // And a tap on the character of work on show does nothing, as before.
+    // And a tap on the character of work on show changes no note: it opens the words of the drawn one.
     let both = w.taps("logs", &["look", "poke:m1", "look"]).showed();
-    assert!(both[0].is_some() && both[1].is_none() && both[2].is_none(), "{both:?}");
+    assert!(both[0].is_some() && both[2].is_none(), "{both:?}");
+    assert_eq!(both[0].as_ref().map(|scene| &scene.notes), both[1].as_ref().map(|scene| &scene.notes));
     // The looks wrote nothing: the branch, the run's record and the run's copy are as the run left them.
     let repo = w.at("work").join("alpha");
     let was = w.everything(&repo);
@@ -173,56 +184,57 @@ fn the_page_says_a_wish_is_being_worked_on_and_its_work_still_shows_itself_when_
     assert_eq!(again, "null");
 }
 
-/// Each answer said only "The change was kept." or "thrown away": three of them on a page told nobody which was
-/// of which wish. The answer to a tap takes the place of what was said of another wish's work.
+/// Each answer says only "The change was kept." or "thrown away". It stands under the typed words of its own
+/// wish (`column.rs`), so two on a page are told apart, and the answer to a tap takes nothing of another wish away.
 #[test]
-fn one_answer_stands_on_the_page_and_it_is_of_the_work_just_kept_or_tossed() {
+fn each_answer_stays_under_its_own_wish_when_another_wish_s_work_is_kept_or_tossed() {
     let w = day();
     assert_eq!((ended(&w, "edits", "completed"), ended(&w, "edits", "completed")), ("m1".into(), "m2".into()));
     let acts = ["look", "choose:work-m2:2", "run", "look", "look", "look", "look", "choose:work-m1:1", "run"];
     let lines = w.taps("logs", &acts).ended();
-    let [_, _, _, _, _, _, turn, at_once, kept] = &lines[..] else { panic!("nine lines: {lines:#?}") };
-    // The older work comes under the eyes with the toss's answer still there: a look takes no answer away.
-    assert_eq!(ids(&scene(turn).expect("the older wish's work has its turn")), ["work-m1", "said-m2"]);
-    assert_eq!(ids(&scene(at_once).expect("a tap on Keep it")), ["busy-m1", "said-m2"]);
+    let [_, _, _, _, _, _, after, at_once, kept] = &lines[..] else { panic!("nine lines: {lines:#?}") };
+    // Past the looks held after the toss its wish is drawn as it stands, over the answer: a look takes none away.
+    assert_eq!(held(&scene(after).expect("the tossed wish as it stands")), ["said-m2", "wish-m2", "work-m1"]);
+    assert_eq!(held(&scene(at_once).expect("a tap on Keep it")), ["busy-m1", "said-m2", "wish-m2"]);
     let kept = scene(kept).expect("core's answer");
-    assert_eq!((ids(&kept), title(&kept, "said-m1")), (vec!["said-m1"], KEPT));
+    assert_eq!(held(&kept), ["said-m1", "said-m2", "wish-m2"]);
+    assert_eq!((title(&kept, "said-m1"), title(&kept, "said-m2")), (KEPT, TOSSED));
 }
 
 #[test]
-fn of_work_that_waited_when_the_window_opened_the_newest_is_shown_and_the_older_has_its_turn() {
+fn work_that_waited_when_the_window_opened_is_all_shown_and_a_toss_of_one_leaves_the_other_s_choices() {
     let w = day();
     let (first, second) = (ended(&w, "edits", "completed"), ended(&w, "edits", "completed"));
     assert_eq!((first.as_str(), second.as_str()), ("m1", "m2"));
     let acts = ["look", "look", "choose:work-m2:2", "run", "look", "look", "look", "look", "look"];
     let lines = w.taps("logs", &acts).ended();
-    let [opened, again, at_once, tossed, later, last, held, turn, after] = &lines[..] else {
-        panic!("nine lines: {lines:#?}")
-    };
+    let [opened, again, at_once, tossed, looks @ ..] = &lines[..] else { panic!("nine lines: {lines:#?}") };
     let opened = scene(opened).expect("the first look shows the work that waits");
-    assert_eq!(ids(&opened), ["work-m2"], "the newest wish's work, and that alone");
-    assert_eq!(options(&opened, "work-m2"), CHOICES);
-    assert_eq!(again, "null");
-    assert_eq!(ids(&scene(at_once).expect("a tap on Toss it")), ["busy-m2"]);
-    let tossed = scene(tossed).expect("core's answer");
-    assert_eq!((ids(&tossed), title(&tossed, "said-m2")), (vec!["said-m2"], TOSSED));
-    // The older wish's work waited at the window's opening too: it is not put under a second tap.
-    assert!(no_work(later, "m1") && no_work(last, "m1") && no_work(held, "m1"), "{later} {last} {held}");
-    let last = [later, last, held].into_iter().filter_map(|line| scene(line)).next_back().unwrap_or(tossed);
-    assert_eq!(ids(&last), ["said-m2"], "what was said of the toss stays");
-    // Past the looks held back it has its turn: nothing else on the page says a change still waits.
-    let turn = scene(turn).expect("the older wish's work has its turn");
+    assert_eq!(held(&opened), ["work-m1", "work-m2"], "the work of every wish, each with its choices");
     assert_eq!(
-        (ids(&turn), options(&turn, "work-m1")),
-        (vec!["work-m1", "said-m2"], CHOICES.map(String::from).to_vec())
+        (options(&opened, "work-m1"), options(&opened, "work-m2")),
+        (CHOICES.map(String::from).to_vec(), CHOICES.map(String::from).to_vec())
     );
-    assert_eq!(after, "null", "and it is in the person's hand");
+    assert_eq!(again, "null");
+    assert_eq!(held(&scene(at_once).expect("a tap on Toss it")), ["busy-m2", "work-m1"]);
+    let tossed = scene(tossed).expect("core's answer");
+    assert_eq!((held(&tossed), title(&tossed, "said-m2")), (vec!["said-m2", "work-m1"], TOSSED));
+    // The older wish's work is on the page all the while, with its choices, and what was said of the toss stays.
+    for shown in looks.iter().filter_map(|line| scene(line)).chain([tossed]) {
+        assert_eq!(options(&shown, "work-m1"), CHOICES, "{shown:?}");
+        assert_eq!(title(&shown, "said-m2"), TOSSED, "{shown:?}");
+    }
     // A tap on its character opens it, as before.
     assert_eq!(ids(&scene(&w.taps("logs", &["poke:m1"]).ended()[0]).expect("a tap opens the wish")), ["work-m1"]);
 }
 
+/// What `in_reach` gives of the note `id`: its options and its field.
+fn of_note(line: &str, id: &str) -> Vec<Value> {
+    in_reach(line).0.into_iter().filter(|piece| piece["id"] == id).collect()
+}
+
 #[test]
-fn work_is_not_opened_over_work_on_show_whose_options_and_field_stay_where_they_are() {
+fn work_that_ends_comes_under_its_own_words_and_the_options_of_work_on_show_stay_where_they_are() {
     let w = day();
     assert_eq!(ended(&w, "edits", "completed"), "m1");
     assert_eq!(wish(&w), "m2");
@@ -236,29 +248,34 @@ fn work_is_not_opened_over_work_on_show_whose_options_and_field_stay_where_they_
         release(&w, "ended");
         lines = window.ended();
     });
-    let [poked, before, ended, after, again, at_once, tossed, held @ .., turn, last] = &lines[..] else {
+    let [poked, before, ended, after, again, at_once, tossed, quiet @ .., stands, last] = &lines[..] else {
         panic!("nine lines and the looks held: {lines:#?}")
     };
     assert_eq!(ids(&scene(poked).expect("a tap opens the wish")), ["work-m1"]);
-    // The other wish's run ended: its star is drawn, and its work is not put over the work on show.
+    // The other wish's run ended: its star is drawn, and its work is on the page with the work on show.
     let ended = scene(ended).expect("the look draws the run's end");
     assert_eq!(drawn(&ended, "m2"), Some((State::Idle, 1)));
-    assert_eq!(ids(&ended), ["work-m1"]);
-    let (taps, little) = in_reach(before);
-    assert!(taps.iter().filter(|piece| piece["kind"] == "option").count() == 3, "{before}");
-    assert!(taps.iter().any(|piece| piece["kind"] == "field" && piece["id"] == "work-m1"), "{before}");
-    assert_eq!((taps, little), in_reach(after), "no option, field or character moved");
-    assert!(no_work(again, "m2"), "{again}");
-    // The person decides on the work on show. What was said of the toss stands alone for the looks held back:
-    // no other work's `Keep it` and `Toss it` come where a second tap would land.
-    assert_eq!(ids(&scene(at_once).expect("a tap on Toss it")), ["busy-m1"]);
-    assert_eq!(ids(&scene(tossed).expect("core's answer")), ["said-m1"]);
-    assert_eq!(held, ["null"; HOLD], "nothing is put over what was said of the toss");
-    // Then the other's turn comes, which was kept: its work, over what was said.
-    let turn = scene(turn).expect("the look after the hold shows the work that waited its turn");
-    assert_eq!(ids(&turn), ["work-m2", "said-m1"]);
-    assert_eq!(options(&turn, "work-m2"), CHOICES);
-    assert_eq!(title(&turn, "said-m1"), TOSSED);
+    assert_eq!(held(&ended), ["work-m1", "work-m2"]);
+    let choices = |line: &str| -> Vec<Value> {
+        of_note(line, "work-m1").into_iter().filter(|piece| piece["kind"] == "option").collect()
+    };
+    assert!(choices(before).len() == 3, "{before}");
+    assert!(of_note(before, "work-m1").iter().any(|piece| piece["kind"] == "field"), "{before}");
+    // The newer wish stands under the older in the column, so no option of the work on show moved. The field
+    // of a follow-up is drawn under one wish: `placed` lays the scene out as `layout` does, which knows no tap,
+    // so there it is under the newest wish that may be followed (the window's rule is in `several_wishes.rs`).
+    assert_eq!(choices(before), choices(after), "no option of the work on show moved");
+    assert!(of_note(after, "work-m2").iter().any(|piece| piece["kind"] == "field"), "{after}");
+    assert_eq!(in_reach(before).1, in_reach(after).1, "no character moved");
+    assert_eq!(again, "null");
+    // The person decides on the older work: the newer keeps its choices under its own words meanwhile.
+    assert_eq!(held(&scene(at_once).expect("a tap on Toss it")), ["busy-m1", "work-m2"]);
+    assert_eq!(held(&scene(tossed).expect("core's answer")), ["said-m1", "work-m2"]);
+    assert_eq!(quiet, ["null"; HOLD], "what was said of the toss is read before its wish is drawn again");
+    // Then the tossed wish is as core says it stands, over the answer, which stays.
+    let stands = scene(stands).expect("the look after the hold");
+    assert_eq!(held(&stands), ["said-m1", "wish-m1", "work-m2"]);
+    assert_eq!((options(&stands, "work-m2"), title(&stands, "said-m1")), (CHOICES.map(String::from).to_vec(), TOSSED));
     assert_eq!(last, "null");
 }
 
@@ -280,16 +297,17 @@ fn a_field_to_type_in_keeps_its_note_and_its_place_when_a_run_ends() {
     assert!(matches!(note(&poked, "wish-m1"), Some(Note::Text { field: Some(_), options, .. }) if options.is_empty()));
     let ended = scene(ended).expect("the look draws the run's end");
     assert_eq!(drawn(&ended, "m2"), Some((State::Idle, 1)));
-    assert_eq!(ids(&ended), ["wish-m1"], "no note is over the one with the field");
+    assert_eq!(held(&ended), ["wish-m1", "work-m2"], "the other wish's work, and the note with the field");
     assert_eq!(note(&ended, "wish-m1"), note(&poked, "wish-m1"), "and that note is as it was");
-    let (taps, little) = in_reach(before);
-    assert!(taps.iter().any(|piece| piece["kind"] == "field" && piece["id"] == "wish-m1"), "{before}");
-    assert_eq!((taps, little), in_reach(after), "the field is where it was");
-    assert!(no_work(again, "m2"), "{again}");
+    let taps = of_note(before, "wish-m1");
+    assert!(taps.iter().any(|piece| piece["kind"] == "field"), "{before}");
+    assert_eq!(taps, of_note(after, "wish-m1"), "the field is where it was");
+    assert_eq!(in_reach(before).1, in_reach(after).1, "no character moved");
+    assert_eq!(again, "null");
 }
 
 #[test]
-fn of_two_runs_that_ended_the_first_wishs_work_is_shown_and_the_other_waits_its_turn() {
+fn two_runs_that_ended_show_both_their_work_and_a_keep_of_one_leaves_the_other_s_choices() {
     let w = day();
     assert_eq!((wish(&w), wish(&w)), ("m1".to_string(), "m2".to_string()));
     let mut lines = Vec::new();
@@ -308,21 +326,30 @@ fn of_two_runs_that_ended_the_first_wishs_work_is_shown_and_the_other_waits_its_
     };
     let ended = scene(ended).expect("the look after both ends");
     assert_eq!((drawn(&ended, "m1"), drawn(&ended, "m2")), (Some((State::Idle, 1)), Some((State::Idle, 1))));
-    assert_eq!(ids(&ended), ["work-m1"], "one work is shown: the first wish's, in core's order");
+    assert_eq!(held(&ended), ["work-m1", "work-m2"], "the work of both, each with its choices");
+    assert_eq!(
+        (options(&ended, "work-m1"), options(&ended, "work-m2")),
+        (CHOICES.map(String::from).to_vec(), CHOICES.map(String::from).to_vec())
+    );
     assert_eq!(again, "null");
-    assert_eq!(ids(&scene(at_once).expect("a tap on Keep it")), ["busy-m1"]);
-    assert_eq!(slow, ["null"; HOLD], "nothing is put over a choice core has not answered");
+    assert_eq!(held(&scene(at_once).expect("a tap on Keep it")), ["busy-m1", "work-m2"]);
+    assert_eq!(slow, ["null"; HOLD], "nothing changes while core has not answered");
     let kept = scene(kept).expect("core's answer");
-    assert_eq!((ids(&kept), title(&kept, "said-m1")), (vec!["said-m1"], KEPT));
-    // The looks held back are counted from the answer: the other's work is not put under a second tap.
-    assert_eq!((first.as_str(), second.as_str()), ("null", "null"), "what was said of the keep stays, alone");
-    // A tap on the other's character is the person's own act: it opens that work at once, within the hold.
-    assert_eq!(ids(&scene(poked).expect("a tap opens the wish")), ["work-m2"]);
-    assert_eq!(last, "null");
+    assert_eq!((held(&kept), title(&kept, "said-m1")), (vec!["said-m1", "work-m2"], KEPT));
+    // The looks held back are counted from the answer: what was said of the keep is as it was.
+    for look in [first, second, last] {
+        assert!(scene(look).is_none_or(|shown| held(&shown) == ["said-m1", "work-m2"]), "{look}");
+    }
+    // A tap on the other's character is the person's own act, and its work is there with its choices.
+    let poked = scene(poked).expect("a tap on the wish");
+    assert_eq!(
+        (held(&poked), options(&poked, "work-m2")),
+        (vec!["said-m1", "work-m2"], CHOICES.map(String::from).to_vec())
+    );
 }
 
 #[test]
-fn work_is_not_opened_over_a_choice_to_stop_a_run_and_has_its_turn_when_that_choice_is_gone() {
+fn a_choice_to_stop_a_run_stays_while_another_wish_s_work_comes_and_goes_when_its_run_ends() {
     let w = day();
     assert_eq!(ended(&w, "edits", "completed"), "m1");
     assert_eq!(wish(&w), "m2");
@@ -335,20 +362,14 @@ fn work_is_not_opened_over_a_choice_to_stop_a_run_and_has_its_turn_when_that_cho
         release(&w, "ended");
         lines = window.ended();
     });
-    let [poked, first, second, ended, held @ .., turn, last] = &lines[..] else {
-        panic!("four lines and the looks held: {lines:#?}")
-    };
-    // A tap on the wish whose run goes: the choice to stop it. The older wish's work waited at the opening, and
-    // no look puts it over that choice.
+    let [poked, first, second, ended, rest @ ..] = &lines[..] else { panic!("four lines and more: {lines:#?}") };
+    // A tap on the wish whose run goes: the choice to stop it. The older wish's work waited at the opening: the
+    // first look shows it, under its own wish's words, and the choice stays.
     assert_eq!(ids(&scene(poked).expect("a tap on a wish at work")), ["stop-m2"]);
-    assert_eq!((first.as_str(), second.as_str()), ("null", "null"));
-    // The run ended: the look draws its end and takes the choice, as before, and puts nothing in its place.
+    assert_eq!(held(&scene(first).expect("the window's first look")), ["stop-m2", "work-m1"]);
+    assert_eq!(second, "null");
+    // The run ended: the look draws its end, takes the choice, as before, and shows its work with the older.
     let ended = scene(ended).expect("the look draws the run's end");
-    assert_eq!((drawn(&ended, "m2"), ids(&ended)), (Some((State::Idle, 1)), Vec::new()));
-    // The page left the person's hand with no tap: the looks held after a tap are held after it too, so no
-    // `Toss it` comes where `Stop it` stood under a tap meant for it.
-    assert_eq!(held, ["null"; HOLD], "no work in the looks after the choice went");
-    // Then the work waited its turn: the newest wish's.
-    assert_eq!(ids(&scene(turn).expect("the look after the hold")), ["work-m2"]);
-    assert_eq!(last, "null");
+    assert_eq!((drawn(&ended, "m2"), held(&ended)), (Some((State::Idle, 1)), vec!["work-m1", "work-m2"]));
+    assert_eq!(rest, ["null"; HOLD + 2], "and the looks after it have nothing new");
 }

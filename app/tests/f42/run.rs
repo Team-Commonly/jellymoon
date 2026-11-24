@@ -42,8 +42,8 @@ fn a_wish_entered_starts_its_run_apart_and_the_page_shows_its_star_with_no_tap()
     assert_eq!(drawn(&scenes[0], "m1"), Some((State::Busy, 0, Mark::Busy, SAID.to_string())));
     // The same page on show, looked at again: no tap, and never opened again.
     assert_eq!(drawn(&scenes[1], "m1"), Some((State::Idle, 1, Mark::Star, SAID.to_string())));
-    let stars: Vec<String> = came_true(&scenes[1]).into_iter().map(|(star, _)| star).collect();
-    assert!(stars.contains(&STAR.to_string()) && !came_true(&scenes[0]).iter().any(|(star, _)| star == STAR));
+    // The star is on the wish's little one. "came true today" lists the reading's stars only (ADR 0030).
+    assert!(scenes.iter().all(|scene| !came_true(scene).iter().any(|(star, _)| star == STAR)));
     assert_eq!((w.starts(), called(&w.day)), (1, false), "one run of the agent, and no reading call");
 }
 

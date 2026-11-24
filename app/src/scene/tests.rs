@@ -166,46 +166,76 @@ fn a_day_of_made_wishes_with_nothing_read_has_no_footer() {
     assert_eq!(ruled(&own, &[], 1).footer, found_none);
 }
 
-/// The page's notes that say a made wish is being worked on.
-fn going(shown: &Scene) -> Vec<(&str, &str)> {
-    fn said(note: &Note) -> Option<(&str, &str)> {
+/// The page's tracks: for each, its id, and the two sentences that say a made wish is being worked on.
+fn going(shown: &Scene) -> Vec<(&str, &str, &str)> {
+    fn track(note: &Note) -> Option<(&str, &str, &str)> {
         match note {
-            Note::Plain { title, body } if title.contains("being worked on") => Some((title.as_str(), body.as_str())),
+            Note::Drawn { id, words, options, field: None, .. } if options.is_empty() => {
+                Some((id.as_str(), words[0].as_str(), words[1].as_str()))
+            }
             _ => None,
         }
     }
-    shown.notes.iter().filter_map(said).collect()
+    shown.notes.iter().filter_map(track).collect()
 }
 
 #[test]
-fn the_first_note_says_the_made_wishes_being_worked_on_once_for_all_and_goes_with_their_runs() {
-    let made = |state| Wish { said: format!("tidy the {state:?} uploader"), ..wish("m", state, &[]) };
-    let mut day = page(vec![wish("w1", WishState::Working, &[]), made(WishState::Working)], vec![]);
-    let one =
-        ("Your wish is being worked on.", "“tidy the Working uploader”. What it did will show here when it is done.");
+fn every_made_wish_whose_run_goes_has_its_own_track_that_names_that_one_wish_and_goes_with_its_run() {
+    let made = |id: &str, state| Wish { said: format!("tidy the {id} uploader"), ..wish(id, state, &[]) };
+    let mut day = page(vec![wish("w1", WishState::Working, &[]), made("m1", WishState::Working)], vec![]);
+    let title = "Your wish is being worked on.";
+    let named = |id: &str| format!("“tidy the {id} uploader”. What it did will show here when it is done.");
     let shown = ruled(&day, &[], 1);
-    assert_eq!(going(&shown), [one]);
-    assert!(matches!(shown.notes.first(), Some(Note::Plain { title, .. }) if title == one.0), "the first note");
+    assert_eq!(going(&shown), [("steps-m1", title, named("m1").as_str())]);
+    assert!(matches!(shown.notes.first(), Some(Note::Drawn { id, .. }) if id == "steps-m1"), "the first note");
     // A reading's wish that is working is the model's, and no run of Jellymoon's goes for it.
     assert_eq!(going(&ruled(&day, &[], 0)), []);
-    day.data.wishes.extend([made(WishState::Done), made(WishState::Working), made(WishState::Working)]);
-    day.data.wishes[4].said = "the newest wish".to_string();
-    let many = "“the newest wish”, the newest, and 2 more. What each did will show here when it is done.";
-    assert_eq!(going(&ruled(&day, &[], 4)), [("Your wishes are being worked on.", many)]);
-    // A page with a clash keeps its room for what a person rules on (F37).
+    // Three at work and one done: a track for each that works, each of one wish, in the wishes' order. No note
+    // says "wishes", and none counts the others.
+    day.data.wishes.extend([
+        made("m2", WishState::Done),
+        made("m3", WishState::Working),
+        made("m4", WishState::Working),
+    ]);
+    let all = ruled(&day, &[], 4);
+    let want = ["m1", "m3", "m4"].map(|id| (format!("steps-{id}"), title.to_string(), named(id)));
+    let have: Vec<_> =
+        going(&all).into_iter().map(|(id, title, body)| (id.into(), title.into(), body.into())).collect();
+    assert_eq!(have, want);
+    assert!(!format!("{:?}", all.notes).contains("more"), "{:?}", all.notes);
+    // A page with a clash keeps its room for what a person rules on (F37): a working wish has its pill only.
     day.data.clashes.push(clash(false));
-    assert_eq!(going(&ruled(&day, &[], 4)), []);
+    let clashing = ruled(&day, &[], 4);
+    assert_eq!(going(&clashing), []);
+    assert_eq!(clashing.characters[4].state, State::Busy);
     day.data.clashes.clear();
     // A long wish is named by its start, as every note of a wish names it.
     day.data.wishes[4].said = "word ".repeat(30);
     let long = ruled(&day, &[], 4);
-    let [(_, body)] = going(&long)[..] else { panic!("one note") };
+    let body = going(&long)[2].2;
     assert!(body.starts_with("“word word") && body.len() < 160, "{body}");
-    // With no run going there is nothing to say.
+    // With no run going there is no track.
     for wish in &mut day.data.wishes {
         wish.state = WishState::Done;
     }
     assert_eq!(going(&ruled(&day, &[], 4)), []);
+}
+
+// A made wish's stars are on its little one and in its own notes, under its typed words: the list of what came
+// true holds the reading's rows only, and a list with no row is not drawn.
+#[test]
+fn what_came_true_lists_the_reading_s_stars_and_no_row_of_a_made_wish() {
+    let wishes = vec![wish("w1", WishState::Done, &["a"]), wish("m1", WishState::Done, &["b", "c"])];
+    let both = ruled(&page(wishes.clone(), vec![]), &[], 1);
+    let rows = vec![("a".to_string(), "Label of w1".to_string())];
+    assert_eq!(both.notes[0], Note::List { title: "came true today".to_string(), rows });
+    assert_eq!(both.characters.iter().map(|one| one.stars).collect::<Vec<_>>(), [1, 2], "the stars stay drawn");
+    // The same two wishes, both read: every row is the reading's.
+    let Note::List { rows, .. } = &ruled(&page(wishes.clone(), vec![]), &[], 0).notes[0] else { panic!("a list") };
+    assert_eq!(rows.len(), 3);
+    // Only made wishes have stars: no list.
+    let made = ruled(&page(wishes, vec![]), &[], 2);
+    assert!(!made.notes.iter().any(|note| matches!(note, Note::List { .. })), "{:?}", made.notes);
 }
 
 #[test]

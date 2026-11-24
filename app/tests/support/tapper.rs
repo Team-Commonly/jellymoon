@@ -12,6 +12,8 @@
 //!   it. Nothing of it has begun.
 //! - `size:<W>x<H>`: the window's size from here on. It is 1440x900 until then.
 //! - `placed`: the pieces `layout` places of the scene on show at the window's size, as a list.
+//! - `column`: the scene on show as the window gives it to the kit's view (`Showing::column`): its drawn notes
+//!   open or closed, the offer of a follow-up under one wish, in the order of its column.
 //! - `run`: the oldest work a tap left, on another thread, and the scene its answer shows.
 //! - `hold:<file>`: waits until the test leaves that file, half a minute at most.
 //! - `left:<file>`, as the first act only: the note in that file, as JSON, is on show from the start, as a page
@@ -228,6 +230,7 @@ fn main() {
                 shown(&mut now, showing.asked(elsewhere(asking)));
             }
             ["placed"] => show(&placed(&now, size)),
+            ["column"] => show(&showing.column(&now)),
             ["hold", file] => held(file),
             ["core", wish, index] => show(&core(&today, wish, index.parse().unwrap())),
             _ => panic!("no act {act:?}"),

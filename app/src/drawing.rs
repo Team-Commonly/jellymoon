@@ -70,8 +70,15 @@ pub fn every(scene: &Scene) -> BTreeSet<String> {
 /// The scene as it is drawn while the drawn notes whose ids are in `open` are open: each drawn note open or
 /// closed by that, and no `told-<wish>` while the drawn `work-<wish>`, or the drawn `kept-<wish>` of a change kept
 /// by itself, is on the scene and closed. Where a wish's work is not a drawn note (a question, a keep asked once
-/// more, a kept change the folder no longer shows) its told note stays.
+/// more, a kept change the folder no longer shows) its told note stays. The offer of a follow-up is under the
+/// newest made wish of which one may be made, as on a page nobody tapped ([`passed`]).
 pub fn pass(scene: &Scene, open: &BTreeSet<String>) -> Scene {
+    passed(scene, open, None)
+}
+
+/// [`pass`] in a window where the made wish `tapped` was tapped last: the offer of a follow-up is under that
+/// wish, while one may be made of it, and under no other (`answering::offered`, ADR 0030).
+fn passed(scene: &Scene, open: &BTreeSet<String>, tapped: Option<&str>) -> Scene {
     let closed: Vec<&str> = drawn_ids(scene).filter(|id| !open.contains(*id)).filter_map(wish_of).collect();
     let folded = |note: &Note| match note {
         Note::Told { id, .. } => id.strip_prefix(TOLD).is_some_and(|wish| closed.contains(&wish)),
@@ -83,7 +90,9 @@ pub fn pass(scene: &Scene, open: &BTreeSet<String>) -> Scene {
             *is = open.contains(id);
         }
     }
-    Scene { notes, ..scene.clone() }
+    let mut drawn = Scene { notes, ..scene.clone() };
+    crate::answering::one_offer(&mut drawn, tapped);
+    drawn
 }
 
 /// [`pass`], and then the scene in the order of its column: the one place a scene is made ready to be drawn.
@@ -91,18 +100,36 @@ pub fn column(scene: &Scene, open: &BTreeSet<String>) -> Scene {
     crate::column::column(&pass(scene, open))
 }
 
-/// The drawn notes a person opened in one window, by their ids. An id that leaves the page leaves the set.
+/// The drawn notes a person opened in one window, by their ids, and the made wish they tapped last. An id that
+/// leaves the page leaves the set.
 #[derive(Clone, Default)]
-pub struct Open(Rc<RefCell<BTreeSet<String>>>);
+pub struct Open(Rc<RefCell<BTreeSet<String>>>, Rc<RefCell<Option<String>>>);
 
 impl Open {
-    /// [`column`] of `scene` with what is open now. A note that is not on `scene` is open no more; a look, which
-    /// gives the notes it found again, closes nothing.
+    /// [`column`] of `scene` with what is open now, the offer of a follow-up under the wish tapped last. A note
+    /// that is not on `scene` is open no more; a look, which gives the notes it found again, closes nothing.
     pub(crate) fn column(&self, scene: &Scene) -> Scene {
         let mut open = self.0.borrow_mut();
         let on: Vec<&str> = drawn_ids(scene).collect();
         open.retain(|id| on.contains(&id.as_str()));
-        column(scene, &open)
+        crate::column::column(&passed(scene, &open, self.1.borrow().as_deref()))
+    }
+
+    /// A tap on a note of the made wish `wish`, on its picture, or on its little one or its typed words: the
+    /// offer of a follow-up goes under that wish.
+    pub(crate) fn offer(&self, wish: String) {
+        *self.1.borrow_mut() = Some(wish);
+    }
+
+    /// A tap on the little one of the made wish `wish`, or on its typed words: the offer goes under it
+    /// ([`Open::offer`]), and the drawn note of its finished work on `scene` is opened, or closed when it is open.
+    pub(crate) fn poked(&self, scene: &Scene, wish: &str) {
+        self.offer(wish.to_string());
+        let finished: Vec<String> =
+            drawn_ids(scene).filter(|id| wish_of(id) == Some(wish)).map(str::to_string).collect();
+        for note in finished {
+            self.tapped(scene, &note);
+        }
     }
 
     /// A tap on the picture of the note `note`, or on its `?`: open, it is closed, and closed, it is opened.

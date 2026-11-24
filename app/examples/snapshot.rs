@@ -11,7 +11,9 @@
 //! the notes as they first come onto the page, before `Show me`. `--made <n>` says the page's last `n` wishes are
 //! made wishes, and `--steps <steps file>` gives the working ones their steps, as core counts them: a list of
 //! `[wish id, {"count": .., "last": [..]}]`. A drawn note is closed, as a page first shows it; `--open` draws
-//! every one open, as after a tap on its picture.
+//! every one open, as after a tap on its picture. `--notes <notes file>` puts a list of the scene's notes, as
+//! `layout` prints them, over the page's: the notes several made wishes have at once (ADR 0030), which core makes
+//! of a day's runs and a picture has none of.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -56,7 +58,11 @@ fn asked(args: &mut Vec<String>) -> Result<Asked, String> {
     let made = taken(args, "--made").and_then(|made| made.parse().ok()).unwrap_or(0);
     let doing = taken(args, "--steps").map(|file| steps(&file)).transpose()?.unwrap_or_default();
     let open = args.iter().position(|arg| arg == "--open").map(|at| args.remove(at)).is_some();
-    let notes = waiting.map(|file| work(&file, told.as_deref())).transpose()?.unwrap_or_default();
+    let mut notes = waiting.map(|file| work(&file, told.as_deref())).transpose()?.unwrap_or_default();
+    if let Some(file) = taken(args, "--notes") {
+        let text = std::fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
+        notes.extend(serde_json::from_str::<Vec<Note>>(&text).map_err(|e| format!("{file}: {e}"))?);
+    }
     Ok((notes, made, doing, open))
 }
 
@@ -72,7 +78,7 @@ fn main() -> ExitCode {
     let [file, folder, name, more @ ..] = args.as_slice() else {
         eprintln!(
             "usage: snapshot [--work <waiting file> [--told <shown file>]] [--made <n> [--steps <steps file>]] \
-             [--open] <page file> <folder> <name> [width height [words [option [theme file]]]]"
+             [--notes <notes file>] [--open] <page file> <folder> <name> [width height [words [option [theme file]]]]"
         );
         return ExitCode::from(2);
     };

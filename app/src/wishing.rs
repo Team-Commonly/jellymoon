@@ -74,8 +74,6 @@ pub struct Answer {
     /// answer was given, and when it was not given and the run is known to wait on that question no more; else
     /// the note it was typed under, with its field.
     opened: Option<(String, Note)>,
-    /// After a follow-up core kept (`answering.rs`): the note it was typed under, which goes when it is settled.
-    under: Option<String>,
     /// After a wish was read (`shaping.rs`): the notes that stand where the reading's note stood.
     shape: Option<Vec<Note>>,
 }
@@ -84,18 +82,13 @@ impl Answer {
     /// Core's answer to words for a wish: they were kept when a run is asked for.
     pub(crate) fn of(seen: Seen, said: Option<Said>, asking: Option<Asking>) -> Self {
         let kept = asking.is_some();
-        Answer { seen, said, asking, kept, opened: None, under: None, shape: None }
-    }
-
-    /// This answer, to a follow-up typed under the note `note`.
-    pub(crate) fn under(self, note: &str) -> Self {
-        Answer { under: self.kept.then(|| note.to_string()), ..self }
+        Answer { seen, said, asking, kept, opened: None, shape: None }
     }
 
     /// Core's answer to an answer. `kept` is whether the answer was given to the run: the field it was typed
     /// in is emptied then, whatever core has to say of what came after.
     pub(crate) fn taken(seen: Seen, said: Option<Said>, opened: Option<(String, Note)>, kept: bool) -> Self {
-        Answer { seen, said, asking: None, kept, opened, under: None, shape: None }
+        Answer { seen, said, asking: None, kept, opened, shape: None }
     }
 
     /// This answer, to a wish that was read: `notes` stand where the reading's note stood, on the scene the
@@ -190,9 +183,6 @@ impl OnShow {
                 self.scene.notes.insert(under, note);
             }
         }
-        if let Some(note) = answer.under {
-            self.scene.notes.retain(|one| !working::settled(one, &note));
-        }
         (self.scene.clone(), answer.asking)
     }
 
@@ -275,8 +265,7 @@ impl Today {
     pub(crate) fn again(&self, page: Option<&Page>, drawn: &Scene) -> Scene {
         let mut shown = page.map_or_else(|| self.made_alone(), |page| self.draw(page));
         // Notes of a page's own come and go with what is kept: none is carried over as the app's.
-        let own =
-            |title: &str| [crate::scene::NOTHING, UNTOLD].contains(&title) || crate::scene::GOING.contains(&title);
+        let own = |title: &str| [crate::scene::NOTHING, UNTOLD].contains(&title);
         let over = |note: &&Note| {
             stopping::asks(note)
                 || working::ours(note)

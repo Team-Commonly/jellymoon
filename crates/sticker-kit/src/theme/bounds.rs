@@ -10,11 +10,10 @@ pub const MAX_THEME_BYTES: u64 = 256 * 1024;
 
 /// The range of each number, by the start of its dotted key. The first line that matches a key is its range; the
 /// last matches every key. A size that art is rasterised from has a range near what a theme needs (the sticker theme
-/// has a hero of 200, a character of 92 and a rim of 5), and damping one under which the spring stays stable.
-pub const RANGES: [(&str, f64, f64); 11] = [
+/// has a hero of 120, a character of 48 and a rim of 5), and damping one under which the spring stays stable.
+pub const RANGES: [(&str, f64, f64); 10] = [
     ("metrics.width", 200.0, 10_000.0),
     ("metrics.height", 200.0, 10_000.0),
-    ("metrics.columns", 1.0, 12.0),
     ("metrics.max_scale", 0.1, 10.0),
     ("metrics.hero_size", 0.0, 800.0),
     ("metrics.character_size", 0.0, 400.0),

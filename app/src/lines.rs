@@ -2,6 +2,8 @@
 //! the kit's bundled font files, never by the operating system, so the numbers are the same on every machine.
 
 use serde::Serialize;
+
+use crate::column::column;
 use sticker_kit::{
     BundledMeasure, Entry, PieceKind, Placed, Rect, Role, Scene, State, TextRun, Theme, Viewport, layout, layout_entry,
 };
@@ -40,10 +42,11 @@ pub(crate) struct At {
     h: f64,
 }
 
-/// Every placed piece as one line of JSON, in the order the kit placed them: the scene's, then the entry's field
-/// and a chip for each of its options, when the page has an entry.
+/// Every placed piece as one line of JSON, in the order the kit placed them: the scene's, in the order of its column
+/// and in the column's own places, which no scroll moves, then the entry's field and a chip for each of its
+/// options, in the window's, when the page has an entry.
 pub fn lines(scene: &Scene, entry: Option<&Entry>, theme: &Theme, viewport: Viewport) -> String {
-    let measure = BundledMeasure::new(theme);
+    let (scene, measure) = (&column(scene), BundledMeasure::new(theme));
     let mut placed = layout(scene, theme, viewport, &measure);
     placed.extend(entry.into_iter().flat_map(|entry| layout_entry(entry, theme, viewport, &measure)));
     placed.iter().filter_map(|piece| Some(format!("{}\n", serde_json::to_string(&line(piece, scene)).ok()?))).collect()

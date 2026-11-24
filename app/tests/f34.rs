@@ -55,14 +55,14 @@ fn a_kept_page_is_shown_without_a_call_until_the_day_has_turns_it_did_not_see() 
     assert_eq!(
         notes(&other)[0],
         "Nothing wished for yet today. Choose the folder you want to work in, or type a name for a new project in the \
-         field at the top."
+         field at the bottom."
     );
     assert!(!called(&world), "a day with nothing typed makes no call");
     assert_eq!(other.iter().find(|piece| piece.kind() == "tape").unwrap().said(), "Mon · Mar 9");
 }
 
-/// The one note of a page that shows no page and keeps none. Its title is `lines` lines at this size: "Today
-/// could not be read." is one, "There is no page for this day yet." is two.
+/// The one note of a page that shows no page and keeps none. Its title is whole, in `lines` lines at most: a card
+/// is as wide as the column, so a title that took two lines of the old strip of notes takes one.
 fn one_note(world: &World, args: &[&str], more: &[(&str, &str)], lines: usize) -> String {
     let out = run(world, args, more);
     assert!(out.status.success() && out.stderr.is_empty(), "layout {args:?}");
@@ -72,7 +72,7 @@ fn one_note(world: &World, args: &[&str], more: &[(&str, &str)], lines: usize) -
     assert_eq!(plain.len(), 1, "{args:?}");
     let roles = plain[0].roles();
     let titles = roles.iter().take_while(|role| *role == "note_title").count();
-    assert_eq!(titles, lines, "the title's lines: {roles:?}");
+    assert!((1..=lines).contains(&titles), "the title's lines: {roles:?}");
     assert!(roles[titles..].iter().all(|role| role == "body"), "a plain note: {roles:?}");
     assert!(labels(&placed).is_empty() && !kept(world).exists(), "no page is shown and none is kept");
     plain[0].said()

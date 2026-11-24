@@ -107,7 +107,8 @@ fn rows(decided: &[String], unsure: &[String]) -> Vec<(&'static str, Vec<String>
 fn reads(placed: &[Piece], rows: &[(&str, Vec<String>)], end: &[&str]) -> usize {
     let (own, quotes) = told(placed);
     let quoted = |n: usize| rows[..n].iter().flat_map(|(_, quotes)| quotes.clone()).collect::<Vec<String>>();
-    let n = (0..=rows.len()).find(|n| quoted(*n) == quotes).expect("the quotes are the first rows', whole");
+    let n = (0..=rows.len()).find(|n| quoted(*n) == quotes);
+    let n = n.unwrap_or_else(|| panic!("the quotes are the first rows', whole: {quotes:#?}"));
     let drawn: Vec<&(&str, Vec<String>)> = rows[..n].iter().collect();
     let labels = drawn.iter().map(|(label, _)| label).filter(|label| !label.is_empty());
     let mut words: Vec<String> = [TITLE].iter().chain(labels).map(|s| s.to_string()).collect();
@@ -185,12 +186,11 @@ fn at_1440x900_a_typical_result_reads_what_it_did_and_after_show_me_the_whole_ch
 }
 
 #[test]
-fn at_960x640_a_did_too_long_for_the_room_draws_no_row_at_all_and_the_work_s_note_is_whole() {
+fn at_960x640_a_long_did_is_drawn_whole_and_the_work_s_note_is_the_note_it_was() {
     let (w, _) = finished("edits");
     let small = |w: &World| w.placed_with(&["--size", SIZES[1]]);
     let alone = small(&w);
-    // A did of 231 characters, under core's most, does not fit what the work's note leaves: no row is drawn, and
-    // none after it in its place.
+    // A did of 231 characters, under core's most: the card is as high as it needs, so every row is drawn.
     let long = [DID; 4].join(" ");
     let mut said = pieces().as_array().unwrap().clone();
     said[0] = json!({"type": "did", "text": long});
@@ -198,7 +198,7 @@ fn at_960x640_a_did_too_long_for_the_room_draws_no_row_at_all_and_the_work_s_not
     let mut rows = rows(&[], &[]);
     rows[0].1 = vec![long];
     let placed = small(&w);
-    assert_eq!(reads(&placed, &rows, &[CHECKED, NOTHING_RUN]), 0, "a row was drawn");
+    assert_eq!(reads(&placed, &rows, &[CHECKED, NOTHING_RUN]), rows.len(), "a row was left out");
     assert_eq!(work(&placed), work(&alone), "the work's note is whole");
     let options: Vec<String> =
         of(&placed, "work-m1").iter().filter(|piece| piece.kind() == "option").map(|o| o.said()).collect();
@@ -222,17 +222,18 @@ fn the_work_s_note_is_the_note_it_is_without_a_result_with_its_three_choices_at_
 }
 
 #[test]
-fn rows_that_do_not_fit_are_left_out_and_counted_and_none_is_cut() {
+fn rows_of_many_lines_are_all_drawn_whole_at_both_sizes_and_none_is_cut_or_counted() {
     let (w, _) = finished("edits");
     let long = |n: usize| format!("{n} {}", "a long word of doubt".repeat(7));
     let doubts: Vec<Value> = (0..3).map(|n| json!({"type": "unsure", "text": long(n)})).collect();
     let decided: Vec<Value> = (3..6).map(|n| json!({"type": "decided", "text": long(n)})).collect();
     let all = [pieces().as_array().unwrap().clone(), decided, doubts].concat();
     result(&w, &Value::Array(all));
-    let rows = rows(&(3..6).map(long).collect::<Vec<_>>(), &(0..3).map(long).collect::<Vec<_>>());
+    // What core keeps of them: the first two of each kind after the day's own.
+    let rows = rows(&(3..5).map(long).collect::<Vec<_>>(), &(0..2).map(long).collect::<Vec<_>>());
     for size in SIZES {
         let drawn = reads(&w.placed_with(&["--size", size]), &rows, &[CHECKED, NOTHING_RUN]);
-        assert!(size == SIZES[0] || drawn < rows.len(), "{size}: no row was left out");
+        assert_eq!(drawn, rows.len(), "{size}: a row was left out");
     }
 }
 

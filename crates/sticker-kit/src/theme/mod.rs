@@ -164,7 +164,9 @@ pub struct Labels {
 }
 
 /// Sizes on the design canvas (`width` by `height`); the whole page scales
-/// to fit the viewport.
+/// to fit the viewport. The page is one column: it starts `content_left` from the canvas's left and every card of
+/// it is `note_width` wide. `hero_size` is the big character beside a card, held to the room left of the column,
+/// and `character_size` a small one.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Metrics {
@@ -174,16 +176,9 @@ pub struct Metrics {
     pub margin_y: f32,
     pub content_left: f32,
     pub hero_size: f32,
-    pub hero_x: f32,
-    pub hero_top: f32,
     pub character_size: f32,
-    pub columns: usize,
-    pub row_gap: f32,
     pub rim: f32,
-    pub note_left: f32,
-    pub note_top: f32,
     pub note_width: f32,
-    pub note_gutter: f32,
     pub title_size: f32,
     pub date_size: f32,
     pub note_title_size: f32,

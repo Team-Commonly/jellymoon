@@ -74,8 +74,9 @@ fn field(page: &Entity<Page>, cx: &mut VisualTestContext) -> Option<(String, boo
 /// A click on the field under the wish's note, and `words` pasted into it.
 fn pastes(page: &Entity<Page>, cx: &mut VisualTestContext, words: &str) {
     let is = |placed: &&sticker_kit::Placed| placed.piece == PieceKind::Field && placed.id == NOTE;
-    let field = page.read_with(cx, |page, _| page.placed().iter().find(is).cloned());
-    let (x, y) = field.expect("the field is placed").rect.center();
+    // Where it is in the window: the column is held at its end, where the note is.
+    let field = page.read_with(cx, |page, _| page.placed().iter().find(is).map(|field| page.shown_at(field)));
+    let (x, y) = field.expect("the field is placed").center();
     cx.simulate_click(point(px(x), px(y)), Modifiers::default());
     cx.write_to_clipboard(ClipboardItem::new_string(words.into()));
     cx.simulate_keystrokes("cmd-v");

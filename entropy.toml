@@ -827,7 +827,10 @@ max_file_lines = 400
 # Live work raised the kit by 83: what a busy character says (`Character::says`, `PieceKind::Says`, the pill shared
 # with the label in `layout/grid.rs`, its drawing: 27 net) and its test (`tests/says.rs`, 56).
 # Its gate raised the kit by 7: the pill cut in its middle (`layout/grid.rs`, 5) and its test (`tests/says.rs`, 2).
-"crates/sticker-kit" = 11188
+# The page is one column lowered the kit by 383: the grid (`layout/grid.rs`), the planner that shortened, shrank and
+# dropped notes for room, the told note's second try, the legend and their tests went; the column, its scroll
+# (`scroll.rs`, `layout/column.rs`, `draw/column.rs`) and its test in the view (`tests/column_draw.rs`) came.
+"crates/sticker-kit" = 10805
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1019,7 +1022,11 @@ max_file_lines = 400
 # (`tests/work_shows.rs`, 16).
 # A tossed change is no star raised it by 22: a made wish that was let go draws no star and is not listed as come
 # true (`src/scene.rs`, 10), with its tests (`src/scene/tests.rs`, 9, and `tests/f47/asked.rs`, 3).
-"app" = 16347
+# The page is one column raised the app by 378: the order of a scene's column (`src/column.rs`, 129, of which 74 are
+# its two tests) and the slice's test at the made-up window and the kit's door (`tests/one_column.rs`, 265); the
+# helpers of `tests/work_shows.rs` moved to `tests/work_shows/runs.rs` to keep the file under its limit (10), and
+# the pins of the old canvas, made true of the column, are 26 fewer.
+"app" = 16725
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

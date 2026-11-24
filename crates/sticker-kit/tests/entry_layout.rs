@@ -1,8 +1,10 @@
-//! Where the entry is placed: the field under the title, its `go` at the end of its row, the chips under the
-//! field, and what each is cut to.
+//! Where the entry is placed: in a band at the window's bottom, as wide as the column, the field with its `go` at
+//! the end of its row, the chips under the field, and what each is cut to.
 
 use sticker_kit::entry::MAX_ENTRY_OPTIONS;
-use sticker_kit::{Entry, FixedAdvance, PieceKind, Placed, Rect, Scene, Theme, Viewport, layout, layout_entry};
+use sticker_kit::{
+    Entry, FixedAdvance, PieceKind, Placed, Rect, Scene, Theme, Viewport, entry_top, layout, layout_entry, scroll_most,
+};
 
 const SIZES: [Viewport; 2] = [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 960.0, h: 640.0 }];
 const MEASURE: FixedAdvance = FixedAdvance(0.56);
@@ -23,26 +25,28 @@ fn of(placed: &[Placed], kind: PieceKind) -> Vec<&Placed> {
     placed.iter().filter(|p| p.piece == kind).collect()
 }
 
-fn outline(piece: &Placed) -> Rect {
-    piece.rect.turned_bounds(piece.tilt_degrees)
-}
-
-/// Where the chips' rows end: 24 design pixels short of the big character's place.
+/// Where the field's row and the chips' rows end: the column's right edge.
 fn end(theme: &Theme, viewport: Viewport) -> f32 {
     let page = layout(&Scene::sample(), theme, viewport, &MEASURE);
-    let k = of(&page, PieceKind::Paper)[0].rect.w / 1344.0;
-    of(&page, PieceKind::Hero)[0].rect.x - 24.0 * k
+    of(&page, PieceKind::Note)[0].rect.right()
+}
+
+/// Logical pixels to a design unit.
+fn scale(theme: &Theme, viewport: Viewport) -> f32 {
+    let page = layout(&Scene::sample(), theme, viewport, &MEASURE);
+    of(&page, PieceKind::Paper)[0].rect.w / 1344.0
 }
 
 fn scenes() -> Vec<Scene> {
     let long = Scene { title: "W".repeat(400), date_label: "W".repeat(400), ..Scene::sample() };
     let bare = Scene { notes: Vec::new(), ..Scene::sample() };
-    vec![Scene::sample(), long, bare, Scene::crowd(50)]
+    let short = Scene { characters: Vec::new(), ..Scene::sample() };
+    vec![Scene::sample(), long, bare, short, Scene::crowd(50), Scene::default()]
 }
 
-// The entry stands where wishes are listed: in the left column, under the title, the chips under the field.
+// The entry stands where the next wish is typed: under everything, in the window and not in the column.
 #[test]
-fn the_entry_stands_under_the_title_in_the_left_column_and_covers_no_piece_of_any_page() {
+fn the_entry_stands_in_a_band_at_the_window_s_bottom_as_wide_as_the_column_whatever_the_page_holds() {
     for theme in [Theme::sticker(), Theme::plain()] {
         for viewport in SIZES {
             // Six options with long names: the chips fill their row to its end.
@@ -57,33 +61,36 @@ fn the_entry_stands_under_the_title_in_the_left_column_and_covers_no_piece_of_an
                 [(PieceKind::Entry, "wish", 0), chip(0), chip(1), chip(2), chip(3), chip(4), chip(5)],
                 "{at}"
             );
+            let (band, k) = (entry_top(&theme, viewport), scale(&theme, viewport));
             for mine in &ours {
+                assert!(mine.piece.in_band(), "{at}: {mine:?}");
                 assert!(mine.rect.w >= 24.0 && mine.rect.h >= 14.0, "{at}: {mine:?} is too small to use");
                 assert!(mine.text.iter().all(|run| run.rect.inside(&mine.rect.grown(0.5))), "{at}: {mine:?}");
                 assert!(
                     ours.iter().all(|p: &Placed| std::ptr::eq(p, mine) || !p.rect.overlaps(&mine.rect)),
                     "{at}: {mine:?}"
                 );
+                assert!(mine.rect.y >= band && mine.rect.bottom() <= viewport.h, "{at}: {mine:?} leaves the band");
             }
+            let field = ours[0].rect;
+            for chip in &ours[1..] {
+                let under = chip.rect.y - field.bottom();
+                assert!((0.0..=44.0 * k).contains(&under), "{at}: {chip:?} is {under} under {field:?}");
+            }
+            assert!(band > viewport.h * 0.8, "{at}: the band takes a fifth of the window at most: {band}");
             for scene in scenes() {
                 let page = layout(&scene, &theme, viewport, &MEASURE);
-                let (paper, title) = (of(&page, PieceKind::Paper)[0].rect, of(&page, PieceKind::Title)[0].rect);
-                let (field, k) = (ours[0].rect, paper.w / 1344.0);
-                assert!((field.x - title.x).abs() < 0.5, "{at}: {field:?} begins where {title:?} does");
-                let under = field.y - title.bottom();
-                assert!((0.0..=12.0 * k).contains(&under), "{at}: {field:?} is {under} under {title:?}");
-                for chip in &ours[1..] {
-                    let under = chip.rect.y - field.bottom();
-                    assert!((0.0..=44.0 * k).contains(&under), "{at}: {chip:?} is {under} under {field:?}");
-                }
+                // The same band whatever the page holds: the layout of a scene places nothing of the entry's.
+                assert!(page.iter().all(|piece| !piece.piece.in_band()), "{at}");
                 for note in of(&page, PieceKind::Note) {
-                    assert!(field.right() < outline(note).x, "{at}: {field:?} is in the column of {note:?}");
+                    let (card, row) = (note.rect, (field.x, end(&theme, viewport)));
+                    assert!((card.x - row.0).abs() < 0.5 && (card.right() - row.1).abs() < 0.5, "{at}: {card:?}");
                 }
-                for mine in &ours {
-                    assert!(mine.rect.inside(&paper), "{at}: {mine:?} leaves the paper");
-                    for other in page.iter().filter(|p| p.piece != PieceKind::Paper) {
-                        assert!(!mine.rect.overlaps(&outline(other)), "{at}: {mine:?} covers {other:?}");
-                    }
+                // A column that fits ends over the band, and a longer one, moved to its end, does too.
+                let most = scroll_most(&page, &theme, viewport);
+                for other in page.iter().filter(|p| p.piece != PieceKind::Paper && p.piece != PieceKind::Hole) {
+                    let bottom = other.rect.turned_bounds(other.tilt_degrees).bottom();
+                    assert!(bottom - most <= band + 0.5, "{at}: {other:?} is under the entry: {most} {band}");
                 }
             }
         }
@@ -124,17 +131,17 @@ fn the_hint_and_the_options_are_cut_to_their_room_and_the_options_counted() {
     assert_eq!((placed[0].piece, placed[0].text.len()), (PieceKind::Entry, 0));
 
     let mut refused = Theme::sticker();
-    refused.metrics.columns = 0;
+    refused.metrics.width = 0.0;
     assert_eq!(layout_entry(&entry(2, 80), &refused, SIZES[0], &MEASURE), [], "a refused theme places nothing");
 }
 
-// A theme whose big character stands far left leaves the entry a narrow row. A chip is then held to its share of
-// its row, so that six of them, in two rows, still end where the field ends. With no room at all there is no entry:
-// half a field is nothing to type in.
+// A theme with a narrow column leaves the entry a narrow row. A chip is then held to its share of its row, so
+// that six of them, in two rows, still end where the field ends. With no room at all there is no entry: half a
+// field is nothing to type in.
 #[test]
 fn a_chip_is_never_wider_than_its_share_of_a_narrow_row() {
     let mut narrow = Theme::sticker();
-    narrow.metrics.hero_x = narrow.metrics.content_left + 170.0 + 24.0 + narrow.metrics.hero_size / 2.0;
+    narrow.metrics.note_width = 170.0;
     assert_eq!(narrow.check(), Ok(()));
     for viewport in SIZES {
         let placed = layout_entry(&entry(6, 80), &narrow, viewport, &MEASURE);
@@ -146,11 +153,8 @@ fn a_chip_is_never_wider_than_its_share_of_a_narrow_row() {
         let third = (end - field.x) / 3.0;
         assert!(chips.iter().all(|chip| chip.rect.w <= third), "each has a third of its row: {chips:?}");
         assert!(chips[3].rect.y > chips[2].rect.y, "the row was to be narrow: {chips:?}");
-        let page = layout(&Scene::sample(), &narrow, viewport, &MEASURE);
-        let hero = of(&page, PieceKind::Hero)[0].rect;
-        assert!(chips[5].rect.right() < hero.x && field.bottom() < hero.y, "{viewport:?}: {hero:?} is covered");
     }
-    narrow.metrics.hero_x -= 20.0;
+    narrow.metrics.note_width -= 20.0;
     assert_eq!((narrow.check(), layout_entry(&entry(6, 80), &narrow, SIZES[0], &MEASURE)), (Ok(()), Vec::new()));
 }
 
@@ -188,7 +192,7 @@ fn the_options_past_the_sixth_are_counted_in_words_after_the_last_chip() {
     // The count is beside the second row only, so it needs room for that row's three chips at their least width,
     // not for all six: a field of 240 design pixels holds three and the count, and would not hold six.
     let mut between = Theme::sticker();
-    between.metrics.hero_x = between.metrics.content_left + 240.0 + 24.0 + between.metrics.hero_size / 2.0;
+    between.metrics.note_width = 240.0;
     assert_eq!(between.check(), Ok(()));
     for viewport in SIZES {
         let placed = layout_entry(&entry(9, 80), &between, viewport, &MEASURE);
@@ -206,7 +210,7 @@ fn the_options_past_the_sixth_are_counted_in_words_after_the_last_chip() {
     // Where the last row could not hold its chips at their least width beside the count, there is no count:
     // the six options stay there to be chosen.
     let mut narrow = Theme::sticker();
-    narrow.metrics.hero_x = narrow.metrics.content_left + 170.0 + 24.0 + narrow.metrics.hero_size / 2.0;
+    narrow.metrics.note_width = 170.0;
     for viewport in SIZES {
         let placed = layout_entry(&entry(9, 80), &narrow, viewport, &MEASURE);
         assert_eq!((of(&placed, PieceKind::Chip).len(), of(&placed, PieceKind::More).len()), (6, 0), "{viewport:?}");
@@ -255,6 +259,14 @@ fn said(placed: &[Placed]) -> Vec<&str> {
     of(placed, PieceKind::Chip).iter().map(|chip| chip.text[0].text.as_str()).collect()
 }
 
+/// The two themes with a column as narrow as a crowded row: 360 design pixels, which six names fill.
+fn crowded() -> [Theme; 2] {
+    [Theme::sticker(), Theme::plain()].map(|mut theme| {
+        theme.metrics.note_width = 360.0;
+        theme
+    })
+}
+
 // A row's spare width goes to its long chips: a chip is as wide as its name while its row has the room, and names
 // are cut only in a row that is filled to its end.
 #[test]
@@ -262,8 +274,7 @@ fn no_name_is_cut_while_its_row_has_room() {
     let three = ["kitchen-sink-app-frontend", "a", "b"];
     let six = ["alpha", "beta", "garden-letters", "photo-sorter", "parser", "notebook"];
     let long = ["alpha", "garden-letters", "kitchen-sink-app-frontend", "notes-private-journal", "beta", "jellymoon"];
-    for (theme, viewport) in [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
-    {
+    for (theme, viewport) in crowded().iter().flat_map(|theme| SIZES.map(|size| (theme, size))) {
         let at = format!("{} at {viewport:?}", theme.name);
         let placed = layout_entry(&named(&three), theme, viewport, &MEASURE);
         assert_eq!((said(&placed), rows(&placed).0.len()), (three.to_vec(), 1), "{at}: whole, in one row");
@@ -291,8 +302,7 @@ fn two_names_with_a_long_shared_start_read_differently_when_cut() {
     let ends = ["frontend", "backend", "docs", "worker", "mobile", "design"];
     let names = ends.map(|end| format!("kitchen-sink-app-{end}"));
     let entry = named(&names.each_ref().map(String::as_str));
-    for (theme, viewport) in [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
-    {
+    for (theme, viewport) in crowded().iter().flat_map(|theme| SIZES.map(|size| (theme, size))) {
         let placed = layout_entry(&entry, theme, viewport, &MEASURE);
         let said = said(&placed);
         for (n, cut) in said.iter().enumerate() {
@@ -304,30 +314,26 @@ fn two_names_with_a_long_shared_start_read_differently_when_cut() {
     }
 }
 
-// Two numbers of the entry, stated: the least a chip is wide, and what the field keeps from the big character,
-// which stands under the field's row.
+// A number of the entry, stated: the least a chip is wide.
 #[test]
-fn a_chip_is_never_narrower_than_one_and_a_half_times_its_height_and_the_big_character_stands_24_under_the_field() {
+fn a_chip_is_never_narrower_than_one_and_a_half_times_its_height() {
     for (theme, viewport) in [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
     {
         let at = format!("{} at {viewport:?}", theme.name);
         let placed = layout_entry(&named(&["a", "b", "garden-letters"]), theme, viewport, &MEASURE);
-        let page = layout(&Scene::sample(), theme, viewport, &MEASURE);
-        let k = of(&page, PieceKind::Paper)[0].rect.w / 1344.0;
-        let (rows, field) = rows(&placed);
+        let k = scale(theme, viewport);
+        let (rows, _) = rows(&placed);
         let [short, _, long] = rows[0][..] else { panic!("{at}: three chips in one row") };
         assert!((short.rect.w - 1.5 * short.rect.h).abs() < 0.01, "{at}: {short:?}");
         assert!((long.rect.w - (long.text[0].rect.w + 20.0 * k)).abs() < 0.01, "{at}: {long:?} is as wide as its name");
         assert!(long.rect.w > 1.5 * long.rect.h, "{at}");
-        let hero = of(&page, PieceKind::Hero)[0].rect;
-        assert!((hero.y - field.bottom() - 24.0 * k).abs() < 0.01, "{at}: {hero:?} stands 24 under {field:?}");
     }
 }
 
 // The entry's `go` stands at the right end of the field's row, as high as the field, with its words whole; the
-// field, in what it leaves, is wider than two fifths of the page and runs over the big character's place.
+// field, in what it leaves, is wider than two fifths of the page, and the row ends where the column does.
 #[test]
-fn go_ends_the_field_s_row_and_the_field_is_the_page_s_widest_thing_under_the_title() {
+fn go_ends_the_field_s_row_and_the_row_is_as_wide_as_the_column() {
     for (theme, viewport) in [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
     {
         let at = format!("{} at {viewport:?}", theme.name);
@@ -339,10 +345,7 @@ fn go_ends_the_field_s_row_and_the_field_is_the_page_s_widest_thing_under_the_ti
         assert_eq!((go.text[0].text.as_str(), go.id.as_str()), ("Start", "wish"), "{at}");
         assert!(go.text[0].rect.inside(&go.rect.grown(0.5)), "{at}: {go:?}");
         assert!(field.right() < go.rect.x && (go.rect.y, go.rect.h) == (field.y, field.h), "{at}: {go:?}");
-        assert!(field.w > 0.4 * viewport.w && go.rect.right() > end(theme, viewport), "{at}: {field:?}");
-        let page = layout(&Scene::sample(), theme, viewport, &MEASURE);
-        for other in page.iter().filter(|p| p.piece != PieceKind::Paper) {
-            assert!(!go.rect.overlaps(&outline(other)) && !field.overlaps(&outline(other)), "{at}: {other:?}");
-        }
+        assert!(field.w > 0.4 * viewport.w, "{at}: {field:?}");
+        assert!((go.rect.right() - end(theme, viewport)).abs() < 0.5, "{at}: {go:?} ends the column's row");
     }
 }

@@ -4,7 +4,7 @@
 
 use jellymoon_core::{Clash, PageData, Side, Standing, Wish, WishState};
 use sticker_kit::text::clean;
-use sticker_kit::{Character, LegendItem, Mark, Mood, Note, Scene, State};
+use sticker_kit::{Character, Mark, Mood, Note, Scene, State};
 
 use crate::read::{LeftOut, Page};
 
@@ -30,9 +30,9 @@ pub(crate) const GOING: [&str; 2] = ["Your wish is being worked on.", "Your wish
 /// The title of the one note of a page with no wish on it, and its body when a project is on offer. With none,
 /// the body says to choose a folder first (`Today::draw`).
 pub const NOTHING: &str = "Nothing wished for yet today.";
-pub const NOTHING_HERE: &str = "Type what you want done in the field at the top.";
+pub const NOTHING_HERE: &str = "Type what you want done in the field at the bottom.";
 pub const NO_PROJECT: &str =
-    "Choose the folder you want to work in, or type a name for a new project in the field at the top.";
+    "Choose the folder you want to work in, or type a name for a new project in the field at the bottom.";
 
 /// [`ruled`] for a page nobody ruled on, with no made wish on it.
 pub fn scene(page: &Page) -> Scene {
@@ -85,8 +85,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
         notes.push(Note::Whole { title: MADE.to_string(), rows });
     }
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
-    // Nothing read and no wish, projects on offer or not: the legend has nothing to explain, and there is no
-    // reading to speak of.
+    // Nothing read and no wish, projects on offer or not: there is no reading to speak of.
     let blank = data.read.turns == 0 && data.clashes.is_empty() && data.wishes.is_empty();
     let read = footer(data, made.len());
     // A footer that says nothing of a reading says nothing at all: every wish on the page is the person's own.
@@ -98,13 +97,11 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     Scene {
         characters: data.wishes.iter().enumerate().map(drawn).collect(),
         footer: if blank { String::new() } else { read },
-        legend: if blank { Vec::new() } else { legend(!data.wishes.is_empty()) },
         ..bare(&data.day, notes)
     }
 }
 
-/// A day's page with no wish on it: the date, the title, the hero, and these notes, with no legend: nothing on it
-/// has a mark to explain. It is what the app shows while a day is being read and when it could not be.
+/// A day's page with no wish on it: the date, the title, the hero, and these notes. It is what the app shows while a day is being read and when it could not be.
 pub fn bare(day: &str, notes: Vec<Note>) -> Scene {
     Scene {
         date_label: date_label(day),
@@ -112,23 +109,9 @@ pub fn bare(day: &str, notes: Vec<Note>) -> Scene {
         hero: Some(Character { id: "me".to_string(), ..Character::default() }),
         characters: Vec::new(),
         notes,
-        legend: Vec::new(),
         footer: String::new(),
     }
 }
-
-/// The marks of the little ones, each with what it means, and with a little one on the page, with no mark, that a
-/// tap on one opens its wish.
-fn legend(tap: bool) -> Vec<LegendItem> {
-    [(Mark::Star, "finished"), (Mark::Busy, "working on it"), (Mark::NeedsYou, "needs you"), (Mark::Dimmed, "let go")]
-        .into_iter()
-        .chain(tap.then_some((Mark::Plain, TAP)))
-        .map(|(mark, text)| LegendItem { mark, text: text.to_string() })
-        .collect()
-}
-
-/// The last line of the legend, on a page with a wish.
-pub const TAP: &str = "tap a jelly to open its wish";
 
 /// What the note of a tapped wish of the reading says: what the reading took it for, never that a run goes; the
 /// person's words; where they typed them, and that Jellymoon ran nothing; and how to go on, when its project has
@@ -190,7 +173,7 @@ fn going(made: &[Wish]) -> Option<Note> {
     Some(Note::Plain { title: title.to_string(), body })
 }
 
-/// The legend's mark for a wish's state.
+/// The mark of a wish's state, on its row of the made wishes.
 fn mark(state: WishState) -> Mark {
     match state {
         WishState::Working => Mark::Busy,

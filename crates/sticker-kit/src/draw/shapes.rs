@@ -95,11 +95,6 @@ impl Brush<'_> {
                 grid: None,
             }),
             PieceKind::Option => out.push(self.option(piece, rect.scaled(pose.scale))),
-            PieceKind::Legend => {
-                if let Some(item) = self.scene.legend.get(piece.index) {
-                    self.mark(item.mark, rect, out);
-                }
-            }
             PieceKind::Mark => {
                 let note = |(n, _): &(usize, &Note)| format!("note-{n}") == piece.id;
                 if let Some((_, Note::Whole { rows, .. })) = self.scene.notes.iter().enumerate().find(note)
@@ -185,12 +180,12 @@ impl Brush<'_> {
         }
     }
 
-    /// A mark at the left of `rect`, as the legend draws it. A star is text, laid out with the rest.
+    /// The mark of a row of a whole list, at the left of `rect`. A star is text, laid out with the rest.
     fn mark(&self, mark: Mark, rect: Rect, out: &mut Vec<Shape>) {
         let (p, k) = (&self.theme.palette, self.k);
         let centre = (rect.x + 10.0 * k, rect.y + rect.h / 2.0);
         match mark {
-            Mark::Star | Mark::Plain => {}
+            Mark::Star => {}
             Mark::Busy => {
                 out.push(self.disc(centre, 10.0 * k, p.bubble, Some((p.bubble_ring, 2.0 * k))));
                 for dx in [-3.6, 0.0, 3.6] {

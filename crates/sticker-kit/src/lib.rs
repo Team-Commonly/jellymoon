@@ -1,10 +1,10 @@
-//! A sticker-journal page: flat sticker characters, stars and taped notes on
-//! grid paper.
+//! A sticker-journal page: flat sticker characters, stars and taped notes in
+//! one column on grid paper.
 //!
 //! Three plain-data halves and one drawing half:
 //! - [`scene`]: what is on the page.
 //! - [`theme`]: how it looks, loaded from a TOML file or built in.
-//! - [`layout`]: a pure function from scene, theme and viewport to placed pieces.
+//! - [`layout`]: a pure function from scene, theme and viewport to placed pieces, in the column's own coordinates.
 //! - [`draw`]: a GPUI view that paints the placed pieces (feature `gpui`).
 //!
 //! Beside a scene a page may hold one [`Entry`], a line to type: [`entry`] is its rules, as plain data.
@@ -20,6 +20,7 @@ pub mod layout;
 pub mod motion;
 mod sample;
 pub mod scene;
+pub mod scroll;
 pub mod text;
 pub mod theme;
 
@@ -31,10 +32,11 @@ pub use edge::{Corner, EDGE_GAP, EDGE_MARGIN, Edge, EdgeMood, EdgeText, Tone, pl
 pub use fonts::BundledMeasure;
 pub use geom::{Rect, Viewport};
 pub use layout::{
-    EdgeKind, EdgePiece, EdgePlaced, EdgeWindow, MAX_BUBBLE_LINES, MAX_BUBBLE_TEXTS, MAX_NOTES, MAX_PIECES,
-    MAX_QUOTED_LINES, MAX_TEXT_LINES, MORE_NOTES_ID, PieceKind, Placed, TextRun, edge_windows, layout, layout_edge,
-    layout_entry,
+    EdgeKind, EdgePiece, EdgePlaced, EdgeWindow, MAX_BUBBLE_LINES, MAX_BUBBLE_TEXTS, MAX_PIECES, MAX_QUOTED_LINES,
+    MAX_TEXT_LINES, PieceKind, Placed, TextRun, edge_windows, entry_top, layout, layout_edge, layout_entry,
+    scroll_most,
 };
-pub use scene::{Character, Entry, Field, LegendItem, Mark, Mood, Note, Scene, State, ToldRow};
+pub use scene::{Character, Entry, Field, Mark, Mood, Note, Scene, State, ToldRow, speaker};
+pub use scroll::Scroll;
 pub use text::{FixedAdvance, Measure, Role};
 pub use theme::{Loaded, Theme, ThemeError};

@@ -7,7 +7,7 @@ use std::rc::Rc;
 use gpui::{Modifiers, TestAppContext, TestDispatcher, VisualTestContext, point, px, size};
 use sticker_kit::draw::headless::text_system;
 use sticker_kit::draw::{GlyphMeasure, Page, Tap, load_fonts};
-use sticker_kit::{BundledMeasure, Measure, Note, PieceKind, Placed, Role, Scene, Theme};
+use sticker_kit::{BundledMeasure, Measure, PieceKind, Placed, Role, Scene, Theme};
 
 type Taps = Rc<RefCell<Vec<Tap>>>;
 
@@ -32,7 +32,16 @@ fn context() -> TestAppContext {
 }
 
 fn placed(page: &gpui::Entity<Page>, cx: &mut VisualTestContext) -> Vec<Placed> {
-    page.read_with(cx, |page, _| page.placed().to_vec())
+    // Each piece where it is in the window: the column's are moved up by how far the page is scrolled.
+    let shown = |page: &Page, piece: &Placed| Placed { rect: page.shown_at(piece), ..piece.clone() };
+    page.read_with(cx, |page, _| page.placed().iter().map(|piece| shown(page, piece)).collect())
+}
+
+/// Turns the wheel to the column's top, where a piece is painted at the place the layout gave it.
+fn to_top(cx: &mut VisualTestContext) {
+    let up = gpui::ScrollDelta::Pixels(point(px(0.0), px(1e7)));
+    cx.simulate_event(gpui::ScrollEvent { position: point(px(700.0), px(300.0)), delta: up, ..Default::default() });
+    cx.run_until_parked();
 }
 
 // The tests marked `cfg(debug_assertions)`, here and in `tests/entry_draw.rs`, ask `cx.debug_bounds` where a piece
@@ -60,6 +69,9 @@ fn a_click_on_an_option_reaches_the_callback() {
     cx.simulate_click(point(px(x), px(y)), Modifiers::default());
     cx.run_until_parked();
 
+    // The page opened at its column's end, where the choice is: the small ones stand at its top.
+    to_top(cx);
+    let placed = self::placed(&page, cx);
     let who = placed.iter().find(|p| p.piece == PieceKind::Character && p.id == "kite").expect("a character is placed");
     let (x, y) = who.rect.center();
     cx.simulate_click(point(px(x), px(y)), Modifiers::default());
@@ -77,6 +89,7 @@ fn label_text_is_painted_where_the_layout_put_it() {
     for theme in [Theme::sticker(), Theme::plain()] {
         let mut cx = context();
         let (page, cx, _) = open(&mut cx, theme);
+        to_top(cx);
         let labels: Vec<Placed> = placed(&page, cx).into_iter().filter(|p| p.piece == PieceKind::Label).collect();
         assert_eq!(labels.len(), 8);
         for label in labels {
@@ -144,39 +157,4 @@ fn a_theme_at_the_top_of_its_size_ranges_is_drawn() {
     (m.hero_size, m.character_size, m.rim) = (800.0, 400.0, 40.0);
     assert_eq!(theme.check(), Ok(()));
     drawn(theme, "largest sizes", 110);
-}
-
-// A whole choice's options are written smaller when room is short. What is painted is the size the layout measured:
-// each line is as wide as its run, so it ends inside its bubble. Painted at the role's own size it would run past.
-#[cfg(debug_assertions)]
-#[test]
-fn a_whole_option_written_smaller_is_painted_at_the_size_it_was_measured_at() {
-    let options = vec!["请".repeat(200), "W".repeat(200)];
-    let rows = (0..9).map(|i| (format!("row {i}"), "of nine".to_string())).collect();
-    let (title, footer) = ("pick one".to_string(), "a footer".to_string());
-    let mut scene = Scene::sample();
-    scene.notes = vec![
-        Note::List { title: "a list".into(), rows },
-        Note::Choice { id: "a".into(), title, options, footer, struck_first: false, whole: true },
-    ];
-    for theme in [Theme::sticker(), Theme::plain()] {
-        let mut cx = context();
-        let (page, cx, _) = open(&mut cx, theme.clone());
-        page.update(cx, |page, cx| page.set_scene(scene.clone(), cx));
-        cx.simulate_resize(size(px(960.0), px(640.0)));
-        cx.run_until_parked();
-        let bubbles: Vec<Placed> = placed(&page, cx).into_iter().filter(|p| p.piece == PieceKind::Option).collect();
-        assert_eq!(bubbles.len(), 2, "the choice is drawn");
-        let own = Role::Option.size(&theme, 960.0 / 1440.0);
-        assert!(bubbles.iter().all(|bubble| bubble.text.iter().all(|run| run.size < own)), "written smaller");
-        for bubble in &bubbles {
-            for (n, run) in bubble.text.iter().enumerate() {
-                let selector: &'static str = Box::leak(format!("Option:a:{}:{n}", bubble.index).into_boxed_str());
-                let painted = cx.debug_bounds(selector).expect("the line was painted");
-                let (left, width) = (f32::from(painted.origin.x), f32::from(painted.size.width));
-                assert!((width - run.rect.w).abs() <= 1.0, "painted {width} wide, measured {}", run.rect.w);
-                assert!(left + width <= bubble.rect.x + bubble.rect.w, "the line ends inside its bubble");
-            }
-        }
-    }
 }

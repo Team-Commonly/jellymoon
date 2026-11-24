@@ -24,7 +24,8 @@ fn folder(name: &str, files: &[(&str, &str)]) -> PathBuf {
 /// Which pieces a layout placed, in its order.
 fn pieces(theme: &Theme, viewport: Viewport) -> Vec<(PieceKind, String, usize)> {
     let placed = layout(&Scene::sample(), theme, viewport, &FixedAdvance(0.56));
-    placed.into_iter().map(|p| (p.piece, p.id, p.index)).collect()
+    // But for the holes down the paper's edge: they are as many as the column is long, which a theme's sizes change.
+    placed.into_iter().filter(|p| p.piece != PieceKind::Hole).map(|p| (p.piece, p.id, p.index)).collect()
 }
 
 #[test]
@@ -32,7 +33,7 @@ fn both_themes_place_the_same_pieces_in_the_same_order() {
     let dusk = Theme::from_toml("name = \"dusk\"\n[palette]\ndesk = \"#2B2440\"\n[tilt]\nenabled = false\n").unwrap();
     for viewport in SIZES {
         let sticker = pieces(&Theme::sticker(), viewport);
-        assert!(sticker.len() > 40, "{} pieces", sticker.len());
+        assert!(sticker.len() > 30, "{} pieces", sticker.len());
         assert_eq!(pieces(&Theme::plain(), viewport), sticker);
         assert_eq!(pieces(&dusk.theme, viewport), sticker);
     }

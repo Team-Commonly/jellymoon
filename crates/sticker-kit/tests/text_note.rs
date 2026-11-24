@@ -2,9 +2,7 @@
 //! Its options are drawn only under a body drawn whole.
 
 use sticker_kit::layout::MAX_TEXT_CHARS;
-use sticker_kit::{
-    FixedAdvance, MAX_TEXT_LINES, MORE_NOTES_ID, Note, PieceKind, Placed, Scene, Theme, Viewport, layout,
-};
+use sticker_kit::{FixedAdvance, MAX_TEXT_LINES, Note, PieceKind, Placed, Scene, Theme, Viewport, layout};
 
 const SIZES: [Viewport; 2] = [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 960.0, h: 640.0 }];
 
@@ -40,31 +38,31 @@ fn a_text_note_draws_its_title_each_text_of_its_body_in_order_and_its_options() 
 }
 
 #[test]
-fn a_body_longer_than_its_room_is_drawn_from_its_start_and_the_rest_is_counted() {
+fn a_body_of_more_than_its_most_lines_is_drawn_from_its_start_and_the_rest_is_counted() {
     let body: Vec<String> = (1..=60).map(|n| format!("line {n}")).collect();
     for viewport in [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 960.0, h: 640.0 }] {
         let (texts, _) = said(&place(vec![note(body.clone(), &[])], &Theme::sticker(), viewport));
         let [title, drawn @ .., count] = &texts[..] else { panic!("{texts:?}") };
         assert_eq!(title, "A file");
-        assert!(!drawn.is_empty() && drawn.len() < MAX_TEXT_LINES, "{}", drawn.len());
+        assert_eq!(drawn.len(), MAX_TEXT_LINES - 1, "its lines less the count's, at any size");
         assert_eq!(drawn, &body[..drawn.len()], "the first texts, whole and in order");
         assert_eq!(count, &format!("+{} more", body.len() - drawn.len()), "no text is hidden without the count");
     }
 }
 
 #[test]
-fn a_body_that_does_not_fit_is_drawn_with_its_count_and_no_option() {
+fn a_body_of_more_than_its_most_lines_is_drawn_with_its_count_and_no_option() {
     let options = ["Show me", "Yes to those", "No"];
     for viewport in SIZES {
         // The most texts of a line each that are drawn whole with the options, and one more.
         let lines = |n: usize| (1..=n).map(|n| format!("name {n}")).collect::<Vec<_>>();
         let at = |n: usize| said(&place(vec![note(lines(n), &options)], &Theme::sticker(), viewport));
         let most = (1..=MAX_TEXT_LINES).rev().find(|n| !at(*n).1.is_empty()).expect("a short body has its options");
-        assert!(most >= 3, "{most}");
+        assert_eq!(most, MAX_TEXT_LINES, "the window's size takes no line from it");
         let (texts, placed) = at(most);
         assert_eq!((&texts[1..], placed.join("|")), (&lines(most)[..], options.join("|")), "whole, with every option");
-        // One text more has no room with the options, and they are not drawn over a part of it.
-        assert!(at(most + 1).1.is_empty(), "an option under a body of {} texts that had no room", most + 1);
+        // One text more is counted, and no option is drawn under a body that is not all there.
+        assert!(at(most + 1).1.is_empty(), "an option under a body of {} texts, one of them counted", most + 1);
         let (texts, placed) = at(60);
         assert!(placed.is_empty(), "an option under a body of 60 texts");
         let count = texts.last().unwrap();
@@ -84,20 +82,6 @@ fn a_text_that_is_cut_is_drawn_with_no_option_and_one_drawn_to_its_last_characte
         let (texts, options) = at(long(MAX_TEXT_CHARS + 1));
         assert!(options.is_empty(), "an option under a text that was cut");
         assert!(texts.last().unwrap().ends_with('…') && !texts.concat().contains('z'), "{texts:?}");
-    }
-}
-
-#[test]
-fn a_text_note_with_options_is_given_the_room_of_its_whole_body_before_the_notes_after_it() {
-    let body: Vec<String> = (1..=6).map(|n| format!("name {n}")).collect();
-    let plain = |n: usize| Note::Plain { title: format!("Plain {n}"), body: "words ".repeat(40) };
-    for viewport in SIZES {
-        let notes = vec![note(body.clone(), &["Yes", "No"]), plain(1), plain(2), plain(3), plain(4)];
-        let placed = place(notes, &Theme::sticker(), viewport);
-        let (texts, options) = said(&placed);
-        assert_eq!((&texts[1..], &options[..]), (&body[..], &["Yes".to_string(), "No".to_string()][..]));
-        // What it left no room for is counted, as notes are.
-        assert!(placed.iter().any(|piece| piece.id == MORE_NOTES_ID), "the notes after it are counted");
     }
 }
 

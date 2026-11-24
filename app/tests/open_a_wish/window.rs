@@ -3,7 +3,7 @@
 //! chip, chooses nothing. The wish then entered is kept by core for that project, and no run is started: the day
 //! has no installed command.
 
-use gpui::{Entity, Modifiers, TestAppContext, VisualTestContext, point, px};
+use gpui::{Entity, Modifiers, ScrollDelta, ScrollEvent, TestAppContext, VisualTestContext, point, px};
 use jellymoon_app::showing::Showing;
 use sticker_kit::draw::Page;
 use sticker_kit::{Note, PieceKind};
@@ -14,8 +14,19 @@ use crate::support::windowed::{context, held, opened, types};
 /// A click on the little one of the wish `id`.
 fn tap(page: &Entity<Page>, cx: &mut VisualTestContext, id: &str) {
     let is = |piece: &&sticker_kit::Placed| piece.piece == PieceKind::Character && piece.id == id;
-    let piece = page.read_with(cx, |page, _| page.placed().iter().find(is).cloned());
-    let (x, y) = piece.unwrap_or_else(|| panic!("no little one {id}")).rect.center();
+    // The column is longer than the window: the wheel to its top first, then down until the little one is at the
+    // window's middle (or as near as the column's end lets it be).
+    let wheel = |cx: &mut VisualTestContext, by: f32| {
+        let delta = ScrollDelta::Pixels(point(px(0.0), px(by)));
+        cx.simulate_event(ScrollEvent { position: point(px(700.0), px(300.0)), delta, ..Default::default() });
+        cx.run_until_parked();
+    };
+    wheel(cx, 1e7);
+    let down = page.read_with(cx, |page, _| page.placed().iter().find(is).map(|piece| piece.rect.center().1 - 300.0));
+    wheel(cx, -down.unwrap_or_else(|| panic!("no little one {id}")).max(0.0));
+    let piece = page.read_with(cx, |page, _| page.placed().iter().find(is).map(|piece| page.shown_at(piece)));
+    let (x, y) = piece.unwrap_or_else(|| panic!("no little one {id}")).center();
+    assert!(y > 0.0 && y < 760.0, "{id} is in the window, over the entry's band, to be clicked: {y}");
     cx.simulate_click(point(px(x), px(y)), Modifiers::default());
     cx.run_until_parked();
 }

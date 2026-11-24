@@ -82,7 +82,10 @@ fn context() -> TestAppContext {
 }
 
 fn piece(page: &Entity<Page>, cx: &mut VisualTestContext, kind: PieceKind, id: &str) -> Placed {
-    let found = page.read_with(cx, |page, _| page.placed().iter().find(|p| p.piece == kind && p.id == id).cloned());
+    // Where it is in the window: a note's pieces are moved up by how far the page is scrolled.
+    let shown = |page: &Page, piece: &Placed| Placed { rect: page.shown_at(piece), ..piece.clone() };
+    let found = page
+        .read_with(cx, |page, _| page.placed().iter().find(|p| p.piece == kind && p.id == id).map(|p| shown(page, p)));
     found.unwrap_or_else(|| panic!("no {kind:?} of {id} is placed"))
 }
 

@@ -55,6 +55,7 @@ fn title(note: &Note) -> &str {
         | Note::Text { title, .. }
         | Note::Whole { title, .. }
         | Note::Told { title, .. } => title,
+        Note::Said { text, .. } => text,
     }
 }
 

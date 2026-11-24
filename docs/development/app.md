@@ -39,6 +39,40 @@ system's. With no name left it is `jellymoon-app: the file cannot be read`; for 
 opened may be a name mistyped, so the same words come after what it takes: `jellymoon-app: --theme is sticker,
 plain or a theme file: the file cannot be read: <name>`.
 
+## The page is one column (`app/src/column.rs`, ADR 0026)
+
+A page is read from its top, like talking with one pet: what the person typed, then what came of it, in order,
+the newest at the bottom, and the field to type the next wish under it all, in a band at the window's bottom that
+never scrolls and is never covered. Nothing on a page is beside another note, shortened, written smaller or left
+out for room: the column is as long as what it holds, and the wheel moves it.
+
+`column::column(&scene)` is a pure reordering of the scene the rest of the app makes, applied where a scene goes
+to the kit (`lines::lines` for `layout`, `window.rs` for the window) and nowhere else, so every scene the app
+keeps, compares and prints is as it was. From the top:
+
+| Part | What it is |
+|---|---|
+| the header | the date's tape, the title, and the footer as quiet lines under it |
+| a row a wish of the reading | its small character, its label, what it says; the ones let go last |
+| the day's own notes | every note of no made wish, in the scene's order: what was left out, what came true, the clashes, the plain notes, an opened wish of the reading |
+| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `shape-`, `shaping`, `steps-`, `stop-`, `told-`, `work-`, `file-`, `sure-`, `busy-`, `wish-`, `said-` |
+
+The list "wished here today" that `scene::ruled` builds is not drawn: its rows are the words the bubbles carry.
+A tap on a bubble or on its character is the tap on that wish's character. The big character stands left of the
+first card after each bubble. `layout` prints a piece's place in the column, `y` from the column's top, and the
+entry's pieces where they are in the window.
+
+Which notes are on a page, when one comes and when it goes (a look, a tap, the hold after a choice) is as the
+sections below say: this changed where a note stands and nothing else. Where a section below speaks of a note
+making room, giving way or being counted with the notes left out, the column has made that untrue, and the
+sentence has been changed to say so. What a card is bounded by is the kit's (`crates/sticker-kit/README.md`).
+`app/tests/one_column.rs` holds the order, that no card overlaps another, that eight notes are all placed, and
+that the entry is the lowest thing in the window whatever the column holds.
+
+A card stands under the cards before it, so a note that comes or goes higher up moves the cards under it down or
+up, whole. The window holds a page at its column's end while the reader is there, and where the reader left it
+otherwise.
+
 ## Today's page (`app/src/today.rs`)
 
 With no `--page` the app shows a day: today in the computer's time zone, or `--date`. It calls core's `day` and `page`
@@ -92,7 +126,7 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   on any other page it is not looked at, and the footer is the reading's.
 - **A day whose logs hold no turn of it** makes no call, and its page has no footer, with a made wish on it or
   none: every wish on it is the person's own and there is no reading to speak of, so a footer would only say
-  so in words a new person does not need. The legend stays while a wish is on the page, for its marks. (Its
+  so in words a new person does not need. (Its
   footer once said "Nothing typed on this day was read, so there is no reading. 1 made wish is in your own
   words.", which read as jargon to a person who had typed one wish.)
 - **Folders switched off.** `--skip <names>`, and `<home>/skip.txt`, one folder name a line, for an app opened with
@@ -149,14 +183,11 @@ drawn from `--page` has no day, and a tap on it does nothing.
   200. A page drawn from `--page` cannot be tapped and keeps its quotes cut to fit. A clash with nothing to choose
   (its two statements are the same once cleaned, or one is empty: `Standing::is_choice`) is not offered: it is one
   plain note, "two things you said clash", with neither statement and nothing to tap, since core would refuse it.
-- **What fits.** One clash of two statements of 200 characters is drawn whole at 960x640 and at 1440x900, in words
-  and in a script of wide characters with no spaces. At 1440x900 an option is written at 14 pixels. At 960x640 it
-  is 11, or 9.35 when the page needs the room (the kit's 0.85 step; the last step, 0.72, is 7.9), which is under
-  the 11 pixels every other text keeps. `layout` prints each run's `size`, so the step taken can be read. The
-  page scales with its window, so a larger window gives no more room. A clash the person has not chosen on is placed before one they have, so when two long clashes do not
-  fit together the open one is drawn, and the other when the first is settled. Past that (four statements of 200
-  wide characters) neither is drawn: both are counted, and `jellymoon settle` is the way to rule on them. A
-  settled clash that is counted cannot be turned over in the window either.
+- **What fits.** A clash of two statements of 200 characters is drawn whole at 960x640 and at 1440x900, in words
+  and in a script of wide characters with no spaces, and so is a second one under it: a card is as high as its
+  words. An option is written at its own size, 14 pixels at 1440x900 and 11 at 960x640, and never smaller.
+  `layout` prints each run's `size`. A clash the person has not chosen on is placed before one they have
+  (`app/tests/f35.rs`).
 - **A tap acts on what was drawn.** The window keeps the scene on show (`OnShow`). A tap names a note and an option.
   The note's id must be exactly `clash-<n>` for a clash of the page. The option's drawn text must be one of the
   two statements core gives now; that side is asked of `jellymoon_core::settle`. When it is neither (the page
@@ -183,10 +214,9 @@ the clashes, so on a page too full for all its notes it is a clash that falls in
 
 A day's page has one entry (the kit's, `crates/sticker-kit/README.md`): a field to type a wish in, and under it a
 chip for each project a wish can be made for that day, whatever the page read, of which one is always
-chosen. It stands in the left column, under the title "what I wished for today", where the wishes are listed. The chips
+chosen. It stands in a band at the window's bottom, under the column, where the next thing is said. The chips
 stand in one row when their names fit it and in two when they do not, and after them stands "Choose a folder"
-(below, "A project given in the window"). The field is the page's main thing: its row runs from the content's left
-edge to the left column's right edge, over the big character, which stands under it, and "Start" ends the row: it
+(below, "A project given in the window"). The field's row is as wide as the column, and "Start" ends the row: it
 does what Enter does, and with nothing typed it enters nothing and the note "Nothing to start yet." says what to
 type first (`starting::UNREADY`); it goes before the notes standing, which stay. While the field has the keys
 its ring is a calm colour of the theme, never the red an error would have: the sticker theme's lilac (#6F5BD6,
@@ -326,12 +356,12 @@ ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project 
   for a wish stay through a drop, and a half-typed name stays in the wish's field. A name core takes empties the
   field; a name it refuses stays.
 - **The empty page says what to do here.** The note of a page with no wish is "Nothing wished for yet today.",
-  with "Type what you want done in the field at the top." when a project is on offer, and with none (no project
+  with "Type what you want done in the field at the bottom." when a project is on offer, and with none (no project
   read on the page and none listed) "Choose the folder you want to work in, or type a name for a new project in
-  the field at the top." (`Today::draw`). A day with no session logs says "You can start here: choose the folder
+  the field at the bottom." (`Today::draw`). A day with no session logs says "You can start here: choose the folder
   you want to work in, or drop it on this window. Or type a name for a new project in the field." Words entered
   in the entry of a day with no project are a new project's name and never a wish (`starting::named`). A page
-  with nothing read and no wish, projects on offer or not, has no legend and no footer: it has no mark to explain and no reading to speak
+  with nothing read and no wish, projects on offer or not, has no footer: it has no reading to speak
   of (`app/tests/entry_first.rs`).
 
 `OnShow::listing` and `listed` need no window. `app/tests/f64.rs` and `f66.rs` carry a folder and a name through
@@ -467,8 +497,7 @@ that fit and counts the rest in a last line, `+N more`.
   it."), and, only when the entry offers that project a chip, "To go on with it here, type what you want next.
   It will start in <project>." The tap also chooses that chip, as a click on the chip does (`Showing::chip_of`,
   `window::poked`): what is typed stays, nothing starts, and the hold after a choice is not changed. A tap on a
-  made wish, or on a wish whose project has no chip, chooses nothing (`app/tests/open_a_wish.rs`). The page's
-  legend ends, on a page with a wish, in one line with no mark: "tap a jelly to open its wish".
+  made wish, or on a wish whose project has no chip, chooses nothing (`app/tests/open_a_wish.rs`).
 - **Work that waits shows itself** (`Showing::look`, `app/src/showing.rs`). A look that finds a wish's run ended
   puts the wish's work on the page with no tap: the notes a tap on its character gives (`told-<wish>` when there
   is one, and `work-<wish>` with its choices), from the calls to core a tap makes, off the window's thread, in
@@ -535,13 +564,9 @@ that fit and counts the rest in a last line, `+N more`.
   every one a quote piece and nothing else; `<name>` is core's cleaned name. It ends with "Nothing was run to
   try this. A run reads and edits files, and no more.", and, when core dropped a piece, "Something the run said
   could not be checked, so it is not here." No result, or every piece dropped: no such note. It has no option
-  and no field, so a tap on it finds nothing. The kit plans the work's note first, as it is without a result,
-  and the result next, taking room from the notes after them: the work's note is drawn whole, lower, with its
-  three choices, and the rows are drawn in their order up to the first that does not fit, which with every
-  row after it is counted. While it is on the page the count of the notes left out is one plain line, not a
-  sheet. With several works waiting, a result's note takes room the later notes give way to, as `layout` prints
-  it; never room from its own work's note, which shows what it shows with no result, or the result is left out. At 1440x900 a typical result (a did of two lines, one change of a line a side, a decision) reads its
-  did and, after `Show me`, its whole change; a did too long for the room draws no row: the title, the count and the sentences. It is shown when the wish is opened, with `Show me`'s file, and by `layout`, and goes with the
+  and no field, so a tap on it finds nothing. The result's card stands over the work's, each as high as what it holds: the work's note is the note it is
+  without a result, with its three choices, and every row of the result is drawn whole, in order (the kit counts
+  the rows past its twelfth). It is shown when the wish is opened, with `Show me`'s file, and by `layout`, and goes with the
   work's note when the work is kept, tossed or asked about once more. No file of the work is opened or run.
 - **The result in plain words** (`app/src/told.rs`, `app/src/working.rs`). A person who asked for something
   follows it without reading a file's name or a changed line, so neither is on the notes as they first come onto
@@ -558,8 +583,7 @@ that fit and counts the rest in a last line, `+N more`.
   every name among the files it only counts. A tap on `Show me` brings the rows and the names
   (`working::notes_of`, `WorkDone::Shown`), and no file with them: a page has room for two of a wish's notes,
   and with the result and the work on it a file's note was never drawn, so a second tap changed nothing a person
-  saw. Each tap after the first brings a file, under the work's choices, and the result goes after them, where
-  the kit gives it the room they leave (`told::in_turn`); a result with no row of a change has nothing to show
+  saw. Each tap after the first brings a file, under the work's choices, and the result goes after them; a result with no row of a change has nothing to show
   first, so its first tap brings the file. Which tap it is, the scene says: a file's note, or a change's
   row. Each row is drawn as it was before this, and the rows of the
   changes come before what the run did, decided and is not sure about: the kit leaves out the rows that do not
@@ -616,8 +640,7 @@ that fit and counts the rest in a last line, `+N more`.
   - The kit places a text note's options only under a title and a body both drawn whole
     (`layout/text_note.rs`): the title within its two lines, and every text, each to its last character. Where
     the title is cut, the names do not fit the window, or one is cut, no option is placed, and a tap
-    finds only a placed option. A text note with options is planned with the room of its whole body, before the
-    notes after it, so on a crowded page it is those notes that are counted.
+    finds only a placed option. A card is as high as its body, so only a body past the kit's own bounds is cut or counted.
   - Work with more than six such files has no yes on a page, and neither has work with one whose name a person
     does not read whole and as it is: a name that looks like a credential is drawn as `[redacted]`, and one
     with a letter that draws as a blank, with a joiner, or that reads like a count (`+5 more`) is drawn whole
@@ -907,12 +930,12 @@ and Cmd-Q are the system's and are not run by a test.
 
 | Page data | Piece |
 |---|---|
-| a wish | a character with the wish's label, in page order; the kit places let-go ones last |
+| a wish | a character with the wish's label, in page order: a row under the header, the let-go ones last; a made wish's stands at the end of its bubble |
 | its state | working: busy bubble; done: idle; needs you: badge; let go: dimmed, label struck |
 | each star | a star on its wish's character (the kit draws at most 4) and a row in the list note "came true today"; none of a made wish that was let go, whose change was thrown away |
 | a clash | a choice note `clash-<n>` with both quotes, each drawn whole; `settled` strikes the first |
 | `read` | the footer: how many things were typed, in which projects, and that the reading is unedited |
-| the day's made wishes | a character each, like any wish, and one whole list note, "wished here today", after the clashes: each made wish's own words after the mark of its state, drawn to the last word or counted in the note's last line, `+N more`, never cut. The footer adds "N made wishes are in your own words."; on a day not read yet that is all the footer says |
+| the day's made wishes | a character each, like any wish, and, in the scene, one whole list note, "wished here today", after the clashes: each made wish's own words after the mark of its state. The column draws each as a bubble of its own instead, whole (`column.rs`). The footer adds "N made wishes are in your own words."; on a day not read yet that is all the footer says |
 | a made wish whose run goes, on a page with no clash | the first note (after "not everything is drawn"), a plain one: "Your wish is being worked on." over "“<the start of its words>”. What it did will show here when it is done." With more, one note for all: "Your wishes are being worked on." over "“<the newest's>”, the newest, and N more. What each did will show here when it is done." The wish is named as every note of a wish names it, by its first 40 characters as core cleans them. No time is promised. It goes with the last run, and a look never carries it over as the app's own. A page with a clash has none: it is a note planned before the made wishes' list, so it would move or shrink what a person rules on, which a made wish never does (F37) |
 | a made wish whose run goes, with steps (live work, `app/src/live.rs`) | its little one says on a small pill over it the stage its run is at, from the tool of its last step, in fixed words: "looking around" (`Read`, `Glob`, `Grep`), "making the change" (`Edit`, `Write`); "thinking" before the first step. On a page with the note that says it is being worked on, a told note `steps-<wish>` goes just before that note, of the newest working wish: "What it is doing", then the stage as a sentence, "Looking around your project." or "Making the change.", and "1 step so far." or "N steps so far.". It has no row. No file's name is drawn, on the pill, in the note or on an opened wish: a person who asked for something wants to know how far along it is, not which file is open. Core keeps the names (`runs/<id>/steps.json`); the page does not draw them. A pill is drawn only where the room over the little one holds one line and it has no star (stars stand there). A step is a tool use the run asked for, as its stream says, not proof that it happened. Nothing of it can be tapped, and once the run has ended none of it is drawn: the notes are the ones they were |
 | no wish, and nothing set aside | one plain note: "Nothing wished for yet today." |
@@ -924,7 +947,7 @@ drawn as a plain note with its label or text. Such a wish gets no character, no 
 its note counts its stars: `A wish in a state this app cannot draw yet: paused. Its 3 stars are not drawn.` Anything
 else that does not fit core's shapes refuses the whole file.
 
-## The door: a size, four lengths, and a count of what was left out
+## The door: a size, four lengths, and a count of what the app left out
 
 Page data is untrusted input. `app/src/read.rs` holds it to these before anything else looks at it:
 
@@ -941,24 +964,19 @@ starts with a plain note, "not everything is drawn", whose body counts what went
 12 clashes.` One of a thing is said in the singular (`1 wish, 1 star`). So the work `layout` does is bounded by these
 numbers, whatever the file holds. What is piped in is read only to the size and one byte more; the rest stays unread.
 
-**Nothing is left out without a word.** Three places can run out of room, and each says how much it left out:
+**Nothing is left out without a word.** The app counts what its door leaves out, in the plain note "not everything
+is drawn". The column leaves no note out, and what it bounds is a card's own text:
 
-- The list note shows the rows that fit and ends with `+N more`. When it is placed it keeps at least one row.
-- The notes are placed in page order: what was left out, came true today, the clashes, then the plain notes. The
-  first note that does not fit and every note after it are left out together, and a last small sheet says how many:
-  a `note` piece with the id `more`, its `index` the number of notes on the page, and the text `+N more of M notes`.
-  No note is skipped to make room for a later one.
+- The list note shows its first 24 rows and ends with `+N more`.
+- Every note is a card, in page order: what was left out, came true today, the clashes, then the plain notes.
 - A character shows at most 4 stars; every star of a wish that has a character is a row of the list note. The stars
   of a wish in an unknown state are counted in its plain note.
 
 **The fullest page core can write is drawn whole**: 8 wishes with labels of 40 characters, 4 stars of 60 each, and
 2 clashes with two quotes of 200 each, at 1440x900 and at 960x640, in both themes. Every wish is a character, both
-clashes are choice notes with both quotes, the list note is there, and nothing is counted as left out. An F28 case
-holds this three times: with quotes in words, in Chinese with no space, and as one unbroken word. The kit makes the
-room in this order: the list gives up rows, down to its title, one row and `+N more`; then each quote is shown in two
-lines, not three, ending in `…`; then the gaps between notes close by a third. The page data keeps the whole quote. Only past what core writes (a third clash, parts the app
-does not know, a list over its length) does `+N more of M notes` appear: with three clashes, the list, the first one
-or two of them, and `+1` or `+2 more of 4 notes`.
+clashes are choice notes with both quotes to their last character, and the list note is there. An F28 case holds
+this three times: with quotes in words, in Chinese with no space, and as one unbroken word. Past what core writes,
+a third clash is a third card.
 
 The kit has its own door for scenes and theme files (`crates/sticker-kit/README.md`).
 
@@ -968,8 +986,8 @@ One JSON object a line, in the kit's order: `kind`, `id`, `index`, `x`, `y`, `w`
 `tilt` (degrees), `state` on a character, and `text`, a list of runs with `role`, `text`, `size` (the font size the
 run is drawn at) and their own box. Any text
 that is longer than its place is cut with an ellipsis: a label to the theme's width and length, a row of the list note
-to the note's width (the star's text gets up to 64% of the row, the wish's label what is left), a quote to three
-lines, or to two when the notes need the room. A quote breaks at a space. A word too long for a line of its own (an
+to the note's width (the star's text gets up to 64% of the row, the wish's label what is left), a quote of a choice that is not a clash's to three
+lines. A quote breaks at a space. A word too long for a line of its own (an
 address, or a script written without spaces) carries on to the next line, broken between characters and never inside
 one (the kit's README says what counts as one), so such a quote fills its lines like any other.
 No text holds a control character, a line or paragraph separator, or a format character other than the two joiners

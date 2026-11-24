@@ -1,45 +1,55 @@
-//! The page itself: paper, punched holes, the dated tape, the title, the
-//! big character, the legend and the footer line.
+//! The page itself: paper, punched holes, the dated tape, the title and the
+//! line under it that says what the page was made from.
 
-use super::entry::{band_bottom, under_field};
+use super::entry::entry_top;
 use super::{Ctx, PieceKind, line_height, piece, run};
 use crate::geom::Rect;
-use crate::scene::{Mark, Scene};
-use crate::text::Role;
+use crate::scene::Scene;
+use crate::text::{Role, wrap};
 
 /// Body outline of a character in its own units: 200 wide, and from 14
 /// above its anchor to the feet 154 below.
 pub(crate) const BODY_TOP: f32 = 14.0;
 pub(crate) const BODY_BOTTOM: f32 = 154.0;
 
-/// The most holes punched down the paper's edge, whatever height a theme gives the page.
+/// The lines the footer is drawn in at most.
+const FOOTER_LINES: usize = 4;
+
+/// The most holes punched down the paper's edge, however long the column is.
 const MAX_HOLES: usize = 150;
 
-pub(crate) fn header(cx: &mut Ctx, scene: &Scene) {
-    cx.out.push(piece(PieceKind::Paper, "paper", 0, cx.paper()));
-    holes(cx);
+/// The head of the column: the dated tape, the title, and the scene's footer in quiet lines under it. Returns
+/// where the column goes on.
+pub(crate) fn header(cx: &mut Ctx, scene: &Scene) -> f32 {
     date_tape(cx, scene);
-    title(cx, scene);
+    let under = title(cx, scene);
+    footer(cx, scene, under + cx.px(6.0)) + cx.px(30.0)
 }
 
-fn holes(cx: &mut Ctx) {
+/// The paper under a column that ends at `bottom`, and its holes, put under every piece placed so far. It is never
+/// shorter than what a window shows over the entry's band.
+pub(crate) fn paper(cx: &mut Ctx, bottom: f32) {
     let m = cx.theme.metrics;
-
+    let top = cx.px(m.margin_y);
+    let shown = entry_top(cx.theme, cx.viewport) - top;
+    let high = (bottom + cx.px(40.0)).max(shown) - top;
+    let rect = Rect::new(cx.x(m.margin_x), top, cx.px(m.width - 2.0 * m.margin_x), high);
+    let mut under = vec![piece(PieceKind::Paper, "paper", 0, rect)];
     let radius = cx.px(7.5);
     let hole_x = cx.x(m.margin_x + 36.0);
-    let mut y = m.margin_y + 70.0;
-    let mut index = 0;
-    while y < m.height - m.margin_y - 26.0 && index < MAX_HOLES {
-        let rect = Rect::new(hole_x - radius, cx.y(y) - radius, 2.0 * radius, 2.0 * radius);
-        cx.out.push(piece(PieceKind::Hole, "hole", index, rect));
-        y += 66.0;
-        index += 1;
+    let mut y = top + cx.px(70.0);
+    while y < rect.bottom() - cx.px(26.0) && under.len() <= MAX_HOLES {
+        let hole = Rect::new(hole_x - radius, y - radius, 2.0 * radius, 2.0 * radius);
+        under.push(piece(PieceKind::Hole, "hole", under.len() - 1, hole));
+        y += cx.px(66.0).max(1.0);
     }
+    under.append(&mut cx.out);
+    cx.out = under;
 }
 
 fn date_tape(cx: &mut Ctx, scene: &Scene) {
     let m = cx.theme.metrics;
-    let tape = Rect::new(cx.x(m.content_left - 2.0), cx.y(m.margin_y + 32.0), cx.px(232.0), cx.px(36.0));
+    let tape = Rect::new(cx.x(m.content_left - 2.0), cx.px(m.margin_y + 32.0), cx.px(232.0), cx.px(36.0));
     let size = cx.size(Role::Date);
     let (text, width) = cx.line(&scene.date_label, Role::Date, tape.w - cx.px(24.0));
     let (mid_x, mid_y) = tape.center();
@@ -52,91 +62,36 @@ fn date_tape(cx: &mut Ctx, scene: &Scene) {
     cx.out.push(date);
 }
 
-fn title(cx: &mut Ctx, scene: &Scene) {
-    let m = cx.theme.metrics;
+/// The title, one line as wide as the column at most. Returns its bottom.
+fn title(cx: &mut Ctx, scene: &Scene) -> f32 {
     let size = cx.size(Role::Title);
-    let left = cx.x(m.content_left);
-    let (text, width) = cx.line(&scene.title, Role::Title, cx.content_right() - left);
+    let (left, wide) = cx.column();
+    let (text, width) = cx.line(&scene.title, Role::Title, wide);
     let height = line_height(size);
-    let top = title_bottom(cx) - height;
+    let top = cx.px(cx.theme.metrics.margin_y + 78.0);
     let mut title = piece(PieceKind::Title, "title", 0, Rect::new(left, top, width, height));
     title.text = vec![run(text, Role::Title, left, top + height / 2.0, width, size)];
     cx.out.push(title);
+    top + height
 }
 
-pub(crate) fn title_bottom(cx: &Ctx) -> f32 {
-    cx.y(cx.theme.metrics.margin_y + 78.0) + line_height(cx.size(Role::Title))
-}
-
-/// Places the big character and returns the top of the space left for the
-/// small ones, which is never above the band an entry stands in. The big
-/// character stands under the entry's field, however high a theme puts it.
-pub(crate) fn hero(cx: &mut Ctx, scene: &Scene) -> f32 {
-    let m = cx.theme.metrics;
-    let Some(hero) = &scene.hero else {
-        return band_bottom(cx);
-    };
-    let unit = cx.px(m.hero_size) / 200.0;
-    let rect = Rect::new(
-        cx.x(m.hero_x) - 100.0 * unit,
-        (cx.y(m.hero_top) - BODY_TOP * unit).max(under_field(cx)),
-        200.0 * unit,
-        (BODY_TOP + BODY_BOTTOM) * unit,
-    );
-    cx.out.push(piece(PieceKind::Hero, &hero.id, 0, rect));
-    (rect.bottom() + cx.px(50.0)).max(band_bottom(cx))
-}
-
-/// The design line the legend sits on; the grid of characters stops above it.
-pub(crate) fn legend_top(cx: &Ctx) -> f32 {
-    cx.y(cx.theme.metrics.height - 118.0)
-}
-
-pub(crate) fn legend_and_footer(cx: &mut Ctx, scene: &Scene) {
-    let right = cx.paper().right() - cx.px(40.0);
-    legend(cx, scene, right);
-    footer(cx, scene, right);
-}
-
-fn legend(cx: &mut Ctx, scene: &Scene, right: f32) {
-    let m = cx.theme.metrics;
-    let size = cx.size(Role::Legend);
-    let height = line_height(size);
-    let mid_y = legend_top(cx) + height / 2.0;
-    let (mark, gap, between) = (cx.px(20.0), cx.px(6.0), cx.px(18.0));
-    let mut left = cx.x(m.content_left);
-    for (index, item) in scene.legend.iter().enumerate() {
-        let (mark, gap) = if item.mark == Mark::Plain { (0.0, 0.0) } else { (mark, gap) };
-        let room = right - left - mark - gap;
-        let (text, width) = cx.line(&item.text, Role::Legend, room);
-        if text.is_empty() {
-            break;
-        }
-        let rect = Rect::new(left, mid_y - height / 2.0, mark + gap + width, height);
-        let mut entry = piece(PieceKind::Legend, "legend", index, rect);
-        if item.mark == Mark::Star {
-            let star = cx.size(Role::Bullet);
-            let star_width = cx.measure.width("★", Role::Bullet, star);
-            let star_x = left + (mark - star_width) / 2.0;
-            entry.text.push(run("★".into(), Role::Bullet, star_x, mid_y, star_width, star));
-        }
-        entry.text.push(run(text, Role::Legend, left + mark + gap, mid_y, width, size));
-        cx.out.push(entry);
-        left = rect.right() + between;
-    }
-}
-
-fn footer(cx: &mut Ctx, scene: &Scene, right: f32) {
-    let m = cx.theme.metrics;
+/// The scene's footer at `top`, in at most [`FOOTER_LINES`] lines of the column's width. Returns its bottom, or
+/// `top` when it says nothing.
+fn footer(cx: &mut Ctx, scene: &Scene, top: f32) -> f32 {
     let size = cx.size(Role::Footer);
-    let left = cx.x(m.content_left);
-    let (text, width) = cx.line(&scene.footer, Role::Footer, right - left);
-    if text.is_empty() {
-        return;
+    let (left, wide) = cx.column();
+    let lines = wrap(&cx.clean(&scene.footer), wide, FOOTER_LINES, Role::Footer, size, cx.measure);
+    if lines.is_empty() {
+        return top;
     }
     let height = line_height(size);
-    let top = cx.y(m.height - 84.0);
-    let mut footer = piece(PieceKind::Footer, "footer", 0, Rect::new(left, top, width, height));
-    footer.text = vec![run(text, Role::Footer, left, top + height / 2.0, width, size)];
+    let widest = lines.iter().map(|(_, width)| *width).fold(0.0, f32::max);
+    let mut footer = piece(PieceKind::Footer, "footer", 0, Rect::new(left, top, widest, 0.0));
+    for (line, width) in lines {
+        footer.text.push(run(line, Role::Footer, left, top + footer.rect.h + height / 2.0, width, size));
+        footer.rect.h += height;
+    }
+    let bottom = footer.rect.bottom();
     cx.out.push(footer);
+    bottom
 }

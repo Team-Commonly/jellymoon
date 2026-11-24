@@ -25,8 +25,8 @@ pub const TYPED: &str = "What you typed";
 /// The two choices, in their order.
 pub const GO: &str = "Go with this";
 pub const GO_TYPED: &str = "Go with what I typed";
-/// The labels of the sharper wish's rows, in their order. A row whose text is empty is left out.
-pub const LABELS: [&str; 5] = ["The wish", "Done when", "Not touching", "Why", "Only you know"];
+/// The labels of the sharper wish's rows, in order; an empty row is left out. The question stands before the reason.
+pub const LABELS: [&str; 5] = ["The wish", "Done when", "Not touching", "Only you know", "Why"];
 
 /// Whether an id is one of this file's notes.
 pub(crate) fn names(id: &str) -> bool {
@@ -46,7 +46,7 @@ pub(crate) fn settle(scene: &mut Scene, notes: Vec<Note>) {
 
 /// The two notes of a sharper wish. `said` is the typed words as core keeps them.
 fn pair(shape: &Shape, said: String) -> Vec<Note> {
-    let texts = [&shape.wish, &shape.done_when, &shape.not_touching, &shape.why, &shape.ask];
+    let texts = [&shape.wish, &shape.done_when, &shape.not_touching, &shape.ask, &shape.why];
     let rows = LABELS.iter().zip(texts).filter(|(_, text)| !text.is_empty());
     let rows = rows.map(|(label, text)| ToldRow {
         label: label.to_string(),

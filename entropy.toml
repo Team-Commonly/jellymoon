@@ -1026,7 +1026,8 @@ max_file_lines = 400
 # true (`src/scene.rs`, 10), with its tests (`src/scene/tests.rs`, 9, and `tests/f47/asked.rs`, 3).
 # F91 raised the app by 320: `src/shaping.rs`, 106 (the three notes and the tap), 20 where a wish is entered and
 # answered, its tests, 188 (`tests/shape_first.rs`), and Enter in the entry for the made-up window, 6.
-"app" = 16667
+# The owner's walk of F91 added 2, both in its test: the question row stands before the reason row, pinned.
+"app" = 16669
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

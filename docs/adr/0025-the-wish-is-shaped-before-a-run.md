@@ -59,6 +59,13 @@ By the owner, on Claude Code 2.1.330, macOS only; none of it by the tests, which
 - A project with `SessionStart` and `PreToolUse` hooks in both `.claude/settings.json` and
   `.claude/settings.local.json` ran neither, and an instruction in the project's `CLAUDE.md` was not obeyed.
 
+- The texts ran 125 to 140 characters before the system words named a length, which is why they say "under 120".
+- The `why` text is the model's own claim and no check holds it against a file. Twice, of a file of three lines,
+  it spoke of an empty fourth line that the file does not have; and it named the file though the system words ask
+  it not to. So the page draws it as a quote, last of the rows, and no run is given it.
+- Walked without a window in a made-up project, through the app's own calls: Enter to the sharper wish took
+  about 9 seconds, `Go with this` started the run, and the run's result came as a typed wish's does.
+
 Not measured: Windows, Linux, an older Claude Code, and a link inside the project that points outside it.
 
 ## Open

@@ -76,7 +76,8 @@ fn text(id: &str, title: &str, quoted: &str, options: &[&str]) -> Note {
 
 /// The two notes of the sharper wish for the words `said`: every word of the model's is a quote.
 fn pair(said: &str) -> Vec<Note> {
-    let rows = LABELS.iter().zip([WISH, DONE, LEFT, WHY, ASK]);
+    // The question only the person can answer stands before the model's reason.
+    let rows = LABELS.iter().zip([WISH, DONE, LEFT, ASK, WHY]);
     let rows =
         rows.map(|(label, text)| ToldRow { label: label.to_string(), quotes: vec![text.into()], ..ToldRow::default() });
     let sharper = Note::Told { id: SHARPER_ID.into(), title: SHARPER.into(), rows: rows.collect(), end: Vec::new() };
@@ -130,6 +131,7 @@ fn a_sharper_wish_is_shown_as_quotes_with_two_choices_and_nothing_is_kept() {
     let printed = acted(&w, &[SAID], &[], &[]);
     let Some(Note::Told { rows, .. }) = scene(&printed[1]["scene"]).notes.first().cloned() else { panic!("no note") };
     assert_eq!(rows.iter().map(|row| row.label.as_str()).collect::<Vec<_>>(), ["The wish", "Done when", "Why"]);
+    assert_eq!(LABELS[3..], ["Only you know", "Why"]);
 }
 
 #[test]

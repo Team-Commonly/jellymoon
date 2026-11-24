@@ -299,7 +299,7 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   end here.
 - **`shaped`.** Nothing is kept. The entry is emptied, and two notes stand where the reading's stood:
   `shape-said`, the kit's told note titled "Your wish, sharper", with a row for each text that is not empty under
-  the labels "The wish", "Done when", "Not touching", "Why" and "Only you know"; and under it the text note
+  the labels "The wish", "Done when", "Not touching", "Only you know" and "Why"; and under it the text note
   `shape`, titled "What you typed", with the typed words as its quote and exactly two options, "Go with this" and
   "Go with what I typed". Every word of the model's is a quote of a row. Every other word is fixed here.
 - **A tap** on either option is one arm of `stopping::chose` and an ordinary `Chosen::Work`: both notes go at

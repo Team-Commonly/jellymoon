@@ -49,12 +49,27 @@ moves to the cases where it decides something, and every other change gets a way
    file would come back, ignored or not (the keep's own rule with the two commits swapped); and git's trial of
    the move passes on a copy of the index. The check of `HEAD`, the tip and the disk is made a second time just
    before the step, with nothing but the writing of `back` between it and `read-tree`.
+   Three rules were added after the first review:
+   - **The record is proved.** Before anything else, `kept` must be a commit whose only parent is `before`
+     (`git rev-list --parents -n 1`). A record edited to name any other two ids moves no branch and no file.
+   - **A folder at a returning path** is in the way unless everything on the disk below it is a file the move
+     removes. `read-tree` removes such a folder with whatever git ignores in it and has no word that stops it.
+   - **The folder's index is refreshed** before the second check, so a file that was only touched does not
+     pass the trial and then stop the step. `refs/stash` is not a name that holds the change elsewhere.
 8. **`back` is written before the step**, and the record is cleared after the branch was seen at `before`. An
    undo cut off at any point is finished by the next `run undo`; until then `run keep` is refused and says so.
    An undo that goes on and finds something in its way is refused, and forgets `back`.
 9. **On the page** a change kept by itself has the note `kept-<wish>`: "Your folder has this change now.", the
    count of its files, and one choice, `Undo it`. The answer to the tap is a note, and under it the work's own
    note is back with `Keep it` and `Toss it`, or the kept note again when core refused. Every word is core's.
+10. **The page asks the folder, at every look.** The record says only that the change was kept once. Core asks
+    the repo whether `HEAD` is on `onto` and whether that branch's tip holds `kept`, and the note says one of
+    three things: on the branch at `kept`, "Your folder has this change now." with `Undo it`; on the branch
+    with `kept` under later commits, the same title, no choice, and "It cannot be undone here any more: the
+    branch has a commit since."; anything else (another branch, none, a branch that does not hold `kept`, a
+    repo or a record that is not as a keep left it), "This change was put in your folder earlier.", no choice,
+    and "Your folder stands somewhere else now, so the change is not undone from here." A change whose files
+    cannot be read says "Its details cannot be read now." and has no choice. `run waiting` prints the answer.
 
 ## When it is kept by itself, and when it waits
 
@@ -77,7 +92,9 @@ Each is one fixed sentence with no word of git's and no run's id, and with nothi
 
 - nothing of the wish is kept;
 - the change was kept by a tap, or was kept by itself before a later day's change was;
+- the record of the change is not one Jellymoon wrote (`kept`'s only parent is not `before`);
 - the branch has a commit since the change was kept;
+- the branch no longer holds the change;
 - a later change was kept on top of this one (the newest is undone first);
 - a file of the change has unsaved or staged edits;
 - a file is in the way where one the change removed would come back;
@@ -100,6 +117,11 @@ git 2.50.1 (Apple Git-155), in scratch repos with no hook and empty configs:
 - With `HEAD` on another branch at `kept`, the two commands move `refs/heads/<onto>` and no other ref.
   `git reset --keep <before>` there rewinds the branch `HEAD` is on.
 - Run again after a cut between the two commands, `read-tree` exits 0 and the step ends as an uncut one.
+- Where the change made a folder of a file: `read-tree -m -u <kept> <before>` exits 0 and removes the folder
+  with an ignored file, an ignored folder or an empty folder of the person's below it; for an untracked file
+  there it exits 128 and writes nothing. In the keep's direction (a folder becomes a file) the keep's
+  `merge --ff-only --no-overwrite-ignore` exits 1 and removes nothing for an ignored file, an ignored folder
+  and an untracked file below, and removes an empty folder. So the rule is the undo's alone.
 
 ## Open
 
@@ -116,4 +138,9 @@ git 2.50.1 (Apple Git-155), in scratch repos with no hook and empty configs:
   later day's change is kept by itself in that repo. A repo no later change is kept in keeps its branches.
 - **A later change that waits on top** (a follow-up of a kept change, not yet kept) does not refuse the undo of
   the change it follows.
+- **A keep of a folder that becomes a file, with an ignored file of the person's below it,** is stopped by
+  git's step and not by the checks before it: the keep's own `fits` passes it. Nothing is lost; what the keep
+  then says was not looked at here.
+- **An undo of a change whose run's branch is gone** is not refused: a page offers none, the command line does.
+- **A record edited to name a real commit and its real parent** at the branch's tip is not told from a keep's.
 - **Windows and Linux** were not run. The smoke chain was not run with this change.

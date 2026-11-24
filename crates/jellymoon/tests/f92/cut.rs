@@ -79,3 +79,19 @@ fn the_step_moves_no_ref_but_the_branch_it_names_when_head_is_switched_away_just
     assert_eq!(made.git(&["symbolic-ref", "HEAD"]), "refs/heads/other");
     waits(&made.record());
 }
+
+#[test]
+fn an_undo_that_goes_on_after_the_person_took_the_change_out_only_finishes_its_record() {
+    let made = landed();
+    let cut = made.undo_with(&[], &[("JELLYMOON_TEST_UNDO_CUT", "1".into())]);
+    assert_eq!(cut.code, 70, "{}", cut.stderr);
+    // The branch is put back by hand, and has a commit of the person's since: it holds the change no more.
+    made.git(&["reset", "-q", "--hard", "HEAD~1"]);
+    fs::write(made.repo.join("mine.txt"), "the person's own\n").unwrap();
+    made.git(&["add", "mine.txt"]);
+    made.git(&["commit", "-q", "-m", "the person's own commit"]);
+    let tip = made.w.commit(&made.repo, "main");
+    assert_eq!(printed(&made.undo())["why"], json!(UNDONE));
+    waits(&made.record());
+    assert_eq!((made.w.commit(&made.repo, "main"), made.status()), (tip, String::new()));
+}

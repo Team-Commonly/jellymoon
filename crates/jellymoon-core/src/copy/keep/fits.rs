@@ -95,14 +95,14 @@ pub(super) fn fits(
     let _ = clear();
     let passed = trial(mine, places, &copy, moved, files);
     let _ = clear();
-    if !passed? || in_way(mine, folder, files, again)? { Err(Unkept::InWay) } else { Ok(()) }
+    if !passed? || in_way(mine, folder, files, again, false)? { Err(Unkept::InWay) } else { Ok(()) }
 }
 
 /// The last check of [`fits`], which an undo asks by itself too (`undo.rs`): whether something is on the disk
-/// where a file the move makes would go, ignored or not.
-pub(super) fn in_way(mine: &Repo, folder: &Path, files: &[Touched], again: bool) -> Result<bool, Unkept> {
+/// where a file the move makes would go, ignored or not. `whole` is the undo's rule of a folder there ([`taken`]).
+pub(super) fn in_way(mine: &Repo, folder: &Path, files: &[Touched], again: bool, whole: bool) -> Result<bool, Unkept> {
     let removed: Vec<&[u8]> = files.iter().filter(|file| file.removed).map(|file| &file.path[..]).collect();
-    let made = files.iter().filter(|file| file.made && taken(folder, &file.path, &removed));
+    let made = files.iter().filter(|file| file.made && taken(folder, &file.path, &removed, whole));
     let there: Vec<&[u8]> = made.map(|file| &file.path[..]).collect();
     Ok(!there.is_empty() && (!again || ignored(mine, folder, &there)?))
 }
@@ -165,12 +165,40 @@ fn ignored(mine: &Repo, folder: &Path, paths: &[&[u8]]) -> Result<bool, Unkept> 
 /// a folder of its path would be. On a disk that takes two spellings for one name, a file of the person's under
 /// the other spelling is there too. What the work itself removes from there is not in the way: git's trial has
 /// asked of it. Nothing is followed and nothing is opened.
-fn taken(folder: &Path, path: &[u8], removed: &[&[u8]]) -> bool {
+///
+/// With `whole`, a folder at the path is in the way unless everything on the disk below it is a file the work
+/// removes ([`emptied`]): git, writing the file, removes the folder with whatever it ignores in there, and an
+/// undo's `read-tree` has no word that stops it. A keep's `merge` has (`--no-overwrite-ignore`), and stops.
+fn taken(folder: &Path, path: &[u8], removed: &[&[u8]], whole: bool) -> bool {
     let there = |path: &[u8]| on_disk(folder, path).and_then(|path| fs::symlink_metadata(path).ok());
     let below = |gone: &&[u8]| gone.len() > path.len() && gone.starts_with(path) && gone[path.len()] == b'/';
-    let whole = there(path).is_some_and(|there| !(there.is_dir() && removed.iter().any(below)));
+    let goes = || if whole { emptied(folder, path, removed) } else { removed.iter().any(below) };
+    let whole = there(path).is_some_and(|there| !(there.is_dir() && goes()));
     let mut above = path.iter().enumerate().filter(|(_, byte)| **byte == b'/').map(|(at, _)| &path[..at]);
     whole || above.any(|above| !removed.contains(&above) && there(above).is_some_and(|there| !there.is_dir()))
+}
+
+/// Whether the folder at `path` holds something, and nothing but files the work removes, however deep. A folder
+/// that cannot be listed, an empty one and a name that is no text on a system whose paths are text do not pass.
+fn emptied(folder: &Path, path: &[u8], removed: &[&[u8]]) -> bool {
+    let Some(Ok(listed)) = on_disk(folder, path).map(fs::read_dir) else { return false };
+    let mut any = false;
+    for entry in listed {
+        let Ok(entry) = entry else { return false };
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { return false };
+        let below = [path, b"/", name.as_bytes()].concat();
+        let goes = match entry.file_type() {
+            Ok(kind) if kind.is_dir() => emptied(folder, &below, removed),
+            Ok(_) => removed.contains(&&below[..]),
+            Err(_) => false,
+        };
+        if !goes {
+            return false;
+        }
+        any = true;
+    }
+    any
 }
 
 /// Where a path of the store is in a checkout. None for a path that leads out of it, which git never writes, and
@@ -235,7 +263,7 @@ mod tests {
         fs::write(folder.join("f"), "").unwrap();
         fs::create_dir(folder.join("d")).unwrap();
         fs::write(folder.join("d").join("x"), "").unwrap();
-        let taken = |path: &str, removed: &[&[u8]]| taken(folder, path.as_bytes(), removed);
+        let taken = |path: &str, removed: &[&[u8]]| taken(folder, path.as_bytes(), removed, false);
         for free in ["new", "d/y", "new/deep/file", "../f", "d/../f"] {
             assert!(!taken(free, &[]), "{free}");
         }

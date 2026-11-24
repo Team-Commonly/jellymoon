@@ -708,7 +708,10 @@ A tap on `Undo it` is carried as every tap on work is (`working.rs`): "That chan
 and then core's answer as the note `said-<wish>`. Undone: "The change was undone.", and under it the work's own
 note `work-<wish>` is back with `Show me`, `Keep it` and `Toss it`. Refused: "The change was not undone.", what
 the person can do next and core's one sentence of why ([keep.md](keep.md#undone)), and under it the kept note
-again. A change that was not kept by itself has the work's note as before, whose first line says that it waits
+again. The title and the choice are there only while core, asking the repo at that look, finds the folder
+on the change's branch at the change's commit: under later commits the note has no choice and says why, and
+anywhere else it is titled "This change was put in your folder earlier." and has none
+([keep.md](keep.md#where-a-kept-change-stands)). A change that was not kept by itself has the work's note as before, whose first line says that it waits
 for a yes. Every word and every rule is core's (`run/waits/itself.rs`, `run/undo.rs`).
 
 Tests: `app/tests/kept_by_itself.rs`, in worlds that say a finished change is kept by itself

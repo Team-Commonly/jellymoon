@@ -13,7 +13,7 @@ use std::fs;
 
 use sticker_kit::{Note, Scene};
 use support::Piece;
-use support::wished::SAID;
+use support::wished::{SAID, World};
 use support::worked::landed;
 
 const HAS: &str = "Your folder has this change now.";
@@ -109,4 +109,29 @@ fn a_change_of_a_file_the_person_s_tools_obey_still_waits_for_a_yes() {
     let said = note.said();
     assert!(said.contains(WAITS) && said.contains(READY), "{said:?}");
     assert!(placed.iter().all(|piece| !piece.id().starts_with("kept-")), "{placed:?}");
+}
+
+#[test]
+fn a_kept_change_the_folder_is_past_or_away_from_or_that_cannot_be_read_has_no_undo_on_a_page() {
+    const PAST: &str = "It cannot be undone here any more: the branch has a commit since.";
+    const EARLIER: &str = "This change was put in your folder earlier.";
+    const ELSEWHERE: &str = "Your folder stands somewhere else now, so the change is not undone from here.";
+    const UNREAD: &str = "Its details cannot be read now.";
+    let opened = |w: &World| w.taps("logs", &["poke:m1"]).showed().remove(0);
+    // The person committed on top of the change: the folder has it, and it is not undone from a page.
+    let (w, repo) = landed("edits");
+    fs::write(repo.join("mine.txt"), "the person's own\n").unwrap();
+    w.told(&repo, &["add", "mine.txt"]);
+    w.told(&repo, &["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "own"]);
+    assert_eq!(texts(&opened(&w)), [("kept-m1", HAS, vec![COUNTED, PAST], vec![])]);
+    // The folder stands on another branch: nothing is claimed of it now.
+    w.told(&repo, &["checkout", "-q", "-b", "other", "HEAD~2"]);
+    assert_eq!(texts(&opened(&w)), [("kept-m1", EARLIER, vec![COUNTED, ELSEWHERE], vec![])]);
+    assert!(w.placed().iter().all(|piece| piece.kind() != "option" || piece.id() != "kept-m1"));
+
+    // The run's branch is gone: the change is where it was, and its files cannot be counted.
+    let (w, repo) = landed("edits");
+    let run = w.kept()["run"].as_str().unwrap().to_string();
+    w.told(&repo, &["branch", "-q", "-D", &format!("jellymoon/run-{run}")]);
+    assert_eq!(texts(&opened(&w)), [("kept-m1", HAS, vec![UNREAD], vec![])]);
 }

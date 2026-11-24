@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 mod itself;
 mod plain;
 
-pub use itself::kept_itself;
+pub use itself::{KeptItself, kept_itself};
 pub use plain::stands;
 
 use super::keep::keep_named;
@@ -93,9 +93,6 @@ pub struct Waits {
     /// The folder the wish is for, by the name it is kept with: a page says it, `run waiting` never prints it.
     #[serde(skip)]
     pub project: String,
-    /// The change was kept by itself and can be undone: the note says so, and its one choice is the undo.
-    #[serde(skip)]
-    pub itself: bool,
 }
 
 /// What `jellymoon run waiting` prints.
@@ -105,6 +102,9 @@ pub struct Waiting {
     pub day: String,
     /// The day's made wishes whose work waits, in their order.
     pub waits: Vec<Waits>,
+    /// The day's made wishes whose change was kept by itself and not undone, each with where it stands now.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kept: Vec<KeptItself>,
     /// The day's made wishes a follow-up may be made of, in their order (F54): those whose work waits or was
     /// kept. A page offers one under these and under no other.
     pub follows: Vec<String>,
@@ -208,11 +208,14 @@ fn named(names: &[String], beside: usize) -> String {
 impl Waits {
     /// The title of the note of this work.
     pub fn title(&self) -> &'static str {
-        match (self.read, self.itself) {
-            (true, true) => itself::TITLE,
-            (true, false) => WAITS,
-            (false, _) => UNREAD,
-        }
+        if self.read { WAITS } else { UNREAD }
+    }
+
+    /// How many files the work made, changed and removed, as a note says it.
+    fn counted(&self) -> String {
+        let listed = self.made + self.changed + self.removed;
+        let of = (self.names.len() + self.more > listed).then_some(listed);
+        plain::counted(self.made, self.changed, self.removed, of)
     }
 
     /// Whether the work touches more files the person's tools obey than a note names, or one whose name is not
@@ -227,14 +230,11 @@ impl Waits {
     pub fn lines(&self) -> Vec<String> {
         let (said, project) = (format!("“{}”", self.said), &self.project);
         let mut lines = if self.read {
-            let listed = self.made + self.changed + self.removed;
-            let of = (self.names.len() + self.more > listed).then_some(listed);
-            let counted = plain::counted(self.made, self.changed, self.removed, of);
-            if self.itself { vec![counted] } else { vec![plain::waits(!self.over()).to_string(), said, counted] }
+            vec![plain::waits(!self.over()).to_string(), said, self.counted()]
         } else {
             vec![plain::unread(project), said, format!("{}.", self.why)]
         };
-        lines.extend((!self.names.is_empty() && !self.itself).then(|| named(&self.names, self.more)));
+        lines.extend((!self.names.is_empty()).then(|| named(&self.names, self.more)));
         lines.extend(self.over().then(|| OVER.to_string()));
         lines
     }
@@ -244,7 +244,6 @@ impl Waits {
     pub fn choices(&self, sure: bool) -> Vec<&'static str> {
         match (self.read, self.over()) {
             (false, _) => Vec::new(),
-            (true, _) if self.itself => vec![itself::UNDO],
             (true, true) => vec![SHOW, TOSS],
             (true, false) => vec![SHOW, if sure { KEEP_TOO } else { KEEP }, TOSS],
         }
@@ -296,23 +295,8 @@ fn read(home: &Path, options: &RunOptions, itself: bool) -> Option<(Waits, Optio
         || format!("the work of run {run} waits: files made {made}, changed {changed}, removed {removed}{first}");
     let (read, why) = (unread.is_none(), unread.unwrap_or_else(counted));
     let result = shown.as_ref().and_then(|shown| shown.result.clone());
-    let waits = Waits {
-        wish,
-        run,
-        said,
-        read,
-        made,
-        changed,
-        removed,
-        names,
-        more,
-        obeyed,
-        plain,
-        why,
-        result,
-        project,
-        itself,
-    };
+    let waits =
+        Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why, result, project };
     Some((waits, shown))
 }
 
@@ -327,9 +311,10 @@ pub fn waits(home: &Path, options: &RunOptions) -> Option<Waits> {
 pub fn waiting(home: &Path, options: &RunOptions) -> Result<Waiting, Error> {
     let day = wish::day_of(options.day.as_deref())?;
     let made = wish::kept_of(home, &day)?;
-    let one = |made: &wish::MadeWish| waits(home, &RunOptions { wish: made.id.clone(), ..options.clone() });
-    let follows = followable(home, &day, true);
-    Ok(Waiting { waits: made.iter().filter_map(one).collect(), follows, day })
+    let of = |made: &wish::MadeWish| RunOptions { wish: made.id.clone(), ..options.clone() };
+    let waits = made.iter().filter_map(|made| waits(home, &of(made))).collect();
+    let kept = made.iter().filter_map(|made| kept_itself(home, &of(made))).collect();
+    Ok(Waiting { waits, kept, follows: followable(home, &day, true), day })
 }
 
 /// The first file after number `after` that `run show --file` prints, from the first again past the last.

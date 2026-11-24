@@ -12,9 +12,12 @@ use super::{Yes, keep};
 use crate::copy::{self, Keep, Named};
 
 /// Whether a test's build was told that every change waits (`JELLYMOON_TEST_WAITS` is 1), as before F92: the
-/// tests of everything that is done with work that waits. A release holds no read of it.
+/// tests of everything that is done with work that waits. A release holds no read of it: it is not compiled in.
 fn off() -> bool {
-    cfg!(debug_assertions) && std::env::var_os("JELLYMOON_TEST_WAITS").is_some_and(|waits| waits == "1")
+    #[cfg(debug_assertions)]
+    return std::env::var_os("JELLYMOON_TEST_WAITS").is_some_and(|waits| waits == "1");
+    #[cfg(not(debug_assertions))]
+    false
 }
 
 /// Keeps the work of the wish's run by itself, and says whether it is in the person's folder now.

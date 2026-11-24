@@ -4,7 +4,7 @@
 //! no config of this machine. Every other test's world says that every change waits, as before F92
 //! (`support/door/world.rs`); the worlds here say that a finished change is kept by itself, as it is outside the
 //! tests. This file holds when a change is kept by itself and when it waits; `f92/undone.rs` what an undo does
-//! and what it refuses, and `f92/cut.rs` an undo cut off after each of its steps and one whose checkout moved
+//! and what it refuses, `f92/stands.rs` what a page is told of where a kept change is now, and `f92/cut.rs` an undo cut off after each of its steps and one whose checkout moved
 //! just before its step.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -12,6 +12,8 @@
 mod cut;
 #[path = "f45/made.rs"]
 mod kept;
+#[path = "f92/stands.rs"]
+mod stands;
 mod support;
 #[path = "f92/undone.rs"]
 mod undone;
@@ -101,6 +103,20 @@ impl Made {
 
     pub fn undo(&self) -> Ran {
         self.undo_with(&[], &[])
+    }
+
+    /// The day's changes that were kept by itself, as `jellymoon run waiting` prints them.
+    pub fn stood(&self) -> Value {
+        let asked = ["run", "waiting", "--date", DAY, "--repo", self.repo.to_str().unwrap()];
+        printed(&self.w.run(&asked))["kept"].clone()
+    }
+
+    /// Writes `before` into the run's record, as no keep did.
+    pub fn forge(&self, before: &Value) {
+        let file = self.w.jm("runs").join(&self.run).join("run.json");
+        let mut record = self.record();
+        record["before"] = before.clone();
+        fs::write(file, serde_json::to_string(&record).unwrap()).unwrap();
     }
 
     /// What the index holds, and every file of the checkout with its bytes.

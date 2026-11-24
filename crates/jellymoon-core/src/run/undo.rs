@@ -12,7 +12,7 @@ use super::keep::{BUSY, NO_LOCK, intent};
 use super::show::{Asked, found, not_cores};
 use super::{RunOptions, WorkState, place, record, refused};
 use crate::Error;
-use crate::copy::{self, Back, Keep, Stays, Unkept};
+use crate::copy::{self, Back, Keep, Stands, Stays, Unkept};
 
 const UNDONE: Asked = Asked { to: "undo", done: "undone", going: "is going: there is nothing of it to undo yet" };
 
@@ -21,6 +21,9 @@ const TAPPED: &str = "this change was kept by a tap, or was kept by itself befor
                       a change is not undone here: nothing was changed";
 const COMMITTED: &str = "the branch has a commit since this change was kept, so it was not undone, and nothing was \
                          changed";
+const GONE: &str = "the branch no longer holds this change, so nothing was undone, and nothing was changed";
+const FORGED: &str = "the record of this change is not one Jellymoon wrote, so it was not undone, and nothing was \
+                      changed";
 const LATER: &str = "a later change was kept on top of this one, and the newest kept change is undone first: nothing \
                      was changed";
 const EDITS: &str = "a file of this change has unsaved or staged edits, so it was not undone, and nothing was changed";
@@ -112,6 +115,21 @@ pub fn undo_run(home: &Path, options: &RunOptions, ask: bool) -> Result<Undone, 
     }
 }
 
+/// Where the wish's change that was kept by itself is now, for a page: asked of the repo at every look, and
+/// [`Stands::Elsewhere`] of whatever cannot be asked.
+pub(super) fn stands(home: &Path, options: &RunOptions) -> Stands {
+    let asked = || {
+        let found = found(home, options, &UNDONE).ok()?;
+        let (kept, onto) = intent(&found.record.kept, &found.record.onto).ok()??;
+        let before = found.record.before.clone().filter(|before| copy::is_id(before))?;
+        let (named, run) = (found.named().ok()??, found.run.as_str());
+        let folder = place::folder(home, &found.day, &found.made, options).ok()?;
+        let of = Keep { home, folder: &folder, run, named: &named, was: None, ask: true, held: None, itself: true };
+        Some(copy::stands_now(&of, &Back { kept, before: &before, onto, again: false }))
+    };
+    asked().unwrap_or(Stands::Elsewhere)
+}
+
 /// The sentence of a change that stays. Of a branch that moved: whether what moved it is a later change that
 /// was kept by itself on top of this one, by the records of the home.
 fn why(home: &Path, record: &record::Record, stays: &Stays) -> &'static str {
@@ -124,6 +142,8 @@ fn why(home: &Path, record: &record::Record, stays: &Stays) -> &'static str {
     match stays {
         Stays::Moved if record::all(home).iter().any(on_top) => LATER,
         Stays::Moved => COMMITTED,
+        Stays::Gone => GONE,
+        Stays::Forged => FORGED,
         Stays::Away => AWAY,
         Stays::Midway => MIDWAY,
         Stays::Held => HELD,

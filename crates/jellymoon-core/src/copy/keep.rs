@@ -28,7 +28,7 @@ use std::time::Duration;
 pub(crate) use fits::Touched;
 pub(crate) use step::LOOSE;
 pub(crate) use toss::{Branch, Left, Untossed, toss};
-pub(crate) use undo::{Back, Stays, undo};
+pub(crate) use undo::{Back, Stands, Stays, stands_now, undo};
 pub(crate) use why::{How, Unkept};
 
 use super::git::{Git, Repo, Unopened};

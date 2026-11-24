@@ -74,6 +74,13 @@ pub fn play(script: &str, number: usize, rec: &Path) -> i32 {
             fs::write(".gitattributes", "*.txt text\n").unwrap();
             ends_with(&success())
         }
+        // F92. The work, and where it removed a file a folder with a file in it.
+        "folder" => {
+            edits();
+            fs::create_dir("b.txt").unwrap();
+            fs::write("b.txt/x", "below what was a file\n").unwrap();
+            ends_with(&success())
+        }
         "many" | "past" | "walls" | "wall8" => beside(script),
         "crowd" | "long" | "longs" | "six" | "seven" | "eight" | "masked" | "blank" | "object" | "joined"
         | "counted" => obeyed(script),

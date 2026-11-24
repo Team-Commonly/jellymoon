@@ -3,10 +3,11 @@
 //! changed.
 
 use std::fs;
+use std::time::{Duration, SystemTime};
 
 use serde_json::{Value, json};
 
-use super::{DAY, Made, finished, itself, landed, printed, wished};
+use super::{DAY, Made, finished, itself, landed, played, printed, wished};
 
 pub const UNDONE: &str = "the change was undone: the branch names the commit it named before, and the work waits";
 const WOULD: &str = "an undo would put the branch back at the commit it named before";
@@ -26,11 +27,13 @@ const MIDWAY: &str = "a merge, a cherry-pick, a revert, a rebase or a bisect is 
                       change was not undone, and nothing was changed";
 const HELD: &str = "another name in the repo holds this change (a branch, a tag or a remote's branch), and a change \
                     that was already sent elsewhere is not undone here: nothing was changed";
+const FORGED: &str = "the record of this change is not one Jellymoon wrote, so it was not undone, and nothing was \
+                      changed";
 const BUSY: &str = "a keep, a toss or the start of a follow-up's run is at work in this home: the change was not \
                     undone, and nothing was changed";
 
 /// Fails unless an undo is refused in these words with nothing changed, and `--ask` says the same and no.
-fn stays(made: &Made, why: &str) {
+pub fn stays(made: &Made, why: &str) {
     let before = made.held();
     let asked = printed(&made.undo_with(&["--ask"], &[]));
     assert_eq!(asked, json!({"run": made.run, "wish": made.wish, "why": why, "fits": false}));
@@ -218,4 +221,70 @@ fn a_change_kept_by_itself_on_a_later_day_takes_the_branch_and_the_undo_of_an_ea
     // The newest is undone as ever, and the earlier day's is not undone after it either.
     assert_eq!(printed(&made.undo())["why"], json!(UNDONE));
     assert_eq!(super::refused(&made.w.run(&earlier)), super::said(TAPPED));
+}
+
+#[test]
+fn an_undo_spares_what_git_ignores_below_a_folder_that_becomes_a_file_again() {
+    // The change made a folder of the file `b.txt`, with a file in it.
+    let (made, said) = played("folder");
+    assert_eq!(said["kept_itself"], json!(true), "{said}");
+    assert!(made.repo.join("b.txt").join("x").is_file());
+    fs::create_dir_all(made.repo.join(".git").join("info")).unwrap();
+    fs::write(made.repo.join(".git").join("info").join("exclude"), "*.log\nlogs/\n").unwrap();
+    // The person keeps a file git ignores in that folder, or a folder of them: git would remove both unasked.
+    for mine in ["b.txt/secret.log", "b.txt/logs/a"] {
+        let file = made.repo.join(mine);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(&file, "the person's own\n").unwrap();
+        assert!(made.status().starts_with("!! b.txt/"), "{}", made.status());
+        stays(&made, WAY);
+        assert_eq!(fs::read_to_string(&file).unwrap(), "the person's own\n");
+        fs::remove_file(&file).unwrap();
+    }
+    // An empty folder of the person's is theirs too. With nothing below but what the change made, it is undone.
+    stays(&made, WAY);
+    fs::remove_dir(made.repo.join("b.txt").join("logs")).unwrap();
+    assert_eq!(printed(&made.undo())["why"], json!(UNDONE));
+    assert_eq!(fs::read_to_string(made.repo.join("b.txt")).unwrap(), "b.txt as it was\n");
+    assert_eq!(made.status(), "");
+}
+
+#[test]
+fn an_undo_of_a_record_whose_commits_are_not_a_keep_s_is_refused() {
+    let first = landed();
+    let real = first.record()["before"].clone();
+    // A commit with no parent, and a tree: neither is the commit before the kept one.
+    let tree = first.git(&["rev-parse", "main^{tree}"]);
+    let root = first.git(&["commit-tree", "-m", "a root of its own", &tree]);
+    for forged in [root, tree] {
+        first.forge(&json!(forged));
+        stays(&first, FORGED);
+        assert_eq!(first.stood()[0]["stands"], json!("elsewhere"));
+    }
+    first.forge(&real);
+    assert_eq!(first.stood()[0]["stands"], json!("here"));
+    // The commit before the commit before: a second change is kept on the first, and its record is told so.
+    let (wish, said) = wished(&first.w, &first.repo, DAY, "follow");
+    let second = Made { w: first.w, repo: first.repo, wish, run: said["run"].as_str().unwrap().to_string() };
+    second.forge(&real);
+    stays(&second, FORGED);
+}
+
+#[test]
+fn an_undo_is_not_stopped_by_a_file_that_was_only_touched_or_by_a_stash() {
+    // A file of the change holds what it held, at another time.
+    let made = landed();
+    let touched = fs::File::options().write(true).open(made.repo.join("a.txt")).unwrap();
+    touched.set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000_000)).unwrap();
+    drop(touched);
+    assert_eq!(printed(&made.undo())["why"], json!(UNDONE));
+    assert_eq!(made.status(), "");
+
+    // The person stashed an edit of their own after the keep: the stash stands on the kept commit, and stays.
+    let made = landed();
+    fs::write(made.repo.join("c.txt"), "half an edit\n").unwrap();
+    made.git(&["stash", "-q"]);
+    let stash = made.git(&["rev-parse", "refs/stash"]);
+    assert_eq!(printed(&made.undo())["why"], json!(UNDONE));
+    assert_eq!((made.git(&["rev-parse", "refs/stash"]), made.status()), (stash, String::new()));
 }

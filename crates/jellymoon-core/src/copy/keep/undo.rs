@@ -9,9 +9,11 @@
 
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
+
 use super::super::git::Repo;
 use super::super::work::{REF_MAX, tip_of};
-use super::{At, Keep, Places, SAID_MAX, Unkept, Unread, fits, opened, runs, stands};
+use super::{At, Keep, Places, SAID_MAX, Unkept, Unread, fits, line, opened, runs, stands};
 
 /// What an undo goes by, all of it from the run's record: the commit the keep landed, the commit the branch named
 /// before it, the branch by its whole name, and whether an undo wrote down before that it was about to step.
@@ -24,8 +26,12 @@ pub(crate) struct Back<'a> {
 
 /// Why a change stays kept.
 pub(crate) enum Stays {
-    /// The branch names another commit than the keep landed.
+    /// The branch names another commit than the keep landed, with the kept one in its history.
     Moved,
+    /// The branch does not hold the kept commit any more.
+    Gone,
+    /// The record's two commits are not a commit and its only parent: no keep wrote them.
+    Forged,
     /// The checkout stands on another branch, or on none.
     Away,
     Midway,
@@ -67,10 +73,55 @@ pub(crate) fn undo(of: &Keep, back: &Back, note: &mut dyn FnMut() -> bool) -> Re
     opened(of, |at| Ok(undone(at, back, note)))?
 }
 
+/// Where a change that was kept by itself is now, asked of the repo at every look of a page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Stands {
+    /// The checkout stands on the branch, and the branch names the kept commit.
+    Here,
+    /// The checkout stands on the branch, which has commits since the kept one.
+    Past,
+    /// Anything else: another branch or none, a branch that does not hold the commit, a repo or a record that
+    /// is not as a keep left it.
+    Elsewhere,
+}
+
+/// [`Stands`] of the change `back` names. Nothing is written and no lock is taken.
+pub(crate) fn stands_now(of: &Keep, back: &Back) -> Stands {
+    let asked = opened(of, |at| {
+        let head = line(at.mine, &[], &["symbolic-ref", "--quiet", "HEAD"])?;
+        Ok(match tip_of(at.repo, back.onto) {
+            _ if !proven(at, back) || head.as_deref() != Some(back.onto) => Stands::Elsewhere,
+            Ok(tip) if tip == back.kept => Stands::Here,
+            Ok(tip) if within(at, back.kept, &tip) => Stands::Past,
+            _ => Stands::Elsewhere,
+        })
+    });
+    asked.unwrap_or(Stands::Elsewhere)
+}
+
+/// Whether the kept commit is a commit whose only parent is the commit before: what every keep by itself
+/// leaves, and what a record that was edited to name any other two ids of the store does not show.
+fn proven(at: &At, back: &Back) -> bool {
+    let parents = line(at.repo, &[], &["rev-list", "--parents", "-n", "1", back.kept]);
+    matches!(parents, Ok(Some(said)) if said == format!("{} {}", back.kept, back.before))
+}
+
+/// Whether `commit` is `tip` or in its history.
+fn within(at: &At, commit: &str, tip: &str) -> bool {
+    let asked = ["merge-base", "--is-ancestor", commit, tip];
+    matches!(at.repo.answer(None, &[], &asked, &[], SAID_MAX), Some((Some(0), _)))
+}
+
 fn undone(at: &At, back: &Back, note: &mut dyn FnMut() -> bool) -> Result<(), Stays> {
     let of = at.of;
-    // An undo that was cut off after its step: the branch is back, and only the record is to be written.
-    if back.again && tip_of(at.repo, back.onto).ok().as_deref() == Some(back.before) {
+    if !proven(at, back) {
+        return Err(Stays::Forged);
+    }
+    // An undo that was cut off after its step, or whose change the person took out since: the branch holds the
+    // commit before and not the kept one, and only the record is to be written.
+    let back_already = |tip: String| within(at, back.before, &tip) && !within(at, back.kept, &tip);
+    if back.again && tip_of(at.repo, back.onto).is_ok_and(back_already) {
         return Ok(());
     }
     let files = fits::touched(at.repo, back.kept, back.before)?;
@@ -86,6 +137,8 @@ fn undone(at: &At, back: &Back, note: &mut dyn FnMut() -> bool) -> Result<(), St
     if of.ask {
         return Ok(());
     }
+    // A file that was only touched is no unsaved change, to the trial and now to the step's own index.
+    let _ = at.mine.answer(Some(of.folder), &[], &["update-index", "-q", "--refresh"], &[], SAID_MAX);
     close(at, back, &files)?;
     if !note() {
         return Err(Stays::Unwritten);
@@ -103,19 +156,20 @@ fn close(at: &At, back: &Back, files: &[fits::Touched]) -> Result<(), Stays> {
         return Err(Stays::Away);
     }
     if tip != back.kept {
-        return Err(Stays::Moved);
+        return Err(if within(at, back.kept, &tip) { Stays::Moved } else { Stays::Gone });
     }
-    if fits::in_way(at.mine, at.of.folder, files, back.again)? { Err(Stays::Way) } else { Ok(()) }
+    if fits::in_way(at.mine, at.of.folder, files, back.again, true)? { Err(Stays::Way) } else { Ok(()) }
 }
 
 /// Whether a name of the repo other than the branch itself has the kept commit in its history: a branch, a tag,
-/// a remote's branch. A run's branch is Jellymoon's own name and holds nothing that was sent anywhere.
+/// a remote's branch. A run's branch is Jellymoon's own name and holds nothing that was sent anywhere, and
+/// neither does the stash, whose commits stand on the one the checkout was at.
 fn held(at: &At, back: &Back) -> Result<bool, Stays> {
     let names = ["for-each-ref", "--contains", back.kept, "--format=%(refname)"];
     let names = at.repo.bytes(&names, &[], REF_MAX).filter(|names| names.len() < REF_MAX);
     let names =
         String::from_utf8(names.ok_or(Unkept::Unread(Unread::Repo))?).map_err(|_| Unkept::Unread(Unread::Repo))?;
-    Ok(names.lines().any(|name| name != back.onto && !runs(name)))
+    Ok(names.lines().any(|name| name != back.onto && name != "refs/stash" && !runs(name)))
 }
 
 /// The step, and nothing else: the files and the index go from the kept commit to the one before, and then the

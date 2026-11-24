@@ -70,7 +70,7 @@ pub use stop::stop_run;
 pub use told::{Piece, Told};
 pub use toss::{Tossed, toss_run};
 pub use undo::{Undone, undo_run};
-pub use waits::{Waiting, Waits, WorkDone, WorkTap, kept_itself, stands, waiting, waits, work_tapped};
+pub use waits::{KeptItself, Waiting, Waits, WorkDone, WorkTap, kept_itself, stands, waiting, waits, work_tapped};
 use words::{asking, by_now, cancelled, cut, cut_late, failed, finished, going, had, no_wish};
 
 use crate::busy::{self, or_test};

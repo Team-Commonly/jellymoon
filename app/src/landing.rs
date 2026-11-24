@@ -21,8 +21,8 @@ impl Today {
     /// follow-up. None of any other wish.
     pub(crate) fn kept_notes(&self, id: &str) -> Option<Vec<Note>> {
         let kept = jellymoon_core::kept_itself(&self.home, &self.run_of(id))?;
-        let note = text(format!("{KEPT}{id}"), kept.title(), kept.lines(), kept.choices(false));
-        Some(told(&kept, false).into_iter().chain([with_more(note, id, self.follows(id))]).collect())
+        let note = text(format!("{KEPT}{id}"), kept.title(), kept.lines(), kept.choices());
+        Some(told(&kept.waits, false).into_iter().chain([with_more(note, id, self.follows(id))]).collect())
     }
 
     /// The notes under core's answer to a tap on the undo: the work's own note, which waits again, or the note

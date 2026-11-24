@@ -7,7 +7,8 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 ## The three data types
 
 - `Scene` (`src/scene.rs`): what is on the page. A date, a title, a hero,
-  characters, notes (`List`, `Choice`, `Plain`, `Text`), a legend. Plain serde data.
+  characters, notes (`List`, `Choice`, `Plain`, `Text`, `Whole`, `Told`, and `Said`: what a person
+  typed). Plain serde data.
 - `Theme` (`src/theme/`): how it looks. Colours, font names, tilt angles,
   motion amounts and sizes. It names no pictures: the art is the kit's own.
   Two are built in: `Theme::sticker()` and `Theme::plain()`.
@@ -25,12 +26,10 @@ from outside the app reach `on_paths`, with their paths, called while the page i
 
 A page may hold one `Entry` (`src/scene.rs`) beside its scene: an id, a hint, a
 few options of which one is always chosen, and a cap on its characters. It has
-a spot of its own, under the title. The field's row is the page's widest thing
-there: from the content's left edge to the left column's right edge, 44 design
-pixels high, over the big character's place, and the big character stands 24
-design pixels under it, however high a theme puts it. The chips stand under the
-field, from its left edge to 24 design pixels short of the big character's
-place: in one row when that holds them, else in two. A chip is as
+a spot of its own: a band at the window's bottom, as wide as the column. It is the one thing on a page that is
+placed in the window and not in the column, so it is where it was however long the column is and however far it
+is scrolled. The field's row is 44 design pixels high, 12 under the band's top, and the chips stand under it: in
+one row when that holds them, else in two. A chip is as
 wide as its name, and at least one and a half times its height, while its row
 has the room. In a row too narrow for its names the short ones keep their
 width and the long ones share what is left; those are cut in the middle with
@@ -38,12 +37,10 @@ an ellipsis ("kitc…ntend"), so no name is cut while its row has room and two
 names that begin alike are told apart by their ends (`tests/entry_layout.rs`).
 The end never begins with a mark that is drawn onto the character before it
 (`tests/text.rs`).
-Every page keeps that band free, whether or not it has an entry (a page
-with no big character begins its small ones under it), so an entry that comes
-or goes moves no piece. `layout_entry(entry, theme, viewport, &measure)` places
+Every window keeps that band (`entry_top(theme, viewport)` is its top), whether or not the page has an entry, and
+the column is shown over it only, so an entry that comes or goes moves no piece. `layout_entry(entry, theme, viewport, &measure)` places
 the field (`PieceKind::Entry`) and a chip for each of the first six options
-(`PieceKind::Chip`). The options past those are counted, as the rows of a list
-past its room are: `+N more` (`PieceKind::More`), in words, after the last
+(`PieceKind::Chip`). The options past those are counted: `+N more` (`PieceKind::More`), in words, after the last
 chip, whose row keeps its width free. It is no option: no click chooses it. It
 is left out only where that row could not hold its chips at their least width
 beside it. An entry's `action`, when it is not empty, is one thing to do that is no option
@@ -56,7 +53,7 @@ chip, its words in the hint's grey), and a tap enters nothing and reaches `on_ta
 id, so whoever made the entry can say what to type first. With `loud`, the action is the entry's loud choice:
 filled as a chosen chip is, while no chip is drawn chosen. The hint, and `go`, are written at the size typed words
 are. `page.choose_option(name, cx)` chooses the option of that name when it is offered, and says whether it was.
-It places nothing for a theme whose big character leaves the chips under 160 design pixels.
+It places nothing for a theme whose column is under 160 design pixels wide.
 
 Three things about an entry are told apart by more than a shade, and each is
 a key of the theme's `[palette]`: the hint is a grey (`entry_hint`, also the
@@ -197,7 +194,7 @@ options (`layout/typed.rs`, `draw/field.rs`).
   hint in it. An `offer` that has words is a small pill over the field
   (`PieceKind::Offer`); a click on it gives the field the keys and nothing
   else.
-- **The body's room.** The quoted words and the field are placed whether the
+- **A long body.** The quoted words and the field are placed whether the
   body is drawn whole or counted; the options still go when it is counted.
 - **Typing.** A field is typed in as the entry is, by the same code and under
   the same rules: a click gives it the keys, Escape or a press elsewhere takes
@@ -318,15 +315,15 @@ bounds. A theme outside them is **refused**, never clamped, with the key named.
 | theme file | a regular file of at most 256 KiB | `theme::MAX_THEME_BYTES` |
 | any number in a theme | finite, and 0 to 10000 unless a line below says otherwise | `theme::RANGES` |
 | `metrics.width`, `metrics.height` | 200 to 10000 | |
-| `metrics.columns` | 1 to 12 | |
 | `metrics.max_scale` | 0.1 to 10 | |
-| `metrics.hero_size` | 0 to 800 (the sticker theme: 200) | |
-| `metrics.character_size` | 0 to 400 (92) | |
+| `metrics.hero_size` | 0 to 800 (the sticker theme: 120) | |
+| `metrics.character_size` | 0 to 400 (48) | |
 | `metrics.rim` | 0 to 40 (5) | |
 | `motion.damping` | 0 to 200 (14); the spring is stable all the way | |
 | `labels.max_chars` | 1 to 200 | |
 | every angle under `tilt` | -45 to 45 | |
-| notes in a scene | the first 12 are laid out, the rest only counted | `MAX_NOTES` |
+| rows of a list | the first 24 are laid out, the rest only counted | |
+| texts of a text note's body | 24 lines of them, the rest only counted | `MAX_TEXT_LINES` |
 | options of a choice note | the first 4 | |
 | rows of a whole list | the first 12 are laid out, the rest only counted | |
 | rows of a told note | the first 12 are laid out, the rest only counted | |
@@ -354,68 +351,43 @@ byte-order mark, tag characters) are removed, except the joiners U+200C and
 U+200D, which emoji and several scripts are written with. The kit carries no
 Unicode tables, so the list is written out in `src/text.rs`.
 
-**Notes that do not fit are counted, never dropped in silence.** Notes are
-placed in the scene's order, and room is made in this order. A list shows the
-rows that fit, down to one, and ends with `+N more`. Then every option of a
-choice note is shown in two lines, not three. Then the gap under each note
-goes from 48 to 32 design units. A tighter step is taken only when it places
-more notes. Text that is cut ends in `…`; the scene keeps the whole text.
-A choice with `whole: true` is for options a person acts on by what they
-read: no option of it is ever cut. Its sheet is as wide as the note column,
-its options take the lines they need, and after the gaps close they are
-written at 0.85 and then 0.72 of their size when that places more notes.
-A `Whole` list is that promise for rows: each is drawn after its mark to its
-last word, or passed over and counted in the list's last line, `+N more`.
-It never moves or shrinks another note: the other notes are placed as if the
-scene had no whole list, and it comes below them in the room they leave. It
-makes room for itself alone, by a closer gap above it (32, then 16) and rows
-written at 0.85 and 0.72, taking a step only when it draws more rows. With no
-room for even its count line it is counted with the notes left out, where
-that sheet fits. Where that sheet does not fit either, and every other note
-is drawn, nothing is drawn for the list: it is the one note that can go
-without a word, since a word for it would move another note. A scene's maker
-that must have its rows counted says the count elsewhere, as in the footer.
-`layout` returns one `mark` piece a row drawn.
-A `Told` note is someone else's words under the note's own labels
-(`layout/told.rs`): each row is a label in `row_main` and the other's texts
-under it, each a `quote` piece in `Role::Quoted`, never a run of the sheet; a
-row with an empty label starts with its first quote. Rows are drawn in their
-order, each to its last character, up to the first that does not fit; it and
-every row after it are counted, `+N more`, and no later row is drawn in its
-place. A text that cleaning would cut is a row that does not fit. A row's
-`marks` are the note's own small words in `row_sub`, each level with the
-quote of its place and before it; a row with one sets its quotes close
-together, each ground after the widest word. A row's `name` (a file's, the
-other's word) shares the label's line only when the two lay out as one line
-and it holds no blank, unseen or control character; else the label stands
-alone and the name is the row's first quote. A told note costs no other note
-anything (`told::guarded`): with one among the notes they are laid out twice,
-with and without the told notes, and where a note drawn in both differs but
-for its place down the page, or the note a drawn told note is over is drawn
-only without them, the layout without them is kept. A later note may give way
-whole, left out and counted, but never one with an option or a field: where
-such a note is drawn only without the told notes, the told notes give way. That is a second layout only when a told note is
-in the scene. While a told note is among the
-notes, the count of the notes left out is one plain line in the same words
-(a `more` piece, no sheet) close under the last note, so the told note keeps
-the room a sheet would take; without one the count is the sheet. The note's own
-sentences, `end`, come last and are drawn whole, or the note is left out. It
-has no option, field or mark. It is planned just after the note that follows
-it in the scene, with the rows that fit the room that note leaves (at least
-its title, the count and its own sentences), so that note is placed and drawn
-as it is without it, and only the notes after that one give way to it. It is drawn in its own place, over that note, as long
-as the room the notes after it leave, as a list is; that note is then drawn
-lower and is otherwise the same, but for its sheet's `index`, its place in the
-scene.
-That can go under the theme's `min_font_size`, which holds for every other
-text: 9.35 pixels at 960x640 where the smallest is 11. Each text run carries
-the `size` it was measured at, and the drawing paints it at that size, so a
-line always ends inside its option. A
-whole choice that still does not fit is left out and counted, never drawn in
-part. Last, the first note that does not fit and every
-note after it are left out together, and a level sheet (a `Note` piece, id
-`MORE_NOTES_ID`, index the number of notes) says `+N more of M notes`. Layout
-time does not grow with the number of notes or rows.
+**The page is one column, and nothing is left out of it for room** (`layout/column.rs`, ADR 0026). From its top:
+the header (the date's tape, the title, the footer as one quiet line); a row for each small character no `Said`
+is of (the character, its label, what it says); then the scene's notes in the scene's order, each a card of
+`metrics.note_width` at its full height, one under the other. The column is as long as what it holds. No card is
+moved beside another, made smaller, written smaller or left out because the page is long, and no layout is tried
+twice. What bounds a card is what bounds its own text, the same at every window size: a list's first 24 rows, a
+whole list's and a told note's first 12, 24 lines of a text note's body, four options, three lines an option
+(every line of one in a `whole` choice), six lines of a plain note, and `…` on a text over 400 characters. Each
+count that is cut says so in the card's last line, `+N more`. Behind all of it `layout` returns at most
+`MAX_PIECES` pieces.
+
+`Note::Said { id, text }` is what a person typed. It is no card: a bubble at the column's right, one `quote`
+piece in `Role::Quoted` with the note's id, drawn by the rules every quoted text is drawn by (cleaned, at most
+`MAX_QUOTED_LINES` lines, cut with `…`). The character it is of (`speaker(id)`: the id after its first `-`)
+stands small at the bubble's end with its stars and its state, and its label and what it says under them. A tap
+on the bubble is a tap on that character; a bubble of no character takes none. The big character stands left of
+the first card after each `Said`, and of the column's first card, no larger than the room left of the column.
+
+A `Whole` list draws each of its first 12 rows after its mark, to its last word; `layout` returns one `mark`
+piece a row drawn. A choice with `whole: true` cuts no option. A `Told` note is someone else's words under the
+note's own labels (`layout/told.rs`): each row is a label in `row_main` and the other's texts under it, each a
+`quote` piece in `Role::Quoted`, never a run of the sheet; a row with an empty label starts with its first
+quote. Rows are drawn in their order, each to its last character, up to the first that the cleaning every text
+is drawn with would cut; it and every row after it are counted, `+N more`, and no later row is drawn in its
+place. A row's `marks` are the note's own small words in `row_sub`, each level with the quote of its place and
+before it; a row with one sets its quotes close together, each ground after the widest word. A row's `name` (a
+file's, the other's word) shares the label's line only when the two lay out as one line and it holds no blank,
+unseen or control character; else the label stands alone and the name is the row's first quote. The note's own
+sentences, `end`, come last and are drawn whole, or the note is left out. It has no option, field or mark.
+
+**A piece's place is the column's own, and a view scrolls it** (`src/scroll.rs`, `draw/column.rs`). `layout` is
+pure and knows nothing of scrolling: `y` is from the column's top. `scroll_most(placed, theme, viewport)` is how
+far a column scrolls: what of it is below `entry_top`. `Page` keeps a `Scroll`: a turn of the wheel moves the
+column, held between its top and its end; a page opens at its end, and one that is at its end stays there when
+the column grows, while one a reader has moved stays where it was. The view paints the column in a layer clipped
+at the band's top and the entry in a second layer over it, so no card is drawn or tapped under the entry.
+`page.shown_at(piece)` says where a piece is in the window now.
 
 **Text breaks at a space, and never inside a character** (`text::wrap`,
 `text::fit`). A word too long for a line of its own, such as an address or

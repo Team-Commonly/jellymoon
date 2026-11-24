@@ -38,12 +38,14 @@ fn a_name_is_drawn_as_text_and_cut_to_its_chip() {
         let (start, end) = cut.split_once('…').unwrap_or_else(|| panic!("{cut:?} is not cut"));
         assert!(cut.chars().count() < long.chars().count() && !start.is_empty() && !end.is_empty(), "{cut:?}");
         assert!(long.starts_with(start) && long.ends_with(end), "{cut:?} is not {long:?} with its middle left out");
-        let field = rect(&of(&placed, "entry")[0].0);
+        // The field's row: the field, and the choice that ends it.
+        let (field, go) = (rect(&of(&placed, "entry")[0].0), rect(&of(&placed, "go")[0].0));
         for chip in of(&placed, "chip") {
             let ([x, y, w, h], [tx, ty, tw, th]) = (chip.rect(), rect(&chip.runs()[0]));
             assert!(x <= tx && tx + tw <= x + w + 0.01, "{chip:?}: its words leave it");
             assert!(y - 0.5 <= ty && ty + th <= y + h + 0.5, "{chip:?}: its words leave it");
-            assert!(field[0] <= x && x + w <= field[0] + field[2] + 0.01, "{chip:?} is not under the field");
+            let under = field[0] <= x && x + w <= go[0] + go[2] + 0.01 && y >= field[1] + field[3];
+            assert!(under, "{chip:?} is not under the field's row");
         }
         assert!(of(&placed, "more").is_empty() && !called(&w.day), "{logs:?}");
     }

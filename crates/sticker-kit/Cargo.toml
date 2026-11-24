@@ -39,6 +39,10 @@ name = "snapshot"
 required-features = ["headless"]
 
 [[test]]
+name = "column_draw"
+required-features = ["headless"]
+
+[[test]]
 name = "draw"
 required-features = ["headless"]
 

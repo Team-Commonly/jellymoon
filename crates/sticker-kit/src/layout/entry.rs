@@ -1,11 +1,10 @@
 //! The entry: a field to type one line in, with its `go` at the row's right end, and under it a chip for each
-//! option, in one row or two. The field's row is the page's widest thing under the title: from the content's left
-//! edge to the left column's right edge, over the big character, which stands under it ([`under_field`]). The
-//! chips stand short of the big character's place, whatever else the page holds. Every page keeps that band free
-//! ([`band_bottom`]), so the entry is placed by itself.
+//! option, in one row or two. It stands in a band at the window's bottom, as wide as the column: the one thing on
+//! a page that is placed in the window and not in the column, so it is where it was however long the column is and
+//! however far it is scrolled. Every window keeps that band ([`entry_top`]), entry or none, and the column is shown
+//! over it only.
 
-use super::page::title_bottom;
-use super::{Ctx, PieceKind, Placed, line_height, piece, run};
+use super::{Ctx, PieceKind, Placed, line_height, page_scale, piece, run};
 use crate::entry::MAX_ENTRY_OPTIONS;
 use crate::geom::{Rect, Viewport};
 use crate::scene::Entry;
@@ -15,17 +14,17 @@ use crate::theme::Theme;
 /// Where the pieces of an entry go: the field (`Entry`, with the hint as its text), its `Go` when it has one, then
 /// a `Chip` for each of the first [`MAX_ENTRY_OPTIONS`] options, its `index` the option's, then one `More` that
 /// counts the options past those, when there are any, then its `Action`. Nothing for a theme [`Theme::check`]
-/// refuses, or one whose own sizes leave the chips no room left of its big character.
+/// refuses, or one whose column is too narrow for a chip.
 pub fn layout_entry(entry: &Entry, theme: &Theme, viewport: Viewport, measure: &dyn Measure) -> Vec<Placed> {
     if theme.check().is_err() {
         return Vec::new();
     }
-    let cx = Ctx::new(theme, viewport, measure, true);
-    let (left, chips_end) = (cx.x(theme.metrics.content_left), chips_right(&cx));
-    if chips_end - left < cx.px(160.0) {
+    let cx = Ctx::new(theme, viewport, measure);
+    let (left, wide) = cx.column();
+    if wide < cx.px(160.0) {
         return Vec::new();
     }
-    let row = Rect::new(left, field_top(&cx), cx.content_right() - left, field_height(&cx));
+    let row = Rect::new(left, entry_top(theme, viewport) + cx.px(OVER), wide, field_height(theme, cx.k));
     let (field, go) = go(&cx, entry, row);
     let pad = cx.px(14.0);
     let mut out = vec![piece(PieceKind::Entry, &entry.id, 0, field)];
@@ -34,23 +33,24 @@ pub fn layout_entry(entry: &Entry, theme: &Theme, viewport: Viewport, measure: &
         out[0].text.push(run(hint, WORDS, field.x + pad, field.center().1, width, cx.size(WORDS)));
     }
     out.extend(go);
-    chips(&cx, entry, Rect::new(left, field.y, chips_end - left, field.h), &mut out);
+    chips(&cx, entry, row, &mut out);
     out
 }
 
-/// What the field keeps from the big character's place, and what the page's small characters keep from the chips.
-const GAP: f32 = 24.0;
-const UNDER_TITLE: f32 = 6.0;
+/// What the band keeps over the field and under the chips' second row, and between two chips, in design units.
+const OVER: f32 = 12.0;
 const CHIP_GAP: f32 = 6.0;
 
 /// The role of the hint and of `go`: the size typed words are drawn at.
 const WORDS: Role = Role::RowMain;
 
-/// The right end of the chips' rows: short of the big character's place, which is kept clear whether or not the
-/// page has one, as the entry knows no scene.
-fn chips_right(cx: &Ctx) -> f32 {
-    let m = &cx.theme.metrics;
-    (cx.x(m.hero_x) - cx.px(m.hero_size) / 2.0 - cx.px(GAP)).min(cx.content_right())
+/// The top of the band the entry stands in, from the window's top: the field, two rows of chips under it, and
+/// what is kept over and under them, up from the window's bottom. The column is shown over this line and never
+/// under it, on a page with an entry or none, so an entry that comes or goes moves nothing.
+pub fn entry_top(theme: &Theme, viewport: Viewport) -> f32 {
+    let k = page_scale(theme, viewport);
+    let band = field_height(theme, k) + 2.0 * (CHIP_GAP * k + chip_height(theme, k)) + 2.0 * OVER * k;
+    viewport.h - band
 }
 
 /// The entry's `go`, whole, at the right end of the field's row, and the field in what it leaves.
@@ -68,27 +68,12 @@ fn go(cx: &Ctx, entry: &Entry, row: Rect) -> (Rect, Option<Placed>) {
     (Rect::new(row.x, row.y, row.w - width - cx.px(CHIP_GAP), row.h), Some(go))
 }
 
-fn field_top(cx: &Ctx) -> f32 {
-    title_bottom(cx) + cx.px(UNDER_TITLE)
+fn field_height(theme: &Theme, k: f32) -> f32 {
+    (44.0 * k).max(line_height(WORDS.size(theme, k)) + 2.0)
 }
 
-fn field_height(cx: &Ctx) -> f32 {
-    cx.px(44.0).max(line_height(cx.size(WORDS)) + 2.0)
-}
-
-fn chip_height(cx: &Ctx) -> f32 {
-    cx.px(24.0).max(line_height(cx.size(Role::Legend)) + 2.0)
-}
-
-/// The highest the big character's place begins: the field's row runs over it, and is never covered by it.
-pub(crate) fn under_field(cx: &Ctx) -> f32 {
-    field_top(cx) + field_height(cx) + cx.px(GAP)
-}
-
-/// Where the band an entry stands in ends, two rows of chips under the field and the room under those: no page
-/// puts a small character above this line, entry or none, so an entry that comes or goes moves no piece.
-pub(crate) fn band_bottom(cx: &Ctx) -> f32 {
-    field_top(cx) + field_height(cx) + 2.0 * (cx.px(CHIP_GAP) + chip_height(cx)) + cx.px(GAP)
+fn chip_height(theme: &Theme, k: f32) -> f32 {
+    (24.0 * k).max(line_height(Role::Legend.size(theme, k)) + 2.0)
 }
 
 /// The least a chip is wide, in its heights: a name of one letter is still a chip to click.
@@ -100,11 +85,11 @@ const LEAST: f32 = 1.5;
 /// chosen, no name is cut while its row has room, and two names that begin alike are told apart by their ends.
 /// The options past the first [`MAX_ENTRY_OPTIONS`] are counted, as the rows of a list past its room are: `+N
 /// more`, whole, at the end of the last row, whose chips share what it leaves. It is left out only where that row
-/// could not then hold its chips at their least width. `field` is the field's row, cut short of the big character.
+/// could not then hold its chips at their least width. `field` is the field's row, `go` and all.
 fn chips(cx: &Ctx, entry: &Entry, field: Rect, out: &mut Vec<Placed>) {
     let count = entry.options.len().min(MAX_ENTRY_OPTIONS);
     let size = cx.size(Role::Legend);
-    let (gap, pad, height) = (cx.px(CHIP_GAP), cx.px(10.0), chip_height(cx));
+    let (gap, pad, height) = (cx.px(CHIP_GAP), cx.px(10.0), chip_height(cx.theme, cx.k));
     let names: Vec<String> = entry.options.iter().take(count).map(|name| cx.clean(name)).collect();
     let asks = |name: &String| (cx.measure.width(name, Role::Legend, size) + 2.0 * pad).max(LEAST * height);
     let asked: Vec<f32> = names.iter().map(asks).collect();

@@ -101,7 +101,8 @@ fn a_question_at_each_of_core_s_bounds_is_drawn_as_core_keeps_it_and_one_core_ke
         let w = ready();
         let wish = w.ran("asks", number, "failed");
         let placed = w.placed();
-        let ours = |piece: &&Piece| piece.id().ends_with(&format!("-{wish}"));
+        // What the person typed for it is a quote of its own, `typed-<wish>`: not a question.
+        let ours = |piece: &&Piece| piece.id().ends_with(&format!("-{wish}")) && !piece.id().starts_with("typed-");
         let kinds: Vec<&str> = placed.iter().filter(ours).map(Piece::kind).collect();
         assert!(!kinds.contains(&"field") && !kinds.contains(&"quote"), "question {number}: {kinds:?}");
     }

@@ -1,4 +1,4 @@
-//! What a busy character says (live work): one line on a small bubble over it, cut to fit, over no other piece,
+//! What a busy character says (live work): one line on a small bubble on its row, cut to fit, over no other piece,
 //! and nothing of a character that is not busy. A fixed-advance measurer and no GPUI.
 
 use sticker_kit::{Character, FixedAdvance, Mood, PieceKind, Placed, Scene, State, Theme, Viewport, layout};
@@ -15,7 +15,7 @@ fn placed(characters: Vec<Character>, theme: &Theme, size: Viewport) -> Vec<Plac
 }
 
 #[test]
-fn a_busy_character_says_one_line_over_itself_and_over_no_other_piece() {
+fn a_busy_character_says_one_line_on_its_row_and_over_no_other_piece() {
     let long = format!("changing {}last.txt", "a-very-long-folder/".repeat(12));
     for theme in [Theme::sticker(), Theme::plain()] {
         for (count, size) in [1, 3, 8].into_iter().flat_map(|count| SIZES.map(|size| (count, size))) {
@@ -27,15 +27,16 @@ fn a_busy_character_says_one_line_over_itself_and_over_no_other_piece() {
             characters.push(Character { stars: 2, ..character(count + 3, State::Busy, "reading hours.txt") });
             let all = placed(characters, &theme, size);
             let said: Vec<&Placed> = all.iter().filter(|piece| piece.piece == PieceKind::Says).collect();
-            // Every busy one with words and no star says them where there is room, and one alone always has it; no
-            // other says any: not one that is idle or needs you, not one with no words, not one with stars.
-            let ids: Vec<String> = (0..count).map(|n| format!("c{n}")).collect();
+            // Every busy one with words says them, with stars or none: its row has the room. No other says any:
+            // not one that is idle or needs you, not one with no words.
+            let ids: Vec<String> = (0..count).chain([count + 3]).map(|n| format!("c{n}")).collect();
             assert!(said.iter().all(|piece| ids.contains(&piece.id)), "{count} at {size:?}: {said:?}");
-            assert!(count > 1 || said.len() == count, "{count} at {size:?}: {} said", said.len());
+            assert_eq!(said.len(), count + 1, "{count} at {size:?}: {said:?}");
             for piece in &said {
                 let [run] = &piece.text[..] else { panic!("one line: {piece:?}") };
                 assert!(run.rect.inside(&piece.rect.grown(0.5)), "{count} at {size:?}: the line leaves its bubble");
-                let whole = says(piece.id[1..].parse().unwrap());
+                let n: usize = piece.id[1..].parse().unwrap();
+                let whole = if n < count { says(n) } else { "reading hours.txt" };
                 // Whole, or cut in its middle: its start and its end are left, so the file's name still shows.
                 let (start, end) = run.text.split_once('…').unwrap_or((run.text.as_str(), ""));
                 let cut = !start.is_empty() && !end.is_empty() && whole.starts_with(start) && whole.ends_with(end);

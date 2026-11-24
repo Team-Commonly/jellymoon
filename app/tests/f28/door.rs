@@ -1,5 +1,5 @@
 //! F28 at the door: page data is untrusted, so the app holds a file to a size and each list to a length, and whatever
-//! it or the kit leaves out is counted in the printout.
+//! it leaves out is counted in the printout. The kit leaves no note out: the page is one column (ADR 0026).
 
 use std::time::{Duration, Instant};
 
@@ -17,11 +17,10 @@ fn day(clashes: usize) -> Value {
     day
 }
 
-/// The notes placed, by id, and what the kit's last sheet says when it left notes out.
-fn notes(placed: &[Piece]) -> (Vec<&str>, Option<String>) {
-    let notes: Vec<&Piece> = placed.iter().filter(|piece| piece.kind() == "note").collect();
-    let more = notes.iter().find(|note| note.id() == "more").map(|note| note.said());
-    (notes.iter().map(|note| note.id()).filter(|id| *id != "more").collect(), more)
+/// The notes placed, by id. No sheet counts notes left out: none is.
+fn notes(placed: &[Piece]) -> Vec<&str> {
+    assert!(placed.iter().all(|piece| !piece.said().contains(" more of ")), "a count of notes left out");
+    placed.iter().filter(|piece| piece.kind() == "note").map(|note| note.id()).collect()
 }
 
 #[test]
@@ -55,7 +54,7 @@ fn a_page_with_thousands_of_everything_comes_back_fast_and_says_what_it_left_out
         let placed = pieces(&huge, &["--theme", theme]);
         assert!(start.elapsed() < Duration::from_secs(5), "{theme}: {:?}", start.elapsed());
         assert_eq!(placed.iter().filter(|piece| piece.kind() == "character").count(), 12, "24 wishes, 12 drawable");
-        assert!(placed.len() < 300, "{} pieces", placed.len());
+        assert!(placed.len() < 600, "{} pieces", placed.len());
         let first = placed.iter().find(|piece| piece.kind() == "note").unwrap().said();
         assert_eq!(
             first,
@@ -63,30 +62,20 @@ fn a_page_with_thousands_of_everything_comes_back_fast_and_says_what_it_left_out
              this app does not know."
         );
         // 1 note for what was left out, the list, 8 clashes, 12 paused wishes and 8 things from unknown parts.
-        let (drawn, more) = notes(&placed);
-        assert_eq!(more, Some(format!("+{} more of 30 notes", 30 - drawn.len())), "{theme}: {drawn:?}");
+        // Every one is a card of the column: the door bounds the page, so the column needs no count of its own.
+        assert_eq!(notes(&placed).len(), 30, "{theme}");
     }
 }
 
 #[test]
-fn three_clashes_and_the_list_note_are_each_drawn_or_counted() {
-    let all = ["note-0", "clash-1", "clash-2", "clash-3"];
-    let mut counted = 0;
+fn three_clashes_and_the_list_note_are_all_drawn_in_page_order_at_any_size() {
     for size in ["1440x900", "960x640"] {
         for theme in ["sticker", "plain"] {
             let placed = pieces(&day(3), &["--theme", theme, "--size", size]);
-            let (drawn, more) = notes(&placed);
-            assert!(!drawn.is_empty(), "{theme} {size}");
-            assert_eq!(drawn, all[..drawn.len()], "{theme} {size}: the first notes in page order, none skipped");
-            let left_out = all.len() - drawn.len();
-            let want = (left_out > 0).then(|| format!("+{left_out} more of 4 notes"));
-            assert_eq!(more, want, "{theme} {size}: {drawn:?}");
-            counted += usize::from(left_out > 0);
-
+            assert_eq!(notes(&placed), ["note-0", "clash-1", "clash-2", "clash-3"], "{theme} {size}: none left out");
             let list = placed.iter().find(|piece| piece.kind() == "note").unwrap().said();
             assert!(list.starts_with("came true today ★ retry added"), "{theme} {size}: {list}");
-            let rows = list.matches('★').count();
-            assert!(rows == 6 || list.ends_with(&format!("+{} more", 6 - rows)), "{theme} {size}: {list}");
+            assert_eq!(list.matches('★').count(), 6, "{theme} {size}: every row: {list}");
             let paper = placed.iter().find(|piece| piece.kind() == "paper").unwrap().rect();
             for note in placed.iter().filter(|piece| piece.kind() == "note" && piece.0["tilt"] == 0.0) {
                 let [x, y, w, h] = note.rect();
@@ -94,7 +83,6 @@ fn three_clashes_and_the_list_note_are_each_drawn_or_counted() {
             }
         }
     }
-    assert!(counted > 0, "no size or theme left a note out, so the count was never looked at");
 }
 
 #[test]
@@ -142,6 +130,19 @@ fn fullest(quotes: &[String; 2]) -> Value {
     page(wishes.collect(), clashes)
 }
 
+/// The lines of an option are `quote` from its start: all of it, or three lines of it that end in `…`, the same
+/// at every size and beside any number of clashes. It is broken at a space when it has them, and else between
+/// characters, with no line left nearly empty but the last.
+fn whole(lines: &[String], quote: &str, kind: &str, at: &str) {
+    let joined = lines.join(if kind == "words" { " " } else { "" });
+    let cut = joined.strip_suffix('…').is_some_and(|shown| lines.len() == 3 && quote.starts_with(shown));
+    assert!(joined == quote || cut, "{at}: neither all of it nor its first three lines: {lines:?}");
+    let filled = lines[..lines.len() - 1].iter().map(|line| line.chars().count()).min().unwrap_or(12);
+    assert!(lines.len() >= 2 && filled >= 12, "{at}: a line is left nearly empty: {lines:?}");
+    let shown: usize = lines.iter().map(|line| line.chars().count()).sum();
+    assert!(shown * 5 > quote.chars().count(), "{at}: only {shown} characters are shown");
+}
+
 /// The lines of each option of the choice note `id`.
 fn option_lines(placed: &[Piece], id: &str) -> Vec<Vec<String>> {
     let options = placed.iter().filter(|piece| piece.kind() == "option" && piece.id() == id);
@@ -161,22 +162,13 @@ fn the_fullest_page_core_can_write_is_drawn_whole() {
             let placed = pieces(&full, &["--theme", theme, "--size", size]);
             let count = |kind: &str| placed.iter().filter(|piece| piece.kind() == kind).count();
             assert_eq!((count("character"), count("label"), count("star")), (8, 8, 32), "{at}");
-            assert_eq!(notes(&placed), (vec!["note-0", "clash-1", "clash-2"], None), "{at}: nothing is counted");
+            assert_eq!(notes(&placed), ["note-0", "clash-1", "clash-2"], "{at}: nothing is counted");
 
             for (id, order) in [("clash-1", [0, 1]), ("clash-2", [1, 0])] {
                 let options = option_lines(&placed, id);
                 assert_eq!(options.len(), 2, "{at} {id}: both options");
                 for (lines, quote) in options.iter().zip(order.map(|i| format!("“{}”", quotes[i]))) {
-                    assert_eq!(lines.len(), 2, "{at} {id}: two lines beside another clash: {lines:?}");
-                    let shown = lines[1].strip_suffix('…').unwrap_or_else(|| panic!("{at}: {lines:?} is not cut"));
-                    if kind == "words" {
-                        let shown = format!("{} {shown}", lines[0]);
-                        assert!(quote.starts_with(&shown) && quote[shown.len()..].starts_with(' '), "{at}: {lines:?}");
-                    } else {
-                        assert!(quote.starts_with(&format!("{}{shown}", lines[0])), "{at}: {lines:?}");
-                        let short = lines.iter().map(|line| line.chars().count()).min().unwrap();
-                        assert!(short >= 12, "{at}: a line is left nearly empty: {lines:?}");
-                    }
+                    whole(lines, &quote, kind, &at);
                 }
             }
             let list = placed.iter().find(|piece| piece.kind() == "note").unwrap().said();
@@ -188,17 +180,16 @@ fn the_fullest_page_core_can_write_is_drawn_whole() {
 }
 
 #[test]
-fn a_quote_with_no_spaces_fills_its_three_lines_like_one_with_words() {
+fn a_quote_with_no_spaces_fills_its_lines_like_one_with_words() {
     for (kind, quotes) in quote_pairs() {
         let mut one = fullest(&quotes);
         one["clashes"].as_array_mut().unwrap().truncate(1);
         for theme in ["sticker", "plain"] {
             let placed = pieces(&one, &["--theme", theme]);
-            for (lines, quote) in option_lines(&placed, "clash-1").iter().zip(&quotes) {
-                assert_eq!(lines.len(), 3, "{kind} {theme}: {lines:?}");
-                assert!(lines[2].ends_with('…'), "{kind} {theme}: 200 characters do not fit three lines");
-                let shown: usize = lines.iter().map(|line| line.chars().count()).sum();
-                assert!(shown * 5 > quote.chars().count(), "{kind} {theme}: only {shown} characters of 200 are shown");
+            let options = option_lines(&placed, "clash-1");
+            assert_eq!(options.len(), 2, "{kind} {theme}");
+            for (lines, quote) in options.iter().zip(&quotes) {
+                whole(lines, &format!("“{quote}”"), kind, &format!("{kind} {theme}"));
             }
         }
     }

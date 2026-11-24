@@ -31,9 +31,7 @@ fn every_placed_piece_is_printed_with_its_kind_position_and_size() {
         assert!(rect.iter().all(|n| n.is_finite()) && rect[2] >= 0.0 && rect[3] >= 0.0, "{piece:?}");
         assert!(piece.0["tilt"].is_number() && piece.0["index"].is_u64() && piece.0["id"].is_string(), "{piece:?}");
     }
-    for kind in
-        ["paper", "hole", "tape", "title", "hero", "character", "star", "label", "note", "option", "legend", "footer"]
-    {
+    for kind in ["paper", "hole", "tape", "title", "hero", "character", "star", "label", "note", "option", "footer"] {
         assert!(placed.iter().any(|piece| piece.kind() == kind), "no {kind} piece was printed");
     }
     let said = |kind: &str| placed.iter().find(|piece| piece.kind() == kind).map(Piece::said).unwrap_or_default();
@@ -43,8 +41,6 @@ fn every_placed_piece_is_printed_with_its_kind_position_and_size() {
         said("footer"),
         "Read from 5 things you typed in 2 projects (alpha, beta). This is the model's reading, unedited."
     );
-    let legend: Vec<String> = placed.iter().filter(|piece| piece.kind() == "legend").map(Piece::said).collect();
-    assert_eq!(legend, ["★ finished", "working on it", "needs you", "let go", "tap a jelly to open its wish"]);
 }
 
 #[test]
@@ -125,8 +121,8 @@ fn a_page_with_no_wishes_says_so() {
     assert!(
         placed.iter().any(|piece| piece.kind() == "note" && piece.said().contains("Nothing wished for yet today."))
     );
-    // Nothing read and no wish: no legend to explain marks nobody has, and no line about a reading.
-    assert!(placed.iter().all(|piece| !["footer", "legend"].contains(&piece.kind())), "{placed:?}");
+    // Nothing read and no wish: no line about a reading.
+    assert!(placed.iter().all(|piece| piece.kind() != "footer"), "{placed:?}");
 }
 
 /// Eight labels as long as page data allows: 40 wide letters, 40 East Asian characters, and six sentences of 40.
@@ -200,12 +196,18 @@ fn text_from_page_data_is_drawn_as_text_only() {
     day["clashes"][0]["quote_a"] = json!(nasty);
     let wild = pieces(&day, &[]);
 
+    // But for the holes down the paper's edge, which are as many as the column is long: a longer title is a
+    // longer column, and what is under it stands lower and is otherwise where it was.
+    let kept =
+        |placed: &[Piece]| placed.iter().filter(|p| p.kind() != "hole").map(|p| Piece(p.0.clone())).collect::<Vec<_>>();
+    let (calm, wild) = (kept(&calm), kept(&wild));
     let keys =
         |placed: &[Piece]| placed.iter().map(|p| (p.kind().to_string(), p.0["index"].clone())).collect::<Vec<_>>();
     assert_eq!(keys(&calm), keys(&wild), "odd text adds or removes no piece");
     for (before, after) in calm.iter().zip(&wild) {
-        if matches!(before.kind(), "paper" | "hole" | "hero" | "character" | "star" | "bubble" | "badge") {
-            assert_eq!(before.rect(), after.rect(), "{} moved", before.kind());
+        if matches!(before.kind(), "hero" | "character" | "star" | "bubble" | "badge") {
+            let (was, is) = (before.rect(), after.rect());
+            assert_eq!((was[0], was[2], was[3]), (is[0], is[2], is[3]), "{} moved aside or changed", before.kind());
         }
     }
     for run in wild.iter().flat_map(Piece::runs) {
@@ -253,8 +255,10 @@ fn both_themes_place_the_same_pieces_in_the_same_order() {
     for size in ["1440x900", "960x640"] {
         let sticker = pieces(&longest(), &["--theme", "sticker", "--size", size]);
         let plain = pieces(&longest(), &["--size", size, "--theme", "plain"]);
+        // The holes down the paper's edge are as many as the column is long, which a theme's sizes change.
         let keys = |placed: &[Piece]| {
-            placed.iter().map(|p| (p.kind().to_string(), p.id().to_string(), p.0["index"].clone())).collect::<Vec<_>>()
+            let kept = placed.iter().filter(|p| p.kind() != "hole");
+            kept.map(|p| (p.kind().to_string(), p.id().to_string(), p.0["index"].clone())).collect::<Vec<_>>()
         };
         assert_eq!(keys(&sticker), keys(&plain));
         assert!(sticker.iter().any(|piece| piece.0["tilt"] != 0.0), "the sticker theme tilts its notes");

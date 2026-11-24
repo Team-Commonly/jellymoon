@@ -99,10 +99,13 @@ fn on_a_crowded_page_the_yes_is_placed_only_under_every_name_drawn_whole_and_kee
     assert_eq!(yes_under_every_name("six", false), [true, true], "six names of a line each have room");
 }
 
+// A card is as high as what it holds, so names that took more lines than the old strip of notes had are drawn
+// whole, with their yes. A yes is still placed only under every name drawn whole (`yes_under_every_name` asserts
+// it of each page); a body that is cut or counted has none, which the kit's `tests/text_note.rs` holds.
 #[test]
-fn names_too_long_for_the_note_s_room_are_drawn_with_no_yes_and_a_tap_there_keeps_nothing() {
+fn names_of_many_lines_are_drawn_whole_with_their_yes_and_keep_those() {
     assert_eq!(yes_under_every_name("long", false), [true, true]);
-    assert_eq!(yes_under_every_name("longs", false), [false, false]);
+    assert_eq!(yes_under_every_name("longs", false), [true, true]);
 }
 
 #[test]

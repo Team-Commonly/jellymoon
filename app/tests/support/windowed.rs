@@ -28,7 +28,15 @@ pub fn opened(cx: &mut TestAppContext, shown: Showing) -> (Entity<Page>, &mut Vi
     let window = cx.update(|cx| page(scene, Theme::sticker(), viewport, shown, cx)).expect("a page");
     let view = window.root(cx).expect("the page is the window's root");
     let cx = VisualTestContext::from_window(*window.deref(), cx).into_mut();
-    cx.update(|_, cx| view.update(cx, |page, cx| page.set_entry(entry, cx)));
+    // The window is still: a card that opens moves every card under it, and a page that moves them there over a
+    // moment takes a tap on a piece where it is drawn, not yet where the layout has it. A click here is on the
+    // layout's place.
+    cx.update(|_, cx| {
+        view.update(cx, |page, cx| {
+            page.set_reduce_motion(true, cx);
+            page.set_entry(entry, cx);
+        });
+    });
     cx.simulate_resize(size(px(viewport.w), px(viewport.h)));
     cx.run_until_parked();
     (view, cx)
@@ -36,8 +44,9 @@ pub fn opened(cx: &mut TestAppContext, shown: Showing) -> (Entity<Page>, &mut Vi
 
 /// The middle of the first placed piece of `kind`.
 fn middle(page: &Entity<Page>, cx: &mut VisualTestContext, kind: PieceKind) -> (f32, f32) {
-    let piece = page.read_with(cx, |page, _| page.placed().iter().find(|piece| piece.piece == kind).cloned());
-    piece.unwrap_or_else(|| panic!("no {kind:?} is placed")).rect.center()
+    let is = |piece: &&sticker_kit::Placed| piece.piece == kind;
+    let piece = page.read_with(cx, |page, _| page.placed().iter().find(is).map(|piece| page.shown_at(piece)));
+    piece.unwrap_or_else(|| panic!("no {kind:?} is placed")).center()
 }
 
 /// A click on the piece of `kind`.

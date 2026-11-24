@@ -1,6 +1,6 @@
 //! Invented scenes for the examples and the tests.
 
-use crate::scene::{Character, LegendItem, Mark, Mood, Note, Scene, State};
+use crate::scene::{Character, Mood, Note, Scene, State};
 
 fn small(id: &str, label: &str, hue: u8, stars: u8, state: State) -> Character {
     Character { id: id.into(), label: label.into(), hue, stars, state, mood: Mood::Happy, says: String::new() }
@@ -53,12 +53,6 @@ impl Scene {
                     whole: false,
                 },
             ],
-            legend: vec![
-                legend(Mark::Star, "finished"),
-                legend(Mark::Busy, "working on it"),
-                legend(Mark::NeedsYou, "needs you"),
-                legend(Mark::Dimmed, "set aside"),
-            ],
             footer: "Sample content, made up for the kit.".into(),
         }
     }
@@ -76,8 +70,4 @@ impl Scene {
             .collect();
         Scene { date_label: "crowd".into(), title: format!("{count} at once"), characters, ..Scene::default() }
     }
-}
-
-fn legend(mark: Mark, text: &str) -> LegendItem {
-    LegendItem { mark, text: text.into() }
 }

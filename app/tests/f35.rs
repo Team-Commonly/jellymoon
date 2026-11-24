@@ -179,13 +179,10 @@ fn the_option_the_page_draws_is_the_ruling_s_statement_character_for_character()
         let placed = shown(&world, &["--size", size]);
         let drawn = options(&placed, "clash-1", between);
         assert_eq!(drawn.len(), 2, "{at}: the clash is drawn");
-        if (between, size) == ("", "960x640") {
-            // Wide characters at the smallest window need the room: every line of both options says it is drawn
-            // at the kit's 0.85 step of an option's 11 pixels, in the sticker theme.
-            let runs = placed.iter().filter(|piece| piece.kind() == "option").flat_map(Piece::runs);
-            let sizes: Vec<f64> = runs.map(|run| run["size"].as_f64().unwrap()).collect();
-            assert_eq!(sizes, vec![9.35; 9], "{at}");
-        }
+        // No option is written smaller for room: every line is at an option's own size, 11 pixels at the least.
+        let runs = placed.iter().filter(|piece| piece.kind() == "option").flat_map(Piece::runs);
+        let sizes: Vec<f64> = runs.map(|run| run["size"].as_f64().unwrap()).collect();
+        assert!(sizes.iter().all(|size| *size >= 11.0 && *size == sizes[0]), "{at}: {sizes:?}");
         let ruling = jellymoon_core::settle_kept(&world.home, DAY, 1, 2).unwrap().ruling.unwrap();
         assert_eq!(drawn, [format!("“{}”", ruling.over), format!("“{}”", ruling.stands)], "{at}");
         assert_eq!(ruling.stands.chars().count(), 200, "a ruling carries 200 characters");
@@ -194,10 +191,10 @@ fn the_option_the_page_draws_is_the_ruling_s_statement_character_for_character()
     }
 }
 
-// Two clashes too long to be drawn together are never cut to fit: the one not chosen on yet is drawn whole and the
-// other is counted, so each can be tapped in its turn. When not even one fits beside the other notes, none is drawn.
+// Two long clashes are both drawn whole, one under the other, and the one not chosen on yet comes first. The page
+// is one column: neither is cut, written smaller or left out and counted for the other.
 #[test]
-fn a_clash_that_does_not_fit_is_counted_and_the_open_one_comes_first() {
+fn two_long_clashes_are_both_drawn_whole_and_the_open_one_comes_first() {
     let long = |word: &str| format!("{word} ").repeat(200).chars().take(200).collect::<String>();
     let two = |world: &World, [a, b, c, d]: [String; 4]| {
         rewrite(world, |page| {
@@ -208,23 +205,27 @@ fn a_clash_that_does_not_fit_is_counted_and_the_open_one_comes_first() {
         });
     };
     let whole = |word: &str| format!("“{}”", long(word).trim_end());
+    let top = |placed: &[Piece], id: &str| {
+        placed.iter().find(|piece| piece.kind() == "note" && piece.id() == id).unwrap().rect()[1]
+    };
     let world = open_clash();
     two(&world, ["retry", "never", "friday", "ready"].map(long));
     let placed = shown(&world, &["--size", "960x640"]);
     assert_eq!(options(&placed, "clash-1", " "), [whole("retry"), whole("never")]);
-    assert_eq!(options(&placed, "clash-2", " "), [""; 0], "not drawn in part");
-    assert!(notes(&placed).iter().any(|note| note.starts_with("+1 more of")), "{:?}", notes(&placed));
+    assert_eq!(options(&placed, "clash-2", " "), [whole("friday"), whole("ready")], "and the second, whole");
+    assert!(top(&placed, "clash-1") < top(&placed, "clash-2"), "in the page's order");
+    assert!(notes(&placed).iter().all(|note| !note.contains(" more of ")), "{:?}", notes(&placed));
 
     jellymoon_core::settle_kept(&world.home, DAY, 1, 2).unwrap();
     let placed = shown(&world, &["--size", "960x640"]);
-    assert_eq!(options(&placed, "clash-2", " "), [whole("friday"), whole("ready")], "the open clash is drawn now");
-    assert_eq!(options(&placed, "clash-1", " "), [""; 0]);
+    assert_eq!(options(&placed, "clash-2", " "), [whole("friday"), whole("ready")]);
+    assert!(top(&placed, "clash-2") < top(&placed, "clash-1"), "the open clash comes first now");
 
-    // Four statements of 200 of the widest characters: neither clash fits beside the page's other notes.
+    // Four statements of 200 of the widest characters: the open clash is still drawn to its last character.
     two(&world, ["请", "问", "山", "水"].map(|sign| sign.repeat(200)));
     let placed = shown(&world, &[]);
-    assert!(!placed.iter().any(|piece| piece.kind() == "option" && piece.id().starts_with("clash-")));
-    assert!(notes(&placed).iter().any(|note| note.starts_with("+2 more of")), "{:?}", notes(&placed));
+    assert_eq!(options(&placed, "clash-2", ""), ["山", "水"].map(|sign| format!("“{}”", sign.repeat(200))));
+    assert!(notes(&placed).iter().all(|note| !note.contains(" more of ")), "{:?}", notes(&placed));
 }
 
 #[test]

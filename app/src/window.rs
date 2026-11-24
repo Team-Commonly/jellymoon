@@ -31,6 +31,8 @@ use gpui_platform::application;
 use sticker_kit::draw::{EntryMade, Page, Tap, load_fonts};
 use sticker_kit::{Scene, Theme, Viewport};
 
+use crate::column::column;
+
 use crate::jellyfish::Room;
 use crate::shell::{Asked, Opened, wire};
 use crate::showing::{Entered, Showing, entry_line, other_theme, switches_theme, tap_line};
@@ -98,7 +100,7 @@ pub(crate) async fn reads(shown: Showing, later: Option<Later>, page: WeakEntity
         let Some(scene) = shown.read(&next) else { return };
         let _ = page.update(cx, |page, cx| {
             page.set_entry(entry, cx);
-            page.set_scene(scene, cx);
+            page.set_scene(column(&scene), cx);
         });
         cx.update(|cx| choose_waiting(&shown, &page, cx));
         later = next.later;
@@ -114,7 +116,7 @@ pub(crate) async fn looks(shown: Showing, page: WeakEntity<Page>, cx: &mut gpui:
         let Some(look) = shown.look() else { return };
         let Some(seen) = cx.background_executor().spawn(async move { look() }).await else { continue };
         let Some(scene) = shown.seen(seen) else { continue };
-        if page.update(cx, |page, cx| page.set_scene(scene, cx)).is_err() {
+        if page.update(cx, |page, cx| page.set_scene(column(&scene), cx)).is_err() {
             return;
         }
     }
@@ -143,7 +145,7 @@ fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut A
     if let Some(scene) = at_once.flatten() {
         let now = page.clone();
         cx.defer(move |cx| {
-            let _ = now.update(cx, |page, cx| page.set_scene(scene, cx));
+            let _ = now.update(cx, |page, cx| page.set_scene(column(&scene), cx));
         });
     }
     let shown = shown.clone();
@@ -158,7 +160,7 @@ fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut A
         let Some(asking) = asking else { return };
         let said = cx.background_executor().spawn(async move { asking() }).await;
         let Some(scene) = shown.asked(said) else { return };
-        let _ = page.update(cx, |page, cx| page.set_scene(scene, cx));
+        let _ = page.update(cx, |page, cx| page.set_scene(column(&scene), cx));
     })
     .detach();
 }
@@ -179,7 +181,7 @@ fn answer_entry(page: &WeakEntity<Page>, field: Option<&str>, kept: bool, scene:
         (None, None) => page.update(cx, |page, cx| page.answer_entry_closed(kept, cx)),
     }
     if let Some(scene) = scene {
-        page.update(cx, |page, cx| page.set_scene(scene, cx));
+        page.update(cx, |page, cx| page.set_scene(column(&scene), cx));
     }
 }
 
@@ -221,7 +223,7 @@ fn listing(work: Option<Listing>, named: bool, shown: Showing, page: WeakEntity<
             shown.wait_for(name);
             view.update(cx, |page, cx| {
                 page.set_entry(entry, cx);
-                page.set_scene(scene, cx);
+                page.set_scene(column(&scene), cx);
             });
             choose_waiting(&shown, &page, cx);
         });
@@ -258,7 +260,7 @@ fn poked(id: &str, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     cx.spawn(async move |cx| {
         let Some(seen) = cx.background_executor().spawn(async move { look() }).await else { return };
         let Some(scene) = shown.seen(seen) else { return };
-        let _ = page.update(cx, |page, cx| page.set_scene(scene, cx));
+        let _ = page.update(cx, |page, cx| page.set_scene(column(&scene), cx));
     })
     .detach();
 }
@@ -270,13 +272,13 @@ fn chose(note: &str, index: usize, shown: &Showing, page: WeakEntity<Page>, cx: 
     // The view is in the middle of handling the tap: it takes the new scene once that is done.
     let now = page.clone();
     cx.defer(move |cx| {
-        let _ = now.update(cx, |page, cx| page.set_scene(after, cx));
+        let _ = now.update(cx, |page, cx| page.set_scene(column(&after), cx));
     });
     let (Some(left), shown) = (left, shown.clone()) else { return };
     cx.spawn(async move |cx| {
         let ended = cx.background_executor().spawn(async move { left.run() }).await;
         let Some(scene) = shown.ended(ended) else { return };
-        let _ = page.update(cx, |page, cx| page.set_scene(scene, cx));
+        let _ = page.update(cx, |page, cx| page.set_scene(column(&scene), cx));
     })
     .detach();
 }
@@ -302,7 +304,7 @@ pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> 
                     let (scene, now) = (on_show.unready(id), page.clone());
                     return cx.defer(move |cx| {
                         if let Some(scene) = scene {
-                            let _ = now.update(cx, |page, cx| page.set_scene(scene, cx));
+                            let _ = now.update(cx, |page, cx| page.set_scene(column(&scene), cx));
                         }
                     });
                 }
@@ -321,7 +323,7 @@ pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> 
             given(paths, &dropped, dropped_on.clone(), cx);
         };
         // The entry comes with the first answer of `reads`.
-        Page::new(scene, theme).on_tap(tapped).on_entry(made).on_paths(paths)
+        Page::new(column(&scene), theme).on_tap(tapped).on_entry(made).on_paths(paths)
     })
 }
 

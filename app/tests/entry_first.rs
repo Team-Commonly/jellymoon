@@ -1,7 +1,7 @@
 //! The entry is the page's main thing: what a person who has never seen Jellymoon finds where they start. The
 //! field is wide and tall, with `Start` beside it, and nothing covers it; with no project on offer the page says
 //! to choose a folder first, or to name a new project, and words entered there are a name and never a wish; the
-//! hint says what the chips are; a page with nothing read and no wish has no legend and no footer. Proved at
+//! hint says what the chips are; a page with nothing read and no wish has no footer. Proved at
 //! `jellymoon-app layout` and through the made-up window of F42's tests (`support/wisher.rs`), and on the Mac
 //! in the page's window on GPUI's test platform (`entry_first/window.rs`). No window is opened on a screen.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -35,7 +35,6 @@ const HINT_TAB: &str = "What do you want done? Choose its project below.";
 const FOLDER: &str = "choose the folder you want to work in";
 const NAME: &str = "type a name for a new project";
 const UNREADY: &str = "Nothing to start yet.";
-const MARKS: [&str; 5] = ["★ finished", "working on it", "needs you", "let go", "tap a jelly to open its wish"];
 
 fn of<'a>(placed: &'a [Piece], kind: &str) -> Vec<&'a Piece> {
     placed.iter().filter(|piece| piece.kind() == kind).collect()
@@ -64,7 +63,8 @@ fn overlaps(a: [f64; 4], b: [f64; 4]) -> bool {
 }
 
 /// The field is wider than [`SHARE`] of the page and at least [`TALL`] high, `Start` stands beside it on its
-/// row, and no other piece of the page covers either.
+/// row, in the band at the window's bottom, and no other piece of that band covers either. The column's pieces
+/// are in the column's own places, which the view shows over the band only (`one_column.rs`).
 fn the_field_comes_first(placed: &[Piece], size: &str) {
     let width: f64 = size.split('x').next().unwrap().parse().unwrap();
     let k = width / 1440.0;
@@ -76,7 +76,9 @@ fn the_field_comes_first(placed: &[Piece], size: &str) {
     let go = go.rect();
     assert!(field[0] + field[2] < go[0], "{size}: Start is after the field: {field:?} {go:?}");
     assert!((field[1] - go[1]).abs() < 0.01 && (field[3] - go[3]).abs() < 0.01, "{size}: on its row: {go:?}");
-    for piece in placed.iter().filter(|piece| !["paper", "entry", "go"].contains(&piece.kind())) {
+    let height: f64 = size.split('x').nth(1).unwrap().parse().unwrap();
+    assert!(field[1] > 0.8 * height && field[1] + field[3] < height, "{size}: at the window's bottom: {field:?}");
+    for piece in placed.iter().filter(|piece| ["chip", "more", "action"].contains(&piece.kind())) {
         for mine in [field, go] {
             assert!(!overlaps(mine, piece.rect()), "{size}: {piece:?} covers {mine:?}");
         }
@@ -98,8 +100,8 @@ fn with_no_project_the_page_says_to_choose_a_folder_first_and_the_field_is_the_m
             let hint = NEW_HINT.to_lowercase();
             assert!(hint.find("folder") < hint.find("name") && said.find("folder") < said.find("name"));
             the_field_comes_first(&placed, size);
-            // Nothing read and nothing made: no legend and no line about a reading.
-            assert!(of(&placed, "legend").is_empty() && of(&placed, "footer").is_empty(), "logs {logs} at {size}");
+            // Nothing read and nothing made: no line about a reading.
+            assert!(of(&placed, "footer").is_empty(), "logs {logs} at {size}");
         }
         assert!(!called(&w.day), "logs {logs}: a reading call was made");
     }
@@ -167,20 +169,19 @@ fn nothing_read() -> serde_json::Value {
 }
 
 #[test]
-fn projects_on_offer_with_nothing_read_and_no_wish_have_no_legend_and_no_footer() {
+fn projects_on_offer_with_nothing_read_and_no_wish_have_no_footer() {
     let placed = pieces(&nothing_read(), &[]);
-    assert!(of(&placed, "legend").is_empty() && of(&placed, "footer").is_empty(), "{placed:?}");
+    assert!(of(&placed, "footer").is_empty(), "{placed:?}");
 }
 
 #[test]
-fn a_made_wish_with_no_turn_read_keeps_the_legend_and_says_nothing_of_a_reading() {
+fn a_made_wish_with_no_turn_read_says_nothing_of_a_reading() {
     let w = first_run(true);
     add(&w, "alpha");
     w.jellymoon(&["wish", "--date", DAY, "--say", "tidy the uploader", "--project", "alpha"]);
     let placed = w.placed();
     // Every wish on the page is the person's own, and nothing was read: a footer would have nothing to say.
     assert_eq!(words(&placed, "footer"), Vec::<String>::new());
-    assert_eq!(words(&placed, "legend"), MARKS);
 }
 
 #[test]

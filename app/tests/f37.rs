@@ -14,9 +14,17 @@ use support::day::*;
 
 const MADE: &str = "ship the changelog";
 
-/// The labels drawn, in name order: where each stands on the page is the kit's layout.
+/// What `layout` placed of what the person typed for made wishes, in the column's order: each a bubble of the
+/// words, whole, with the id `typed-<wish>`.
+fn typed(placed: &[support::Piece]) -> Vec<String> {
+    let typed = placed.iter().filter(|piece| piece.kind() == "quote" && piece.id().starts_with("typed-"));
+    typed.map(|piece| piece.said().replace('\u{a0}', " ")).collect()
+}
+
+/// The labels drawn and the made wishes' words, in name order: where each stands on the page is the kit's layout.
 fn drawn(world: &World, args: &[&str]) -> Vec<String> {
-    let mut labels = labels(&shown(world, args));
+    let placed = shown(world, args);
+    let mut labels = [labels(&placed), typed(&placed)].concat();
     labels.sort();
     labels
 }
@@ -69,7 +77,7 @@ fn a_made_wish_is_drawn_working_before_the_day_is_read_and_on_a_day_with_no_logs
 
     let nowhere = world.dir.path().join("nowhere");
     let placed = shown(&world, &["--logs", nowhere.to_str().unwrap()]);
-    assert_eq!(labels(&placed), [MADE]);
+    assert_eq!((labels(&placed), typed(&placed)), (Vec::new(), vec![MADE.to_string()]), "its words, in its bubble");
     // No logs and a made wish: the day has its page all the same (F63), and is not said to be unreadable.
     assert!(notes(&placed).iter().all(|note| !note.contains("could not be read")), "{:?}", notes(&placed));
     assert!(!called(&world));
@@ -117,6 +125,7 @@ fn on_a_page_with_a_clash_and_no_wish_read_a_made_wish_takes_the_empty_note_away
         let title = |note: &Note| match note {
             Note::Plain { title, .. } | Note::Choice { title, .. } | Note::Whole { title, .. } => title.clone(),
             Note::List { title, .. } | Note::Text { title, .. } | Note::Told { title, .. } => title.clone(),
+            Note::Said { text, .. } => text.clone(),
         };
         scene.notes.iter().map(title).collect()
     };
@@ -135,77 +144,48 @@ fn on_a_page_with_a_clash_and_no_wish_read_a_made_wish_takes_the_empty_note_away
     }
 }
 
-/// The made wishes the note draws, in order, and how many it counts in `+N more`. Every line of the note belongs to
-/// a wish, character for character, and lies inside the note with its mark.
-fn in_note(placed: &[support::Piece], made: &[String], at: &str) -> (Vec<String>, usize) {
-    let text = |run: &serde_json::Value| run["text"].as_str().unwrap().to_string();
-    let note = placed.iter().find(|piece| piece.kind() == "note" && piece.said().starts_with("wished here today"));
-    let note = note.unwrap_or_else(|| panic!("{at}: no note of made wishes in {:?}", notes(placed)));
-    let [left, top, width, height] = note.rect();
-    for run in note.runs() {
-        let [x, y, w, h] = support::rect(run);
-        let inside = x >= left && x + w <= left + width && y >= top && y + h <= top + height;
-        assert!(inside, "{at}: {:?} is outside the note", text(run));
-    }
-    let lines: Vec<String> = note.runs().iter().filter(|run| run["role"] == "row_main").map(text).collect();
-    let (mut next, mut drawn) = (0, Vec::new());
-    for said in made {
-        let (mut rest, mut used) = (said.as_str(), next);
-        while let Some(after) = lines.get(used).and_then(|line| rest.trim_start().strip_prefix(line.as_str())) {
-            (rest, used) = (after, used + 1);
-            if rest.is_empty() {
-                break;
-            }
-        }
-        if rest.is_empty() {
-            next = used;
-            drawn.push(said.clone());
-        }
-    }
-    assert_eq!(next, lines.len(), "{at}: every line is a made wish's own words: {lines:?}");
-    let marks = placed.iter().filter(|piece| piece.kind() == "mark" && piece.id() == note.id()).count();
-    assert_eq!(marks, drawn.len(), "{at}: one mark a wish drawn");
-    let more = note.runs().iter().find(|run| run["role"] == "row_sub").map(text);
-    let counted = more.map_or(0, |more| more.trim_start_matches('+').trim_end_matches(" more").parse().unwrap());
-    (drawn, counted)
-}
-
-// A made wish has no title but the person's words, so the page shows them: whole, or counted, never cut.
+// A made wish has no title but the person's words, so the page shows them: each whole, in a bubble of its own, in
+// the order they were made. However many there are, none is counted or cut, and none moves aside, shrinks or
+// rewrites a note a person rules on: those stand over them in the column.
 #[test]
-fn every_made_wish_is_drawn_whole_in_its_note_or_counted_there_at_both_sizes_in_both_themes() {
+fn every_made_wish_is_drawn_whole_in_a_bubble_of_its_own_at_both_sizes_in_both_themes() {
     let world = world();
     let words = "write the changelog for the release and name every change a person would see ";
     let long: String = words.repeat(3).chars().take(199).chain(['x']).collect();
-    let typed = [long.as_str(), "ship it", "a third", "a fourth", "a fifth", "a sixth", "a seventh", "the eighth"];
+    let said = [long.as_str(), "ship it", "a third", "a fourth", "a fifth", "a sixth", "a seventh", "the eighth"];
     let cases = [("sticker", "960x640"), ("sticker", "1440x900"), ("plain", "960x640"), ("plain", "1440x900")];
-    // Every piece of the clash's note and of the delivery note: its place, its size and its words.
+    // Every piece of the clash's note and of the delivery note: its place across, its size and its words. Its
+    // place down the column is under the footer, which says one line more once a wish is made.
     let ruled_on = |placed: &[support::Piece]| -> Vec<String> {
         let told = placed.iter().find(|piece| piece.said().starts_with("Your sessions are not told yet."));
         let ids = ["clash-1", told.expect("the delivery note").id()];
-        placed.iter().filter(|piece| ids.contains(&piece.id())).map(|piece| piece.0.to_string()).collect()
+        let across = |piece: &support::Piece| {
+            let [x, _, w, h] = piece.rect();
+            let sizes: Vec<_> = piece.runs().iter().map(|run| run["size"].clone()).collect();
+            format!("{} {} {x} {w} {h} {} {sizes:?}", piece.kind(), piece.id(), piece.said())
+        };
+        placed.iter().filter(|piece| ids.contains(&piece.id())).map(across).collect()
     };
     let draw = |theme: &str, size: &str| shown(&world, &["--theme", theme, "--size", size]);
     let before = cases.map(|(theme, size)| ruled_on(&draw(theme, size)));
     assert!(before.iter().all(|pieces| pieces.len() == 6), "two notes, two tapes, two options: {before:?}");
     let mut made = Vec::new();
-    for (count, typed) in typed.iter().enumerate() {
-        let said = jellymoon_core::wish(&world.home, Some(DAY), typed, "alpha").unwrap().wish.said;
-        assert_eq!(said, *typed);
-        made.push(said);
+    for (count, said) in said.iter().enumerate() {
+        let kept = jellymoon_core::wish(&world.home, Some(DAY), said, "alpha").unwrap().wish.said;
+        assert_eq!(kept, *said);
+        made.push(kept);
         if ![1, 2, 8].contains(&(count + 1)) {
             continue;
         }
         for ((theme, size), before) in cases.iter().zip(&before) {
             let at = format!("{} made, {theme} at {size}", made.len());
             let placed = draw(theme, size);
-            assert_eq!(ruled_on(&placed), *before, "{at}: a made wish moves and shrinks nothing a person rules on");
-            let (drawn, counted) = in_note(&placed, &made, &at);
-            assert_eq!(drawn.len() + counted, made.len(), "{at}: drawn {drawn:?}, and {counted} counted");
-            // Beside the list, the delivery note and the clash, the sticker theme has room for the count alone. The
-            // plain theme draws one or two whole, and of eight passes over the long one for the short ones after it.
-            let few = made.len() <= 2;
-            let fits = if few { drawn == made } else { !drawn.is_empty() && !drawn.contains(&made[0]) };
-            assert!(if *theme == "plain" { fits } else { drawn.is_empty() }, "{at}: {drawn:?} and {counted}");
+            assert_eq!(ruled_on(&placed), *before, "{at}: a made wish moves aside and shrinks nothing ruled on");
+            assert_eq!(typed(&placed), made, "{at}: every made wish, whole and in order");
+            assert!(placed.iter().all(|piece| !piece.said().contains(" more of ")), "{at}: something is counted");
+            let tops: Vec<f64> =
+                placed.iter().filter(|piece| piece.id().starts_with("typed-")).map(|p| p.rect()[1]).collect();
+            assert!(tops.windows(2).all(|pair| pair[0] < pair[1]), "{at}: the older over the newer: {tops:?}");
             assert!(notes(&placed).iter().any(|note| note.starts_with("you changed your mind")), "{at}: the clash");
         }
     }

@@ -3,7 +3,11 @@
 //! Three layers, bottom to top: flat shapes (paper, tape, notes, tags) in
 //! one canvas, sticker art as images, then text. Text is always level;
 //! at this GPUI version only drawn paths can be turned.
+//!
+//! The page is drawn twice over: the column, moved up by how far the view has scrolled it and shown only over the
+//! entry's band, and then the entry in its band, which never moves (`column.rs`).
 
+mod column;
 mod edge;
 mod entry;
 mod field;
@@ -25,21 +29,22 @@ use gpui::{
 };
 
 use crate::geom::Viewport;
-use crate::layout::{PieceKind, Placed, TextRun, layout, layout_entry, page_scale};
-use crate::scene::Scene;
-use crate::text::Role;
+use crate::layout::{PieceKind, Placed, entry_top, layout, layout_entry, page_scale, scroll_most};
+use crate::scene::{Scene, speaker};
+use crate::scroll::Scroll;
 use crate::theme::Theme;
 
+use column::text_element;
 pub use edge::{EdgePainted, EdgePart, EdgeView, edge_ink};
 pub use entry::EntryMade;
 use entry::EntryView;
 pub use field::MAX_KEPT_FIELDS;
+use measure::hsla;
 pub use measure::{GlyphMeasure, load_fonts};
-use measure::{family, hsla, weight};
 use paint::Shape;
 use shapes::Brush;
 use sprites::Sprites;
-use stage::{Pose, Stage, is_art};
+use stage::{Stage, is_art};
 
 /// What was tapped.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,6 +100,9 @@ pub struct Page {
     apart: Vec<EntryView>,
     placed: Vec<Placed>,
     viewport: Viewport,
+    /// How far the column is moved up the window, and how far it can be.
+    scroll: Scroll,
+    most: f32,
     stale: Stale,
     stage: Stage,
     sprites: Sprites,
@@ -121,6 +129,8 @@ impl Page {
             apart,
             placed: Vec::new(),
             viewport: Viewport::default(),
+            scroll: Scroll::default(),
+            most: 0.0,
             stale: Stale::Spring,
             stage: Stage::default(),
             sprites: Sprites::default(),
@@ -185,7 +195,7 @@ impl Page {
         &self.theme
     }
 
-    /// The layout the last frame painted.
+    /// The layout the last frame painted, in the column's own places: not moved by the scroll.
     pub fn placed(&self) -> &[Placed] {
         &self.placed
     }
@@ -209,6 +219,8 @@ impl Page {
         }
         let animate = self.stale == Stale::Spring && !self.placed.is_empty();
         self.stage.retarget(&self.placed, &placed, &self.scene, animate);
+        self.most = scroll_most(&placed, &self.theme, viewport);
+        self.scroll.fit(self.most);
         self.placed = placed;
         self.viewport = viewport;
         self.stale = Stale::Fresh;
@@ -233,6 +245,8 @@ impl Page {
         let tap = match piece.piece {
             PieceKind::Option => Tap::Option { note_id: piece.id.clone(), index: piece.index },
             PieceKind::Action => Tap::Action { id: piece.id.clone() },
+            // A tap on what the person typed is a tap on the character it is of.
+            PieceKind::Quote => Tap::Character { id: speaker(&piece.id).to_string() },
             _ => Tap::Character { id: piece.id.clone() },
         };
         if let Some(handler) = &self.on_tap {
@@ -240,35 +254,9 @@ impl Page {
         }
     }
 
-    fn tap_target(&self, index: usize, piece: &Placed, pose: Pose, cx: &mut Context<Self>) -> AnyElement {
-        let rect = piece.rect.moved(pose.dx, pose.dy);
-        div()
-            .id(("tap", index))
-            .absolute()
-            .left(px(rect.x))
-            .top(px(rect.y))
-            .w(px(rect.w))
-            .h(px(rect.h))
-            .cursor_pointer()
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |page, _, _, cx| {
-                    page.pressed = Some(index);
-                    cx.notify();
-                }),
-            )
-            .on_click(cx.listener(move |page, _, window, cx| page.tap(index, window, cx)))
-            .into_any_element()
-    }
-    /// The frame's flat shapes, and its elements in paint order: sticker
-    /// art, then text, then the invisible tap targets.
-    fn layers(
-        &mut self,
-        t: f32,
-        still: bool,
-        viewport: Viewport,
-        cx: &mut Context<Self>,
-    ) -> (Vec<Shape>, Vec<AnyElement>) {
+    /// The frame's flat shapes and its elements in paint order (sticker art, then text, then the invisible tap
+    /// targets), of the column first and of the entry's band second.
+    fn layers(&mut self, t: f32, still: bool, viewport: Viewport, cx: &mut Context<Self>) -> [Layer; 2] {
         let motion = self.theme.motion;
         let k = page_scale(&self.theme, viewport);
         let rim = self.theme.metrics.rim * k;
@@ -280,17 +268,19 @@ impl Page {
         let brush = Brush { theme: &self.theme, scene: &self.scene, k, chosen, lit, keyed, loud, ready };
         let mut order: Vec<usize> = (0..self.placed.len()).collect();
         order.sort_by_key(|&i| self.placed[i].z);
-        let mut flat = Vec::new();
-        let (mut art, mut text, mut taps) = (Vec::new(), Vec::new(), Vec::new());
+        let mut flat = [Vec::new(), Vec::new()];
+        let mut parts: [[Vec<AnyElement>; 3]; 2] = Default::default();
         for i in order {
             let piece = &self.placed[i];
-            let pose = self.stage.pose(i, t, &motion, still);
-            brush.add(piece, pose, &mut flat);
+            let at = usize::from(piece.piece.in_band());
+            let mut pose = self.stage.pose(i, t, &motion, still);
+            pose.dy -= self.lift(piece);
+            brush.add(piece, pose, &mut flat[at]);
             if is_art(piece.piece) {
                 let (image, rect) = self.sprites.get(piece, &self.scene, &self.theme, rim, cx);
                 let rect = rect.moved(pose.dx, pose.dy).scaled(pose.scale);
                 let sticker = img(image).absolute().left(px(rect.x)).top(px(rect.y));
-                art.push(sticker.w(px(rect.w)).h(px(rect.h)).into_any_element());
+                parts[at][0].push(sticker.w(px(rect.w)).h(px(rect.h)).into_any_element());
             }
             // The hint gives way to words: not to spaces, or to other text nobody sees.
             let hidden = match piece.piece {
@@ -299,37 +289,29 @@ impl Page {
                 _ => false,
             };
             for (n, run) in piece.text.iter().enumerate().filter(|(_, r)| !r.text.is_empty() && !hidden) {
-                text.push(text_element(&brush, piece, n, run, pose));
+                parts[at][1].push(text_element(&brush, piece, n, run, pose));
             }
-            if matches!(piece.piece, PieceKind::Hero | PieceKind::Character | PieceKind::Option | PieceKind::Action) {
-                taps.push(self.tap_target(i, piece, pose, cx));
+            if self.taps(piece) {
+                parts[at][2].push(self.tap_target(i, piece, pose, cx));
             }
         }
-        art.append(&mut text);
-        art.append(&mut taps);
-        (flat, art)
+        let layer = |(flat, parts): (Vec<Shape>, [Vec<AnyElement>; 3])| -> Layer {
+            (flat, parts.into_iter().flatten().collect())
+        };
+        let mut layers = flat.into_iter().zip(parts).map(layer);
+        [layers.next().unwrap_or_default(), layers.next().unwrap_or_default()]
     }
 }
 
-fn text_element(brush: &Brush, piece: &Placed, n: usize, run: &TextRun, pose: Pose) -> AnyElement {
-    let (theme, color) = (brush.theme, brush.ink(piece, run.role));
-    let selector = format!("{:?}:{}:{}:{n}", piece.piece, piece.id, piece.index);
-    let mut element = div()
-        .debug_selector(move || selector)
-        .absolute()
-        .left(px(run.rect.x + pose.dx))
-        .top(px(run.rect.y + pose.dy))
-        .h(px(run.rect.h))
-        .line_height(px(run.rect.h))
-        .whitespace_nowrap()
-        .font_family(family(theme, run.role))
-        .font_weight(weight(theme, run.role))
-        .text_size(px(run.size))
-        .text_color(hsla(color));
-    if matches!(run.role, Role::LabelStruck | Role::OptionStruck) {
-        element = element.line_through();
-    }
-    element.child(run.text.clone()).into_any_element()
+/// The flat shapes of a layer, and its elements over them.
+type Layer = (Vec<Shape>, Vec<AnyElement>);
+
+/// The column's layer, `shown` high from the window's top: the column is shown over the entry's band only, and
+/// what is moved under that line is not drawn and takes no tap.
+fn column_layer(column: Vec<Shape>, over: Vec<AnyElement>, fields: Vec<AnyElement>, shown: f32) -> gpui::Div {
+    let shapes = canvas(|_, _, _| (), move |bounds, _, window, _| paint::paint(&column, bounds.origin, window));
+    let layer = div().absolute().top_0().left_0().w_full().h(px(shown)).overflow_hidden();
+    layer.child(shapes.absolute().size_full()).children(over).children(fields)
 }
 
 impl Render for Page {
@@ -348,8 +330,9 @@ impl Render for Page {
             window.request_animation_frame();
         }
 
-        let entry = self.entry_layer(window, cx);
-        let (flat, layers) = self.layers(t, still, viewport, cx);
+        let [fields, entry] = self.entry_layer(window, cx);
+        let [(column, over), (band, top)] = self.layers(t, still, viewport, cx);
+        let shown = entry_top(&self.theme, viewport).max(0.0);
         let dropped_on = cx.weak_entity();
         div()
             .size_full()
@@ -357,6 +340,7 @@ impl Render for Page {
             .overflow_hidden()
             .bg(hsla(self.theme.palette.desk))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::entry_left))
+            .on_scroll(cx.listener(Self::wheeled))
             .on_drag_move(cx.listener(|page, moved: &DragMoveEvent<ExternalPaths>, _, cx| {
                 page.dragged = moved.drag(cx).paths().to_vec();
             }))
@@ -368,11 +352,12 @@ impl Render for Page {
                     }
                 }),
             )
+            .child(column_layer(column, over, fields, shown))
             .child(
                 canvas(
                     |_, _, _| (),
                     move |bounds, _, window, _| {
-                        paint::paint(&flat, bounds.origin, window);
+                        paint::paint(&band, bounds.origin, window);
                         window.on_mouse_event(move |_: &MouseUpEvent, phase, window, cx| {
                             if phase == DispatchPhase::Bubble {
                                 let _ = dropped_on.update(cx, |page, cx| page.dropped(window, cx));
@@ -383,7 +368,7 @@ impl Render for Page {
                 .absolute()
                 .size_full(),
             )
-            .children(layers)
+            .children(top)
             .children(entry)
     }
 }

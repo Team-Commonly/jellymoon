@@ -60,7 +60,6 @@ fn one_character_per_wish_in_page_order_with_its_state_and_stars() {
     assert_eq!(scene.hero.map(|hero| (hero.id, hero.hue)), Some(("me".to_string(), 0)));
     assert_eq!(scene.title, "what I wished for today");
     assert_eq!(scene.date_label, "Tue · Mar 10");
-    assert_eq!(scene.legend.len(), 5);
 }
 
 #[test]
@@ -127,7 +126,7 @@ fn a_page_with_nothing_on_it_says_so() {
     let scene = scene(&empty);
     assert!(matches!(&scene.notes[..], [Note::Plain { title, .. }] if title == "Nothing wished for yet today."));
     assert_eq!(scene.characters, []);
-    assert_eq!((scene.footer.as_str(), scene.legend.len()), ("", 0), "nothing to explain, no reading");
+    assert_eq!(scene.footer, "", "no reading to speak of");
 }
 
 #[test]
@@ -157,11 +156,11 @@ fn the_footer_counts_in_words_that_agree() {
 }
 
 #[test]
-fn a_day_of_made_wishes_with_nothing_read_has_the_legend_and_no_footer() {
+fn a_day_of_made_wishes_with_nothing_read_has_no_footer() {
     let mut own = page(vec![wish("m1", WishState::Working, &[])], vec![]);
     own.data.read = PageRead { turns: 0, projects: Vec::new(), no_logs: false };
     let shown = ruled(&own, &[], 1);
-    assert_eq!((shown.footer.as_str(), shown.legend.len()), ("", 5));
+    assert_eq!(shown.footer, "");
     own.data.read.no_logs = true;
     let found_none = "No Claude Code session logs were found, so nothing was read. 1 made wish is in your own words.";
     assert_eq!(ruled(&own, &[], 1).footer, found_none);

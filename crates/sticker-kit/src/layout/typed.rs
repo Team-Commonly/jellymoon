@@ -3,11 +3,12 @@
 //! them from the note's own text by their kind, and the view draws each on a ground of its own.
 //!
 //! Quoted words are text and nothing else: cleaned as every text is, in the role for quoted words, and cut to
-//! their room with an ellipsis. Nothing in them is a link or a control, whatever they say. The field and its
-//! offer are the two pieces a person acts on.
+//! their lines with an ellipsis. What a person typed (`Note::Said`) is drawn by the same rules ([`block`]).
+//! Nothing in them is a link or a control, whatever they say. The field and its offer are the two pieces a person
+//! acts on.
 
 use super::notes::Sheet;
-use super::{Ctx, PieceKind, line_height, piece, run};
+use super::{Ctx, PieceKind, Placed, line_height, piece, run};
 use crate::geom::Rect;
 use crate::scene::Field;
 use crate::text::{Role, wrap};
@@ -19,20 +20,30 @@ pub const MAX_QUOTED_LINES: usize = 8;
 /// Someone else's words, under what the sheet holds so far: one `Quote` piece with a run for each line. Nothing
 /// for words that clean to nothing.
 pub(super) fn quoted(cx: &Ctx, sheet: &mut Sheet, id: &str, words: &str) {
+    let at = Rect::new(sheet.left, sheet.cursor, sheet.inner, 0.0);
+    if let Some(block) = block(cx, (id, 0), words, at, MAX_QUOTED_LINES) {
+        sheet.cursor = block.rect.bottom() + cx.px(10.0);
+        sheet.options.push(block);
+    }
+}
+
+/// Words that are not the scene's own, on a ground of their own from `at`'s top left and as wide as `at`: a
+/// `Quote` piece of `id`, cleaned as every text is, in the role for quoted words and no other, a run for each of
+/// at most `most` lines. None for words that clean to nothing.
+pub(super) fn block(cx: &Ctx, (id, index): (&str, usize), words: &str, at: Rect, most: usize) -> Option<Placed> {
     let (role, size) = (Role::Quoted, cx.size(Role::Quoted));
     let (height, pad_x, pad_y) = (line_height(size), cx.px(10.0), cx.px(7.0));
-    let lines = wrap(&cx.clean(words), sheet.inner - 2.0 * pad_x, MAX_QUOTED_LINES, role, size, cx.measure);
+    let lines = wrap(&cx.clean(words), at.w - 2.0 * pad_x, most, role, size, cx.measure);
     if lines.is_empty() {
-        return;
+        return None;
     }
-    let rect = Rect::new(sheet.left, sheet.cursor, sheet.inner, lines.len() as f32 * height + 2.0 * pad_y);
-    let mut block = piece(PieceKind::Quote, id, 0, rect);
+    let rect = Rect::new(at.x, at.y, at.w, lines.len() as f32 * height + 2.0 * pad_y);
+    let mut block = piece(PieceKind::Quote, id, index, rect);
     for (i, (line, width)) in lines.into_iter().enumerate() {
         let mid = rect.y + pad_y + (i as f32 + 0.5) * height;
         block.text.push(run(line, role, rect.x + pad_x, mid, width, size));
     }
-    sheet.options.push(block);
-    sheet.cursor = rect.bottom() + cx.px(10.0);
+    Some(block)
 }
 
 /// The field of a note, under what the sheet holds so far, as wide as the note's text: an `Offer` with the

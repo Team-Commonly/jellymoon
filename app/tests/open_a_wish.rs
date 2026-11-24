@@ -1,4 +1,4 @@
-//! Open a wish: the page says once, in its legend, that a tap on a little one opens its wish; a wish of the reading
+//! Open a wish: a tap on a little one opens its wish. A wish of the reading
 //! opens to what is true of it (the reading's take, never a run's state), where it was typed, that Jellymoon ran
 //! nothing, and how to go on when its project has a chip; and the tap chooses that chip (`open_a_wish/window.rs`,
 //! on the Mac). The taps are carried by the made-up window of F47 (`support/tapper.rs`). Nothing here starts the
@@ -12,12 +12,10 @@ mod window;
 
 use serde_json::json;
 use sticker_kit::{Note, Scene};
+use support::Piece;
 use support::day::{DAY, answer, noon, result, said, write_log};
 use support::wished::{SAID, World, quiet};
-use support::{Piece, clash, page, pieces, wish};
 
-const TAP: &str = "tap a jelly to open its wish";
-const MARKS: [&str; 4] = ["★ finished", "working on it", "needs you", "let go"];
 const RAN: &str = "Jellymoon did not run it.";
 const NEXT: &str = "To go on with it here, type what you want next. It will start in";
 const TYPED: [&str; 4] = ["tidy the uploader", "write the docs", "sort the old notes", "say hello"];
@@ -70,39 +68,6 @@ fn read_note(title: &str, typed: &str, project: &str, chip: bool) -> (String, Ve
     let mut body = vec![format!("“{typed}”"), format!("You typed this in Claude Code{at}. {RAN}")];
     body.extend(chip.then(|| format!("{NEXT} {project}.")));
     (title.to_string(), body)
-}
-
-fn legend(placed: &[Piece]) -> Vec<String> {
-    placed.iter().filter(|piece| piece.kind() == "legend").map(Piece::said).collect()
-}
-
-fn overlap(a: [f64; 4], b: [f64; 4]) -> bool {
-    a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]
-}
-
-#[test]
-fn a_page_with_a_wish_says_once_that_a_jelly_opens_it_and_a_page_with_none_does_not() {
-    let wishes = (1..=3).map(|n| wish(&format!("w{n}"), "a long label for a wish", "done", &["it came true"]));
-    let with = page(wishes.collect(), vec![clash("w1", "w2", "add a retry", "never retry", false)]);
-    for size in ["1440x900", "960x640"] {
-        let placed = pieces(&with, &["--size", size]);
-        assert_eq!(legend(&placed), [&MARKS[..], &[TAP]].concat(), "{size}");
-        let said: Vec<String> = placed.iter().map(Piece::said).filter(|said| said.contains("jelly")).collect();
-        assert_eq!(said, [TAP], "{size}: said once");
-        let tap = placed.iter().find(|piece| piece.said() == TAP).unwrap();
-        let paper = placed.iter().find(|piece| piece.kind() == "paper").unwrap().rect();
-        assert!(tap.rect()[0] + tap.rect()[2] <= paper[0] + paper[2], "{size}: off the page");
-        for note in placed.iter().filter(|piece| ["note", "option"].contains(&piece.kind())) {
-            assert!(!overlap(tap.rect(), note.rect()), "{size}: the line is under {}", note.id());
-        }
-    }
-    let mut read_none = page(vec![], vec![]);
-    read_none["read"] = json!({ "turns": 5, "projects": ["alpha"] });
-    assert_eq!(legend(&pieces(&read_none, &[])), MARKS, "read, and no wish: the marks only");
-    for empty in [read_none, page(vec![], vec![])] {
-        let placed = pieces(&empty, &[]);
-        assert!(placed.iter().all(|piece| !piece.said().contains("jelly")), "{placed:?}");
-    }
 }
 
 #[test]

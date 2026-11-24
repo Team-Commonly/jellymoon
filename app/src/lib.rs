@@ -63,6 +63,7 @@ pub fn echoed(given: &str) -> String {
 }
 
 pub mod answering;
+pub mod column;
 pub mod jelly;
 #[cfg(feature = "window")]
 pub mod jellyfish;

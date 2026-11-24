@@ -14,6 +14,7 @@ use super::field::Which;
 use super::measure::{font_for, hsla};
 use super::{Page, Stale, Tap};
 use crate::entry::{EntryState, MAX_ENTRY_OPTIONS};
+use crate::geom::Rect;
 use crate::layout::{PieceKind, Placed, line_height, page_scale};
 use crate::scene::Entry;
 use crate::text::Role;
@@ -211,10 +212,10 @@ impl Page {
         window.focus(&focus, cx);
     }
 
-    /// The elements of the entry and of each note's field, over everything else: the typed line in the field,
-    /// and what takes the clicks on the field, on its `go`, on each chip and on a field's offer. None for a page
-    /// with neither.
-    pub(super) fn entry_layer(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    /// The elements of each note's field, which move with the column, and of the entry, over everything else:
+    /// the typed line in the field, and what takes the clicks on the field, on its `go`, on each chip and on a
+    /// field's offer. None for a page with neither.
+    pub(super) fn entry_layer(&mut self, window: &mut Window, cx: &mut Context<Self>) -> [Vec<AnyElement>; 2] {
         // The keys are the entry's whenever nothing else on the page holds them, so nothing typed goes nowhere.
         if self.entry.what.is_some() && !self.entry_focused(window) {
             self.focus_view(None, window, cx);
@@ -229,55 +230,57 @@ impl Page {
                 PieceKind::Entry | PieceKind::Chip | PieceKind::Field | PieceKind::Offer | PieceKind::Go
             )
         };
-        self.placed
-            .iter()
-            .filter(typed)
-            .filter_map(|piece| {
-                // A field's pieces are its note's: the entry's are nobody's but the entry's.
-                let which = match piece.piece {
-                    PieceKind::Field | PieceKind::Offer => {
-                        Some(self.fields.iter().position(|view| view.names(&piece.id))?)
-                    }
-                    _ => None,
-                };
-                let (rect, index) = (piece.rect, piece.index);
-                let at = div().absolute().left(px(rect.x)).top(px(rect.y)).w(px(rect.w)).h(px(rect.h));
-                if piece.piece == PieceKind::Go {
-                    let went = cx.listener(|page, _, window, cx| page.entry_go(window, cx));
-                    return Some(at.id("go").cursor_pointer().on_click(went).into_any_element());
+        let (mut fields, mut entry) = (Vec::new(), Vec::new());
+        for piece in self.placed.iter().filter(typed) {
+            let rect = piece.rect.moved(0.0, -self.lift(piece));
+            let into = if piece.piece.in_band() { &mut entry } else { &mut fields };
+            into.extend(self.typed_element(piece, rect, pad, cx));
+        }
+        [fields, entry]
+    }
+
+    /// What takes the clicks and the keys of one piece of the entry or of a note's field, at `rect`.
+    fn typed_element(&self, piece: &Placed, rect: Rect, pad: Pixels, cx: &mut Context<Self>) -> Option<AnyElement> {
+        // A field's pieces are its note's: the entry's are nobody's but the entry's.
+        let which = match piece.piece {
+            PieceKind::Field | PieceKind::Offer => Some(self.fields.iter().position(|view| view.names(&piece.id))?),
+            _ => None,
+        };
+        let index = piece.index;
+        let at = div().absolute().left(px(rect.x)).top(px(rect.y)).w(px(rect.w)).h(px(rect.h));
+        if piece.piece == PieceKind::Go {
+            let went = cx.listener(|page, _, window, cx| page.entry_go(window, cx));
+            return Some(at.id("go").cursor_pointer().on_click(went).into_any_element());
+        }
+        if matches!(piece.piece, PieceKind::Chip | PieceKind::Offer) {
+            let chosen = cx.listener(move |page, _, window, cx| {
+                if which.is_none() {
+                    page.entry.state.choose(index);
                 }
-                if matches!(piece.piece, PieceKind::Chip | PieceKind::Offer) {
-                    let chosen = cx.listener(move |page, _, window, cx| {
-                        if which.is_none() {
-                            page.entry.state.choose(index);
-                        }
-                        page.focus_view(which, window, cx);
-                        cx.notify();
-                    });
-                    let id: ElementId = which.map_or(("chip", index).into(), |field| ("offer", field).into());
-                    return Some(at.id(id).cursor_pointer().on_click(chosen).into_any_element());
-                }
-                let (page, focus) = (cx.entity(), self.view(which).focus.clone()?);
-                let (id, name): (ElementId, String) = match which {
-                    Some(field) => (("field", field).into(), format!("Field:{}", piece.id)),
-                    None => ("entry".into(), "Entry".into()),
-                };
-                let pressed = cx.listener(move |page, event, _, cx| page.entry_pressed(which, event, cx));
-                let field = at.id(id).debug_selector(move || name).track_focus(&focus);
-                let drawn =
-                    move |at, (), window: &mut Window, cx: &mut App| paint(at, (&page, which), &focus, window, cx);
-                let field = field.cursor(CursorStyle::IBeam).overflow_hidden().px(pad);
-                let field = field.on_mouse_down(MouseButton::Left, pressed).on_key_down(cx.listener(Self::entry_key));
-                Some(field.child(canvas(|_, _, _| (), drawn).size_full()).into_any_element())
-            })
-            .collect()
+                page.focus_view(which, window, cx);
+                cx.notify();
+            });
+            let id: ElementId = which.map_or(("chip", index).into(), |field| ("offer", field).into());
+            return Some(at.id(id).cursor_pointer().on_click(chosen).into_any_element());
+        }
+        let (page, focus) = (cx.entity(), self.view(which).focus.clone()?);
+        let (id, name): (ElementId, String) = match which {
+            Some(field) => (("field", field).into(), format!("Field:{}", piece.id)),
+            None => ("entry".into(), "Entry".into()),
+        };
+        let pressed = cx.listener(move |page, event, _, cx| page.entry_pressed(which, event, cx));
+        let field = at.id(id).debug_selector(move || name).track_focus(&focus);
+        let drawn = move |at, (), window: &mut Window, cx: &mut App| paint(at, (&page, which), &focus, window, cx);
+        let field = field.cursor(CursorStyle::IBeam).overflow_hidden().px(pad);
+        let field = field.on_mouse_down(MouseButton::Left, pressed).on_key_down(cx.listener(Self::entry_key));
+        Some(field.child(canvas(|_, _, _| (), drawn).size_full()).into_any_element())
     }
 
     /// A press anywhere off the fields gives the entry the keys: a tap on a note's option or a character too.
     pub(super) fn entry_left(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let (x, y) = (f32::from(event.position.x), f32::from(event.position.y));
         let on = |piece: &Placed| {
-            let r = piece.rect;
+            let r = piece.rect.moved(0.0, -self.lift(piece));
             matches!(
                 piece.piece,
                 PieceKind::Entry | PieceKind::Chip | PieceKind::Field | PieceKind::Offer | PieceKind::Go

@@ -19,7 +19,7 @@
 //! - `poke:<wish id>`: a tap on that wish's character.
 //! - `tap:<note title or id>:<option>`: a tap on that option, only where the page places it.
 //! - `say:<note title or id>:<words>`: Enter in that note's field with those words, only where the page places it.
-//! - `picture:<name>`: `<name>.png` in the folder, the page as it is now, in the sticker theme.
+//! - `picture:<name>`: `<name>.png` in the folder, the page as it is now, in its column's order, in the sticker theme.
 //!
 //! A step that fails says why on one line on stderr, and the walk ends with 1.
 
@@ -32,7 +32,7 @@ use jellymoon_app::showing::{Entered, Showing};
 use jellymoon_app::starting::{Given, Shown, named};
 use jellymoon_app::taps::OnShow;
 use jellymoon_app::today::{Asked, Today};
-use jellymoon_app::{SMALLEST, file_part, lines, one_line, sides};
+use jellymoon_app::{SMALLEST, column::column, file_part, lines, one_line, sides};
 use serde_json::Value;
 use sticker_kit::draw::headless::{Typing, snapshot_typing};
 use sticker_kit::{Entry, Note, Scene, State, Theme, Viewport};
@@ -55,6 +55,7 @@ fn title(note: &Note) -> &str {
         | Note::Text { title, .. }
         | Note::Whole { title, .. }
         | Note::Told { title, .. } => title,
+        Note::Said { text, .. } => text,
     }
 }
 
@@ -223,7 +224,7 @@ impl Walk {
     fn picture(&self, name: &str) -> Result<(), String> {
         let out = self.folder.join(format!("{}.png", file_part(name)));
         let typing = self.entry.clone().map(|entry| Typing { entry, typed: Some((self.typed.clone(), self.chosen)) });
-        snapshot_typing(self.scene(), Theme::sticker(), typing, self.size.w, self.size.h, &out)
+        snapshot_typing(column(&self.scene()), Theme::sticker(), typing, self.size.w, self.size.h, &out)
             .map_err(|error| format!("could not draw {name:?}: {error}"))
     }
 

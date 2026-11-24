@@ -10,7 +10,6 @@ pub struct Scene {
     pub hero: Option<Character>,
     pub characters: Vec<Character>,
     pub notes: Vec<Note>,
-    pub legend: Vec<LegendItem>,
     pub footer: String,
 }
 
@@ -80,8 +79,8 @@ pub enum Note {
         title: String,
         rows: Vec<(String, String)>,
     },
-    /// With `whole`, every option is drawn to its last word, on as many lines as that takes: the note is left out
-    /// and counted when it does not fit, and never drawn with an option cut short.
+    /// With `whole`, every option is drawn to its last word, on as many lines as that takes; without it, an option
+    /// is drawn in three lines at most.
     Choice {
         id: String,
         title: String,
@@ -95,9 +94,9 @@ pub enum Note {
         title: String,
         body: String,
     },
-    /// A text and the choices under it. Each of `body` starts on a line of its own and is wrapped, as many lines
-    /// as the page has room for and at most [`crate::layout::MAX_TEXT_LINES`]; a last line counts the ones of `body`
-    /// that are not drawn to their end. A tap on an option is the note's `id` and the option's place, as a choice's.
+    /// A text and the choices under it. Each of `body` starts on a line of its own and is wrapped, in at most
+    /// [`crate::layout::MAX_TEXT_LINES`] lines; a last line counts the ones of `body` that are not drawn to their
+    /// end. A tap on an option is the note's `id` and the option's place, as a choice's.
     ///
     /// `quoted` is someone else's words: drawn under the body on a ground of their own, in the tone for quoted
     /// words, cut to at most [`crate::layout::MAX_QUOTED_LINES`] lines, and never anything but text. `field` is
@@ -115,7 +114,7 @@ pub enum Note {
         field: Option<Field>,
     },
     /// A list of texts no word of which may be hidden. Each row is drawn after its mark to its last word, on as many
-    /// lines as that takes, or it is left out; a last line, `+N more`, counts the rows left out. No row is cut short.
+    /// lines as that takes; a last line, `+N more`, counts the rows past the twelfth. No row is cut short.
     Whole {
         title: String,
         rows: Vec<(Mark, String)>,
@@ -124,8 +123,7 @@ pub enum Note {
     /// and the other's texts under it, each a `Quote` piece on a ground of its own and never anything but text. A
     /// row is drawn to its last character or left out, and a last line, `+N more`, counts the rows left out. `end`
     /// is the note's own sentences after the rows, each drawn whole, or the note is left out. It has no option
-    /// and no field. It is planned after the note that follows it, in the room that note leaves, so that note is
-    /// drawn as it is without it, lower, and the notes after them give way; it is drawn in its place over that note.
+    /// and no field.
     Told {
         id: String,
         title: String,
@@ -133,6 +131,18 @@ pub enum Note {
         #[serde(default)]
         end: Vec<String>,
     },
+    /// What the person typed: a bubble at the right of the column, a `Quote` piece of this `id` and never anything
+    /// but text. The character whose id is what follows the first `-` of `id` ([`speaker`]) is drawn small at
+    /// the bubble's end, with its state and stars, and a tap on it or on the bubble is a tap on that character.
+    Said {
+        id: String,
+        text: String,
+    },
+}
+
+/// The id of the character a [`Note::Said`] of this id is of: what follows the id's first `-`.
+pub fn speaker(id: &str) -> &str {
+    id.split_once('-').map_or("", |(_, who)| who)
 }
 
 /// One row of a told note: the note's own label, which may be empty, and someone else's texts under it. `marks`
@@ -169,12 +179,6 @@ pub struct Field {
     pub key: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct LegendItem {
-    pub mark: Mark,
-    pub text: String,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Mark {
@@ -182,6 +186,4 @@ pub enum Mark {
     Busy,
     NeedsYou,
     Dimmed,
-    /// No mark: a legend line that says something of every little one.
-    Plain,
 }

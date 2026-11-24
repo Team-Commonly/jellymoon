@@ -50,8 +50,9 @@ fn open(cx: &mut TestAppContext) -> (Entity<Page>, &mut VisualTestContext, Seen<
 }
 
 fn piece(page: &Entity<Page>, cx: &mut VisualTestContext, kind: PieceKind, index: usize) -> Placed {
-    let found =
-        page.read_with(cx, |page, _| page.placed().iter().find(|p| p.piece == kind && p.index == index).cloned());
+    let shown = |page: &Page, piece: &Placed| Placed { rect: page.shown_at(piece), ..piece.clone() };
+    let find = |p: &&Placed| p.piece == kind && p.index == index;
+    let found = page.read_with(cx, |page, _| page.placed().iter().find(find).map(|piece| shown(page, piece)));
     found.expect("the piece is placed")
 }
 

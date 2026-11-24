@@ -5,79 +5,22 @@
 //! opens a window.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "work_shows/runs.rs"]
+mod runs;
 mod support;
 
-use std::{fs, thread};
+use std::fs;
 
-use serde_json::Value;
+use runs::{day, ended, going, wish};
+use serde_json::{Value, json};
 use sticker_kit::{Note, Scene, State};
-use support::day::DAY;
-use support::wished::{SAID, World, quiet, wait_until};
+use support::wished::{SAID, World};
 
 const CHOICES: [&str; 3] = ["Show me", "Keep it", "Toss it"];
 const TOSSED: &str = "The change was thrown away.";
 const KEPT: &str = "The change was kept.";
 /// The looks that show no work after a tap on an option or core's answer to it (`showing.rs`).
 const HOLD: usize = 3;
-
-/// A day nothing was typed on, so no clash is on its page, with `alpha` listed as a person lists it.
-fn day() -> World {
-    let w = quiet();
-    let repo = w.at("work").join("alpha");
-    let added = w.jellymoon(&["project", "add", "--repo", repo.to_str().unwrap(), "--date", DAY]);
-    assert_eq!(added["name"], "alpha", "{added}");
-    fs::create_dir(w.at("harness")).unwrap();
-    w
-}
-
-/// A wish made for `alpha`, as a person types it: its id.
-fn wish(w: &World) -> String {
-    let made = w.jellymoon(&["wish", "--date", DAY, "--say", SAID, "--project", "alpha"]);
-    made["wish"]["id"].as_str().unwrap().to_string()
-}
-
-/// The wish's run, from its start to its end: what it ended as.
-fn run(w: &World, id: &str) -> String {
-    let logs = w.at("logs");
-    let ran = w.jellymoon(&["run", "--wish", id, "--date", DAY, "--logs", logs.to_str().unwrap()]);
-    ran["outcome"].as_str().unwrap().to_string()
-}
-
-/// A wish whose run ended with the made-up agent playing `script`.
-fn ended(w: &World, script: &str, outcome: &str) -> String {
-    w.play(script);
-    let id = wish(w);
-    assert_eq!(run(w, &id), outcome);
-    id
-}
-
-/// How core keeps the made wish `id`.
-fn state(w: &World, id: &str) -> String {
-    let kept = fs::read_to_string(w.at("jm").join("pages").join(format!("{DAY}.wishes.json"))).unwrap_or_default();
-    let kept: Value = serde_json::from_str(&kept).unwrap_or_default();
-    let wishes = kept["wishes"].as_array().cloned().unwrap_or_default();
-    wishes.iter().find(|wish| wish["id"] == id).map_or(String::new(), |wish| wish["state"].as_str().unwrap().into())
-}
-
-/// Runs `then` while the runs of `ids` go, each waiting for the test's word, which is given by the `go` handed to
-/// `then`: it comes back when every one of those runs has ended, each with its one commit.
-fn going(w: &World, ids: &[&str], then: impl FnOnce(&dyn Fn())) {
-    let before = w.starts();
-    w.play("slow");
-    thread::scope(|scope| {
-        let runs: Vec<_> = ids.iter().map(|id| scope.spawn(move || run(w, id))).collect();
-        wait_until("the agents", || w.starts() == before + ids.len());
-        wait_until("the runs", || ids.iter().all(|id| state(w, id) == "working"));
-        let runs = std::cell::RefCell::new(runs);
-        then(&|| {
-            fs::write(w.at("rec").join("go"), "").unwrap();
-            for run in runs.borrow_mut().drain(..) {
-                assert_eq!(run.join().unwrap(), "completed");
-            }
-        });
-        assert!(runs.borrow().is_empty(), "the test let the runs end");
-    });
-}
 
 fn id_of(note: &Note) -> Option<&str> {
     match note {
@@ -124,13 +67,28 @@ fn no_work(line: &str, id: &str) -> bool {
 }
 
 /// What a person can tap or type in, of the pieces a `placed` line holds: every option and field as it is placed,
-/// whole, and each character's id and place.
-fn in_reach(line: &str) -> (Vec<Value>, Vec<(String, [f64; 4])>) {
+/// whole, with its place down the column measured from the top of its own card, to a tenth; and each character's
+/// id, its place across and its size. The page is one column (ADR 0026): a card stands under the cards before it,
+/// so a note that comes or goes higher up moves it down or up whole, and nothing inside it or beside it.
+fn in_reach(line: &str) -> (Vec<Value>, Vec<(String, [f64; 3])>) {
     let placed: Vec<Value> = serde_json::from_str(line).expect(line);
     let kind = |piece: &Value, kinds: &[&str]| kinds.contains(&piece["kind"].as_str().unwrap());
-    let taps = placed.iter().filter(|piece| kind(piece, &["option", "field"])).cloned().collect();
-    let little = placed.iter().filter(|piece| kind(piece, &["character"]));
-    (taps, little.map(|piece| (piece["id"].as_str().unwrap().to_string(), support::rect(piece))).collect())
+    let card = |id: &Value| placed.iter().find(|piece| piece["kind"] == "note" && piece["id"] == *id);
+    let in_card = |piece: &Value| {
+        let top = card(&piece["id"]).expect("the card it is on")["y"].as_f64().unwrap();
+        let from_top =
+            |value: &mut Value| value["y"] = json!(((value["y"].as_f64().unwrap() - top) * 10.0).round() / 10.0);
+        let mut piece = piece.clone();
+        from_top(&mut piece);
+        piece["text"].as_array_mut().unwrap().iter_mut().for_each(from_top);
+        piece
+    };
+    let taps = placed.iter().filter(|piece| kind(piece, &["option", "field"])).map(in_card).collect();
+    let across = |piece: &Value| {
+        let [x, _, w, h] = support::rect(piece);
+        (piece["id"].as_str().unwrap().to_string(), [x, w, h])
+    };
+    (taps, placed.iter().filter(|piece| kind(piece, &["character"])).map(across).collect())
 }
 
 /// Leaves the file a `hold` waits for.
@@ -201,8 +159,8 @@ fn the_page_says_a_wish_is_being_worked_on_and_its_work_still_shows_itself_when_
         lines = window.ended();
     });
     let going = format!("Your wish is being worked on. “{SAID}”. What it did will show here when it is done.");
-    // `layout` has no tap, so it prints the choice to stop the run first; the page's own notes start with this.
-    assert_eq!(placed.get(1), Some(&going), "the first of the page's own notes at layout: {placed:?}");
+    // The page's own notes start with this; the choice to stop the run stands under the wish's own words.
+    assert_eq!(placed.first(), Some(&going), "the first of the page's own notes at layout: {placed:?}");
     let [before, ended, after, again] = &lines[..] else { panic!("four lines: {lines:#?}") };
     assert!(said(serde_json::from_str(before).unwrap()).contains(&going), "{before}");
     // The sentence is no note in the person's hand: the look after the run's end shows the work, and it is gone.

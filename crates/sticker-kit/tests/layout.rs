@@ -1,8 +1,8 @@
-//! The layout rules, with a fixed-advance measurer and no GPUI.
+//! The layout rules, with a fixed-advance measurer and no GPUI: the page is one column, as long as what it holds.
 
 use sticker_kit::{
-    Character, FixedAdvance, MAX_NOTES, MAX_PIECES, MORE_NOTES_ID, Mood, Note, PieceKind, Placed, Rect, Scene, State,
-    Theme, Viewport, layout,
+    Character, FixedAdvance, MAX_PIECES, Mood, Note, PieceKind, Placed, Role, Scene, State, Theme, Viewport, entry_top,
+    layout, scroll_most,
 };
 
 const DEFAULT: Viewport = Viewport { w: 1440.0, h: 900.0 };
@@ -26,10 +26,6 @@ fn of(placed: &[Placed], kind: PieceKind) -> Vec<&Placed> {
     placed.iter().filter(|p| p.piece == kind).collect()
 }
 
-fn full(viewport: Viewport) -> Rect {
-    Rect::new(0.0, 0.0, viewport.w, viewport.h)
-}
-
 fn assert_apart(pieces: &[&Placed], what: &str) {
     for (i, a) in pieces.iter().enumerate() {
         for b in &pieces[i + 1..] {
@@ -38,7 +34,12 @@ fn assert_apart(pieces: &[&Placed], what: &str) {
     }
 }
 
-/// The checks every layout must pass, whatever the scene.
+fn said(note: &Note) -> bool {
+    matches!(note, Note::Said { .. })
+}
+
+/// The checks every layout must pass, whatever the scene: one column, nothing beside or over anything else, and
+/// nothing left of the window or right of it. How far down it goes is the column's own business.
 fn assert_sound(scene: &Scene, theme: &Theme, viewport: Viewport) {
     let placed = place(scene, theme, viewport);
     let labels = of(&placed, PieceKind::Label);
@@ -46,43 +47,61 @@ fn assert_sound(scene: &Scene, theme: &Theme, viewport: Viewport) {
     assert_eq!(characters.len(), scene.characters.len());
     assert_apart(&labels, "labels");
     assert_apart(&characters, "characters");
-    for label in &labels {
-        assert!(label.rect.inside(&full(viewport)), "label leaves the viewport: {label:?}");
-        for run in &label.text {
-            assert!(run.rect.inside(&label.rect.grown(0.5)), "text leaves its tag: {label:?}");
-        }
-        for other in characters.iter().filter(|c| c.id != label.id) {
-            assert!(!label.rect.overlaps(&other.rect), "label {} covers {}", label.id, other.id);
+    for piece in placed.iter().filter(|p| p.piece != PieceKind::Paper) {
+        let outline = piece.rect.turned_bounds(piece.tilt_degrees);
+        assert!(outline.x >= 0.0 && outline.right() <= viewport.w, "{piece:?} leaves the window's sides");
+        assert!(outline.y >= 0.0, "{piece:?} is over the window's top");
+        assert!(piece.text.iter().all(|run| run.rect.inside(&piece.rect.grown(0.5))), "text leaves {piece:?}");
+    }
+    // The cards: of one width, each under the one before, and no character on any of them.
+    let bubble = |p: &Placed| p.piece == PieceKind::Quote && p.index == 0 && typed(scene, &p.id);
+    let cards: Vec<&Placed> = placed.iter().filter(|p| p.piece == PieceKind::Note || bubble(p)).collect();
+    for pair in cards.windows(2) {
+        assert!(pair[0].rect.bottom() <= pair[1].rect.y, "{} is not under {}", pair[1].id, pair[0].id);
+    }
+    let notes = of(&placed, PieceKind::Note);
+    assert!(notes.iter().all(|note| note.rect.x == notes[0].rect.x && note.rect.w == notes[0].rect.w), "one width");
+    for art in placed.iter().filter(|p| is_character_art(p.piece)) {
+        for card in &cards {
+            assert!(!card.rect.overlaps(&art.rect), "{} covers {:?} {}", card.id, art.piece, art.id);
         }
     }
-    for who in &characters {
-        assert!(who.rect.inside(&full(viewport)), "character leaves the viewport: {who:?}");
-    }
-    for note in of(&placed, PieceKind::Note) {
-        let outline = note.rect.turned_bounds(note.tilt_degrees);
-        assert!(outline.inside(&full(viewport)), "note leaves the viewport");
-        for piece in placed.iter().filter(|p| is_character_art(p.piece)) {
-            assert!(!outline.overlaps(&piece.rect), "note covers {:?} {}", piece.piece, piece.id);
-        }
-    }
+    assert_eq!(notes.len(), scene.notes.iter().filter(|note| !said(note)).count(), "every note is a card");
+}
+
+fn typed(scene: &Scene, id: &str) -> bool {
+    scene.notes.iter().any(|note| matches!(note, Note::Said { id: said, .. } if said == id))
 }
 
 fn is_character_art(kind: PieceKind) -> bool {
     use PieceKind::*;
-    matches!(kind, Character | Star | Bubble | Badge | Label)
+    matches!(kind, Character | Hero | Star | Bubble | Badge | Label | Says)
 }
 
 #[test]
-fn one_character_piece_per_character() {
-    let placed = place(&Scene::sample(), &Theme::sticker(), DEFAULT);
-    let ids: Vec<&str> = of(&placed, PieceKind::Character).iter().map(|p| p.id.as_str()).collect();
-    let expected: Vec<String> = {
-        let scene = Scene::sample();
-        let (last, first): (Vec<_>, Vec<_>) = scene.characters.into_iter().partition(|c| c.state == State::Dimmed);
-        first.into_iter().chain(last).map(|c| c.id).collect()
-    };
-    assert_eq!(ids, expected);
-    assert_eq!(of(&placed, PieceKind::Hero).len(), 1);
+fn one_character_piece_per_character_in_the_scene_s_order_each_on_a_row_of_its_own() {
+    let scene = Scene::sample();
+    for viewport in [DEFAULT, SMALL] {
+        let placed = place(&scene, &Theme::sticker(), viewport);
+        let small = of(&placed, PieceKind::Character);
+        let ids: Vec<&str> = small.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, scene.characters.iter().map(|c| c.id.as_str()).collect::<Vec<_>>());
+        // No one typed for these: each is one line under the header, the small one and then its label.
+        let labels = of(&placed, PieceKind::Label);
+        assert_eq!(labels.len(), small.len());
+        let first = of(&placed, PieceKind::Note)[0].rect;
+        for (who, label) in small.iter().zip(&labels) {
+            assert_eq!((who.id.as_str(), who.index), (label.id.as_str(), label.index));
+            assert!(who.rect.right() <= label.rect.x, "{label:?} is beside {who:?}");
+            let middle = label.rect.center().1;
+            assert!(middle >= who.rect.y && middle <= who.rect.bottom(), "on its line: {label:?} {who:?}");
+            assert!(who.rect.bottom() <= first.y, "over the first card");
+        }
+        for pair in small.windows(2) {
+            assert!(pair[0].rect.bottom() <= pair[1].rect.y && pair[0].rect.x == pair[1].rect.x, "{pair:?}");
+        }
+        assert_sound(&scene, &Theme::sticker(), viewport);
+    }
 }
 
 #[test]
@@ -109,141 +128,127 @@ fn bubble_for_busy_and_badge_for_needs_you() {
     let ids = |kind| of(&placed, kind).iter().map(|p| p.id.clone()).collect::<Vec<_>>();
     assert_eq!(ids(PieceKind::Bubble), ["c1"]);
     assert_eq!(ids(PieceKind::Badge), ["c2"]);
-}
-
-#[test]
-fn dimmed_characters_come_last() {
-    let scene = scene_with(vec![
-        character(0, "dim", 1, State::Dimmed),
-        character(1, "a", 1, State::Idle),
-        character(2, "dim too", 1, State::Dimmed),
-        character(3, "b", 1, State::Busy),
-    ]);
-    let placed = place(&scene, &Theme::sticker(), DEFAULT);
-    let ids: Vec<&str> = of(&placed, PieceKind::Character).iter().map(|p| p.id.as_str()).collect();
-    assert_eq!(ids, ["c1", "c3", "c0", "c2"]);
-}
-
-#[test]
-fn eight_longest_labels_fit_at_default_and_small_sizes() {
-    for theme in [Theme::sticker(), Theme::plain()] {
-        let longest = "W".repeat(theme.labels.max_chars);
-        let scene = scene_with((0..8).map(|i| character(i, &longest, 4, State::NeedsYou)).collect());
-        for viewport in [DEFAULT, SMALL] {
-            assert_sound(&scene, &theme, viewport);
-            let placed = place(&scene, &theme, viewport);
-            assert_eq!(of(&placed, PieceKind::Label).len(), 8);
-        }
-    }
-}
-
-#[test]
-fn notes_stack_on_the_right_clear_of_the_characters() {
-    let mut scene = Scene::sample();
-    scene.notes.push(Note::Plain { title: "a third note".into(), body: "something that fits no other shape".into() });
-    for viewport in [DEFAULT, SMALL] {
-        let placed = place(&scene, &Theme::sticker(), viewport);
-        let notes = of(&placed, PieceKind::Note);
-        assert!(notes.len() >= 2, "at least the first two notes are placed");
-        for pair in notes.windows(2) {
-            let (above, below) =
-                (pair[0].rect.turned_bounds(pair[0].tilt_degrees), pair[1].rect.turned_bounds(pair[1].tilt_degrees));
-            assert!(above.bottom() <= below.y, "notes stack downward without overlap");
-        }
-        let rightmost = of(&placed, PieceKind::Character).iter().map(|p| p.rect.right()).fold(0.0, f32::max);
-        assert!(notes.iter().all(|n| n.rect.x > rightmost));
-        assert_sound(&scene, &Theme::sticker(), viewport);
-    }
+    let struck: Vec<&str> = of(&placed, PieceKind::Label)
+        .into_iter()
+        .filter(|label| label.text[0].role == Role::LabelStruck)
+        .map(|label| label.id.as_str())
+        .collect();
+    assert_eq!(struck, ["c3"], "one let go has its label struck, where it stands in the scene");
 }
 
 fn plain(title: &str) -> Note {
     Note::Plain { title: title.into(), body: "a line of body text".into() }
 }
 
-#[test]
-fn a_long_list_gives_up_rows_to_the_notes_after_it_and_says_how_many() {
-    let rows: Vec<(String, String)> = (0..40).map(|i| (format!("row {i}"), "of forty".to_string())).collect();
-    let mut scene = Scene::sample();
-    scene.notes = vec![Note::List { title: "a long list".into(), rows }, plain("second"), plain("third")];
-    for viewport in [DEFAULT, SMALL] {
-        let placed = place(&scene, &Theme::sticker(), viewport);
-        let notes = of(&placed, PieceKind::Note);
-        assert_eq!(notes.len(), 3, "the list did not push the later notes off the paper");
-        let shown = notes[0].text.iter().filter(|run| run.text.starts_with("row ")).count();
-        assert!((1..40).contains(&shown), "{shown} rows shown");
-        let last = notes[0].text.last().map(|run| run.text.as_str());
-        assert_eq!(last, Some(format!("+{} more", 40 - shown).as_str()));
-        assert_sound(&scene, &Theme::sticker(), viewport);
-    }
-}
-
-fn choice(id: &str, title: &str, options: Vec<String>) -> Note {
-    let (footer, struck_first, whole) = ("a footer".into(), false, false);
-    Note::Choice { id: id.into(), title: title.into(), options, footer, struck_first, whole }
-}
-
-fn tall(id: &str) -> Note {
+fn choice(id: &str) -> Note {
     let option = "an option that runs on for three whole lines of text, and then some more words".repeat(2);
-    choice(id, "four long options", vec![option; 4])
+    let (title, footer) = ("four long options".into(), "a footer".into());
+    Note::Choice { id: id.into(), title, options: vec![option; 4], footer, struck_first: false, whole: false }
 }
 
-/// The notes placed, by id, and what the last sheet says when notes were left out.
-fn notes_and_count(placed: &[Placed]) -> (Vec<String>, Option<String>) {
-    let notes = of(placed, PieceKind::Note);
-    let more = notes.iter().find(|note| note.id == MORE_NOTES_ID).map(|note| note.text[0].text.clone());
-    (notes.iter().filter(|note| note.id != MORE_NOTES_ID).map(|note| note.id.clone()).collect(), more)
-}
-
+/// The page was a canvas of one window, and what had no room on it was cut, made smaller or left out and counted.
+/// The column has no such room to run out of.
 #[test]
-fn notes_that_do_not_fit_are_counted_on_a_last_sheet_in_both_themes() {
-    let rows: Vec<(String, String)> = (0..6).map(|i| (format!("row {i}"), "of six".to_string())).collect();
+fn every_note_is_a_card_of_the_column_s_width_at_its_full_height_and_none_is_left_out_for_room() {
+    let rows: Vec<(String, String)> = (0..20).map(|i| (format!("row {i}"), "of twenty".to_string())).collect();
     let mut scene = Scene::sample();
-    scene.notes = vec![Note::List { title: "a list".into(), rows }, tall("a"), tall("b"), plain("small"), tall("c")];
+    scene.notes = vec![Note::List { title: "a list".into(), rows }, choice("a"), choice("b"), plain("small")];
+    scene.notes.extend((0..12).map(|n| if n % 2 == 0 { choice(&format!("c{n}")) } else { plain("more") }));
     for theme in [Theme::sticker(), Theme::plain()] {
         for viewport in [DEFAULT, SMALL] {
             let placed = place(&scene, &theme, viewport);
-            let (ids, more) = notes_and_count(&placed);
-            assert!(!ids.is_empty() && ids.len() < 5, "{ids:?}");
-            assert_eq!(
-                ids,
-                ["note-0", "a", "b", "note-3", "c"][..ids.len()],
-                "the first notes, in order, none skipped"
-            );
-            assert_eq!(more, Some(format!("+{} more of 5 notes", 5 - ids.len())));
-            let list = &of(&placed, PieceKind::Note)[0];
-            assert!(list.text.iter().any(|run| run.text == "row 0"), "the list keeps a row: {:?}", list.text);
-            let last = placed.iter().rfind(|p| p.piece == PieceKind::Note).unwrap();
-            assert_eq!((last.id.as_str(), last.index, last.tilt_degrees), (MORE_NOTES_ID, 5, 0.0));
-            let paper = of(&placed, PieceKind::Paper)[0].rect;
-            assert!(last.rect.inside(&paper), "the count is on the paper: {:?}", last.rect);
+            let notes = of(&placed, PieceKind::Note);
+            let ids: Vec<&str> = notes.iter().map(|note| note.id.as_str()).collect();
+            assert_eq!(ids.len(), 16, "sixteen notes are sixteen cards: {ids:?}");
+            assert_eq!(ids[..5], ["note-0", "a", "b", "note-3", "c0"], "in the scene's order");
+            assert_eq!(notes.iter().map(|note| note.index).collect::<Vec<_>>(), (0..16).collect::<Vec<_>>());
+            let rows = notes[0].text.iter().filter(|run| run.text.starts_with("row ")).count();
+            assert_eq!(rows, 20, "every row of the list");
+            let options = of(&placed, PieceKind::Option);
+            assert_eq!(options.len(), 8 * 4, "every option of every choice");
+            assert!(options.iter().all(|option| (1..=3).contains(&option.text.len())), "in three lines at most");
+            assert!(placed.iter().flat_map(|p| &p.text).all(|run| !run.text.contains(" more of ")), "none counted");
+            // Each role is written at its own size: nothing is made smaller to fit.
+            let sizes = |role: Role| {
+                let mut sizes: Vec<u32> =
+                    placed.iter().flat_map(|p| &p.text).filter(|r| r.role == role).map(|r| r.size.to_bits()).collect();
+                sizes.dedup();
+                sizes.len()
+            };
+            assert_eq!((sizes(Role::Option), sizes(Role::Body), sizes(Role::NoteTitle)), (1, 1, 1));
+            // The column is longer than the window, and that is all it costs: how far it scrolls.
+            let (bottom, band) = (notes[15].rect.bottom(), entry_top(&theme, viewport));
+            let most = scroll_most(&placed, &theme, viewport);
+            assert!(bottom > viewport.h && most > 0.0 && bottom - most <= band, "{bottom} {most} {band}");
             assert_sound(&scene, &theme, viewport);
         }
     }
-    scene.notes.truncate(2);
-    assert_eq!(notes_and_count(&place(&scene, &Theme::sticker(), DEFAULT)).1, None, "all fit: no count");
+    scene.notes = vec![plain("small")];
+    scene.characters.clear();
+    let short = place(&scene, &Theme::sticker(), DEFAULT);
+    assert_eq!(scroll_most(&short, &Theme::sticker(), DEFAULT), 0.0, "a column that fits does not scroll");
+}
+
+fn typed_for(id: &str, text: &str) -> Note {
+    Note::Said { id: format!("typed-{id}"), text: text.into() }
 }
 
 #[test]
-fn options_give_up_their_third_line_and_the_gaps_a_third_before_a_note_is_counted() {
-    let long = "an option that runs on for three whole lines of text, and then some more words".repeat(2);
-    let choice = |id: &str| choice(id, "pick one", vec![long.clone(); 2]);
-    let rows: Vec<(String, String)> = (0..9).map(|i| (format!("row {i}"), "of nine".to_string())).collect();
-    let list = Note::List { title: "a list".into(), rows };
-    let lines = |placed: &[Placed]| of(placed, PieceKind::Option).iter().map(|o| o.text.len()).max();
-    let mut scene = Scene::sample();
+fn what_a_person_typed_is_a_quote_at_the_column_s_right_with_its_character_at_its_end() {
+    let words = "please make the uploader try a file again when it fails, twice, and say so ".repeat(4);
+    let mut scene = scene_with(vec![
+        character(0, "nobody typed this", 1, State::Idle),
+        Character { says: "reading a.txt".into(), ..character(1, "first", 2, State::Busy) },
+        character(2, "second", 0, State::NeedsYou),
+    ]);
+    scene.notes = vec![plain("of the day"), typed_for("c1", &words), plain("came of it"), typed_for("c2", "short")];
     for theme in [Theme::sticker(), Theme::plain()] {
         for viewport in [DEFAULT, SMALL] {
-            scene.notes = vec![choice("a")];
-            assert_eq!(lines(&place(&scene, &theme, viewport)), Some(3), "with room, an option has three lines");
-            scene.notes = vec![list.clone(), choice("a"), choice("b")];
             let placed = place(&scene, &theme, viewport);
-            assert_eq!(notes_and_count(&placed), (vec!["note-0".to_string(), "a".into(), "b".into()], None));
-            assert_eq!(lines(&placed), Some(2), "two lines each, so that both choices and the list fit");
-            let shown = of(&placed, PieceKind::Note)[0].text.iter().filter(|run| run.text.starts_with("row ")).count();
-            assert!(shown >= 1, "the list keeps a row");
+            let notes = of(&placed, PieceKind::Note);
+            let (left, right) = (notes[0].rect.x, notes[0].rect.right());
+            let quotes = of(&placed, PieceKind::Quote);
+            let [long, short] = &quotes[..] else { panic!("two bubbles: {quotes:?}") };
+            assert_eq!((long.id.as_str(), short.id.as_str()), ("typed-c1", "typed-c2"));
+            // Drawn by the rules for words that are not the scene's own: every run quoted, every word there.
+            let drawn: Vec<&str> = long.text.iter().flat_map(|run| run.text.split_whitespace()).collect();
+            assert_eq!(drawn.join(" "), words.trim(), "to its last word");
+            assert!(quotes.iter().flat_map(|quote| &quote.text).all(|run| run.role == Role::Quoted));
+            assert!(long.text.len() > 1 && short.text.len() == 1);
+            for quote in &quotes {
+                let who = placed.iter().find(|p| p.piece == PieceKind::Character && quote.id.ends_with(&p.id)).unwrap();
+                assert!(quote.rect.x > left && quote.rect.right() <= who.rect.x, "ends at its character: {quote:?}");
+                assert!(who.rect.right() <= right + 0.5 && who.rect.y < quote.rect.bottom(), "{who:?}");
+                assert!(quote.rect.w < notes[0].rect.w * 0.75, "a bubble, not a card: {quote:?}");
+                assert!(placed.iter().all(|p| p.piece != PieceKind::Label || p.id != who.id), "no label of its own");
+            }
+            assert!(short.rect.w < long.rect.w && short.rect.right() == long.rect.right(), "as wide as its words");
+            // In the scene's order: the day's note, the first words, what came of them, the second words.
+            assert!(notes[0].rect.bottom() <= long.rect.y && long.rect.bottom() <= notes[1].rect.y);
+            assert!(notes[1].rect.bottom() <= short.rect.y);
+            // The one nobody typed for is a row under the header; the others are at their bubbles only.
+            let rows: Vec<&str> = of(&placed, PieceKind::Label).iter().map(|label| label.id.as_str()).collect();
+            assert_eq!(rows, ["c0"]);
+            assert_eq!(of(&placed, PieceKind::Character).len(), 3);
+            // The busy one says its line under its own bubble, and the stars and states are drawn as ever.
+            let says = of(&placed, PieceKind::Says);
+            assert_eq!((says.len(), says[0].id.as_str(), says[0].text[0].text.as_str()), (1, "c1", "reading a.txt"));
+            assert!(says[0].rect.y >= long.rect.y && says[0].rect.bottom() <= notes[1].rect.y, "{says:?}");
+            assert_eq!(of(&placed, PieceKind::Star).iter().filter(|star| star.id == "c1").count(), 2);
+            assert_eq!(of(&placed, PieceKind::Badge)[0].id, "c2");
+            // The big one stands left of the column's first card and of the first card after typed words.
+            let heroes = of(&placed, PieceKind::Hero);
+            assert_eq!(heroes.iter().map(|hero| hero.index).collect::<Vec<_>>(), [0, 1]);
+            for (hero, card) in heroes.iter().zip(&notes) {
+                assert!(hero.rect.y == card.rect.y && hero.rect.right() < card.rect.x, "{hero:?} {card:?}");
+            }
             assert_sound(&scene, &theme, viewport);
         }
     }
+    // Words that clean to nothing are no bubble, and the character still stands there.
+    scene.notes = vec![typed_for("c1", "\u{7}\u{200F}")];
+    let placed = place(&scene, &Theme::sticker(), DEFAULT);
+    assert!(of(&placed, PieceKind::Quote).is_empty() && of(&placed, PieceKind::Label).len() == 2);
 }
 
 #[test]
@@ -253,24 +258,25 @@ fn a_scene_of_any_size_is_laid_out_in_a_time_that_does_not_grow_with_its_notes()
     let start = std::time::Instant::now();
     let placed = place(&scene, &Theme::sticker(), DEFAULT);
     assert!(start.elapsed() < std::time::Duration::from_secs(2), "{:?}", start.elapsed());
-    let (ids, more) = notes_and_count(&placed);
-    assert!(ids.len() <= MAX_NOTES);
-    assert_eq!(more, Some(format!("+{} more of 200000 notes", 200_000 - ids.len())));
+    assert_eq!(placed.len(), MAX_PIECES, "the backstop: no layout returns more pieces than this");
+    let rows = (0..200_000).map(|i| (format!("row {i}"), String::new())).collect();
+    scene.notes = vec![Note::List { title: "a list".into(), rows }];
+    let placed = place(&scene, &Theme::sticker(), DEFAULT);
+    let last = of(&placed, PieceKind::Note)[0].text.last().unwrap().text.clone();
+    assert_eq!(last, "+199976 more", "a list is laid out to its twenty-fourth row, and the rest counted");
 
     let crowd = Scene::crowd(100_000);
     let placed = place(&crowd, &Theme::sticker(), DEFAULT);
-    assert_eq!(placed.len(), MAX_PIECES, "the backstop: no layout returns more pieces than this");
-
-    // The tallest page a theme may ask for has room for 151 holes, and 150 are punched. One with no end is refused.
+    assert_eq!(placed.len(), MAX_PIECES);
+    // However long the column, 150 holes are punched at most. A page with no end is refused.
+    assert_eq!(of(&placed, PieceKind::Hole).len(), 150);
     let mut tall = Theme::sticker();
-    (tall.metrics.height, tall.metrics.margin_y) = (10_000.0, 0.0);
-    assert_eq!(of(&place(&Scene::sample(), &tall, DEFAULT), PieceKind::Hole).len(), 150);
     tall.metrics.height = f32::INFINITY;
     assert!(place(&Scene::sample(), &tall, DEFAULT).is_empty());
 }
 
 #[test]
-fn a_long_text_is_carried_to_400_characters_and_a_label_stays_on_the_paper() {
+fn a_long_text_is_carried_to_400_characters_and_a_label_stays_in_the_column() {
     let narrow = FixedAdvance(0.001);
     let mut scene = Scene::sample();
     scene.notes = vec![Note::Plain { title: "t".into(), body: "b".repeat(1000) }];
@@ -278,33 +284,15 @@ fn a_long_text_is_carried_to_400_characters_and_a_label_stays_on_the_paper() {
     let body = &of(&placed, PieceKind::Note)[0].text[1].text;
     assert_eq!(body.chars().count(), 401, "400 characters and the ellipsis");
 
-    // One column, hard against the paper's left edge, and a label allowed to be far wider than the room there.
+    // A label allowed to be far wider than the column.
     let mut theme = Theme::sticker();
-    theme.metrics.columns = 1;
     theme.labels.max_width = 2000.0;
     theme.labels.max_chars = 200;
     let scene = scene_with(vec![character(0, &"W".repeat(200), 0, State::Idle)]);
     let placed = place(&scene, &theme, DEFAULT);
-    let (label, paper) = (of(&placed, PieceKind::Label)[0], of(&placed, PieceKind::Paper)[0]);
+    let (label, card) = (of(&placed, PieceKind::Label)[0], of(&placed, PieceKind::Note)[0]);
     assert!(label.text[0].text.ends_with('…'), "the label was cut");
-    assert!(label.rect.x >= paper.rect.x + 7.0, "{:?} reaches the paper's edge at {}", label.rect, paper.rect.x);
-}
-
-#[test]
-fn more_characters_than_slots_flow_to_more_rows() {
-    let theme = Theme::sticker();
-    for count in [9, 12, 30, 50] {
-        let scene = scene_with((0..count).map(|i| character(i, "overflow", 2, State::Busy)).collect());
-        for viewport in [DEFAULT, SMALL] {
-            assert_sound(&scene, &theme, viewport);
-            let placed = place(&scene, &theme, viewport);
-            let mut rows: Vec<i32> =
-                of(&placed, PieceKind::Character).iter().map(|p| p.rect.y.round() as i32).collect();
-            rows.sort_unstable();
-            rows.dedup();
-            assert!(rows.len() > 2, "{count} characters use more than one staggered row");
-        }
-    }
+    assert!(label.rect.right() <= card.rect.right() + 0.5, "{:?} ends where the column does", label.rect);
 }
 
 #[test]
@@ -313,7 +301,11 @@ fn both_themes_place_the_same_pieces_in_the_same_order() {
     for viewport in [DEFAULT, SMALL] {
         let sticker = place(&scene, &Theme::sticker(), viewport);
         let plain = place(&scene, &Theme::plain(), viewport);
-        let keys = |placed: &[Placed]| placed.iter().map(|p| (p.piece, p.id.clone(), p.index)).collect::<Vec<_>>();
+        // The holes down the paper's edge are as many as the column is long, which a theme's sizes change.
+        let keys = |placed: &[Placed]| {
+            let kept = placed.iter().filter(|p| p.piece != PieceKind::Hole);
+            kept.map(|p| (p.piece, p.id.clone(), p.index)).collect::<Vec<_>>()
+        };
         assert_eq!(keys(&sticker), keys(&plain));
         assert!(sticker.iter().any(|p| p.tilt_degrees != 0.0));
         assert!(plain.iter().all(|p| p.tilt_degrees == 0.0));
@@ -325,20 +317,20 @@ fn scene_text_is_carried_as_text_only() {
     let nasty =
         format!("<script>alert(1)</script> & <b>bold</b>\n\tline two\u{200F}\u{202E}\u{0007}{}", "x".repeat(5000));
     let mut scene = Scene::sample();
+    scene.notes.push(typed_for("garden", "words"));
     let calm = place(&scene, &Theme::sticker(), DEFAULT);
     scene.title = nasty.clone();
     scene.date_label = nasty.clone();
     scene.footer = nasty.clone();
-    scene.characters[0].label = nasty.clone();
+    scene.characters[1].label = nasty.clone();
+    scene.notes[2] = typed_for("garden", &nasty);
     let wild = place(&scene, &Theme::sticker(), DEFAULT);
 
-    let keys = |placed: &[Placed]| placed.iter().map(|p| (p.piece, p.index)).collect::<Vec<_>>();
+    // But for the holes down the paper's edge, which are as many as the column is long.
+    let keys = |placed: &[Placed]| {
+        placed.iter().filter(|p| p.piece != PieceKind::Hole).map(|p| (p.piece, p.index)).collect::<Vec<_>>()
+    };
     assert_eq!(keys(&calm), keys(&wild), "odd text adds or removes no piece");
-    for (before, after) in calm.iter().zip(&wild) {
-        if !matches!(before.piece, PieceKind::Label | PieceKind::Title | PieceKind::Footer) {
-            assert_eq!(before.rect, after.rect, "{:?} moved", before.piece);
-        }
-    }
     let max_chars = Theme::sticker().labels.max_chars;
     for run in wild.iter().flat_map(|p| &p.text) {
         assert!(run.text.chars().all(|c| !c.is_control()), "control character kept");
@@ -348,6 +340,11 @@ fn scene_text_is_carried_as_text_only() {
     let label = &of(&wild, PieceKind::Label)[0].text[0].text;
     assert!(label.starts_with("<script>alert(1)"), "markup is shown, not read: {label}");
     assert!(label.chars().count() <= max_chars + 1);
+    // What a person typed is cleaned and cut as every text is, and is still nothing but quoted text.
+    let typed = of(&wild, PieceKind::Quote)[0];
+    assert!(typed.text[0].text.starts_with("<script>alert(1)") && typed.text.iter().all(|r| r.role == Role::Quoted));
+    let drawn = typed.text.iter().map(|run| run.text.chars().count()).sum::<usize>();
+    assert!((390..=401).contains(&drawn), "400 and the ellipsis, less the blanks its lines end at: {drawn}");
     assert_sound(&scene, &Theme::sticker(), DEFAULT);
 }
 
@@ -377,15 +374,23 @@ fn generated_scenes_never_overlap() {
     let viewports = [DEFAULT, SMALL, Viewport { w: 1200.0, h: 760.0 }];
     for round in 0..300 {
         let count = dice.roll(13);
-        let characters = (0..count)
+        let characters: Vec<Character> = (0..count)
             .map(|i| {
                 let label = dice.label();
-                character(i, &label, dice.roll(5) as u8, states[dice.roll(4)])
+                let says = if dice.roll(2) == 0 { dice.label() } else { String::new() };
+                Character { says, ..character(i, &label, dice.roll(5) as u8, states[dice.roll(4)]) }
             })
             .collect();
         let mut scene = scene_with(characters);
         if dice.roll(4) == 0 {
             scene.notes.clear();
+        }
+        // Some of them were typed for, with a card or two under the words.
+        for who in 0..count {
+            if dice.roll(3) == 0 {
+                scene.notes.push(typed_for(&format!("c{who}"), &dice.label()));
+                scene.notes.extend((0..dice.roll(3)).map(|_| plain("came of it")));
+            }
         }
         if dice.roll(4) == 0 {
             scene.hero = None;

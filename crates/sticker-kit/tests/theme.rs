@@ -151,8 +151,8 @@ fn a_number_that_is_not_finite_or_is_out_of_its_range_is_refused_by_key() {
         ("[metrics]\nheight = 3e7\n", "metrics.height"),
         ("[metrics]\nheight = 30000000\n", "metrics.height"),
         ("[metrics]\nheight = 199.0\n", "metrics.height"),
-        ("[metrics]\ncolumns = 0\n", "metrics.columns"),
-        ("[metrics]\ncolumns = 13\n", "metrics.columns"),
+        ("[metrics]\nrim = -1\n", "metrics.rim"),
+        ("[metrics]\nrim = 41\n", "metrics.rim"),
         ("[metrics]\nmax_scale = 0.0\n", "metrics.max_scale"),
         ("[metrics]\nnote_width = 10001\n", "metrics.note_width"),
         ("[paper]\ngrid_step = -1.0\n", "paper.grid_step"),
@@ -167,7 +167,7 @@ fn a_number_that_is_not_finite_or_is_out_of_its_range_is_refused_by_key() {
             other => panic!("{text:?} was not refused: {other:?}"),
         }
     }
-    let edge = "[metrics]\nheight = 10000\nwidth = 200.0\ncolumns = 12\n[tilt]\nnote_tape = -45.0\n";
+    let edge = "[metrics]\nheight = 10000\nwidth = 200.0\nrim = 40\n[tilt]\nnote_tape = -45.0\n";
     assert!(Theme::from_toml(edge).is_ok(), "the ends of a range are inside it");
     let said = Theme::from_toml("[metrics]\nheight = inf\n").unwrap_err().to_string();
     assert_eq!(said, "metrics.height = inf is not a number from 200 to 10000");

@@ -436,7 +436,10 @@ max_file_lines = 400
 # carried typed (`run/keep/tapped.rs`), the window's sentences for two reasons and their test
 # (`run/waits/plain.rs`), and `Make it again` and its words (`run/waits/again.rs`, `run/waits.rs`).
 # After the gate 23 more: a wish made again with no run says so first, with its test (`run/waits/again.rs`).
-"crates/jellymoon-core" = 19559
+# A change that does not fit says so at once raised it by 167 (201 added, 34 removed): the reason a keep by
+# itself kept nothing, written with the run's record and read back (`run/keep/itself.rs`, `run/record.rs`), and
+# the waiting note that says it, with its tests (`run/waits/unfit.rs`, 92; `run/keep/tests.rs`, 19).
+"crates/jellymoon-core" = 19726
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -684,7 +687,9 @@ max_file_lines = 400
 # it (`tests/f92.rs`, `tests/f92/`): when a change is kept by itself, every refusal of an undo, and a cut-off undo.
 # F92's gate raised it by 160: all tests but one line (`tests/f92/stands.rs`, `tests/f92/undone.rs`, `tests/f92/cut.rs`):
 # where a kept change stands, a record no keep wrote, the folder below a returning file, a touched file, a stash.
-"crates/jellymoon" = 31211
+# A change that does not fit says so at once raised it by 28, one test (`tests/f92.rs`): the reason in the record
+# of a change that was not kept by itself, and none in the record of one that landed.
+"crates/jellymoon" = 31239
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -1103,7 +1108,9 @@ max_file_lines = 400
 # (`src/drawing/tucked.rs`, 175), its test at the made-up window (`tests/finished_wishes_tuck_away.rs`, 106), the
 # pass and the window's state that apply it (`src/drawing.rs`, 30; `src/showing.rs`, 18) and their test (43).
 # A wish with no note on the scene yet is not tucked away when a wish is kept: 15 (`src/drawing/tucked.rs`).
-"app" = 19413
+# A change that does not fit says so at once raised the app by 78 (81 added, 3 removed): its test at the made-up
+# window (`tests/a_change_that_no_longer_fits.rs`, 70) and the world where a change is kept by itself (6).
+"app" = 19491
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

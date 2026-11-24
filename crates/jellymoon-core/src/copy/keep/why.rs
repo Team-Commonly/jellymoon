@@ -1,10 +1,14 @@
 //! Why a keep did not keep a run's work, and how one did (`keep.rs`). `run/keep.rs` has the words of each.
 
+use serde::{Deserialize, Serialize};
+
 use super::Unread;
 
-/// Why a run's work was not kept.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Unkept {
+/// Why a run's work was not kept. A run's record holds the one its keep by itself came to, by its name here in
+/// small letters (`run/keep/itself.rs`): a name a release has written is not changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Unkept {
     /// The repo or the run's branch is not as the record names it (`work.rs`).
     Unread(Unread),
     /// Another keep of this home is at work.

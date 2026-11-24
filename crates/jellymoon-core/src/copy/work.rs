@@ -26,9 +26,10 @@ const COMMIT_MAX: usize = 64 * 1024;
 /// The most bytes of git's answer about the run's branch that are read: one line, of a name and an id.
 pub(super) const REF_MAX: usize = 16 * 1024;
 
-/// Why a run's work cannot be shown.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Unread {
+/// Why a run's work cannot be shown. A run's record may hold one, by its name in small letters (`keep/why.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Unread {
     /// No git was found, or the folder of the home that git is started in holds something (`Git::find`).
     Home,
     /// The folder is no checkout git opens, or git did not answer, or an object the work names is not there.

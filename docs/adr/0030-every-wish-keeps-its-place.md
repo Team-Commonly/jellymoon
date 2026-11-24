@@ -111,9 +111,16 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     that can be known before, is found first (step 1).
 
     It is offered only for the refusal that no later tap can get past: changes in the way go with a save, so
-    their note points at `Keep it` again. The waiting note does not offer it: whether a change fits is asked
-    of git when a keep is tapped, not at every look, and the reason a change was not kept by itself is written
-    nowhere (`run/keep/itself.rs` keeps only whether it landed).
+    their note points at `Keep it` again. Amended 2026-11-24: the waiting note offers it too, for one reason
+    only. When a run ends and core's keep by itself keeps nothing, core writes why with the run's record
+    (`unkept` in `runs/<id>/run.json`, by `run/keep/itself.rs`): its own typed reason and no sentence. Work
+    whose record says the change did not fit (`Clash`) says so first on its waiting note, in the two sentences
+    the refusal says, and has `Show me`, `Make it again`, `Toss it`: no `Keep it`, which core has just
+    refused (`run/waits/unfit.rs`). Every other reason, and a record with none, leaves the note as it was.
+    The reason is the run's end's. Whether a change fits is still asked of git only when a keep is tried, not
+    at every look, and no later keep writes or clears it: where the folder has changed back since, the note
+    says what was true then, and `Make it again` still works. The picture of such work is the one all waiting
+    work has; the kit has no picture of a change that does not fit ("Open").
 11. **Finished wishes tuck away.** Decision 2 put the notes of every ended wish on the page at once. After
     three wishes the column was several screens of cards, most of them about wishes that need nothing from
     the person, and the wish being made was under all of them. So a made wish that is settled has none of
@@ -169,5 +176,9 @@ answer and two bare bubbles, and could not tell that the other two had finished.
   own. A wish that was kept and whose run could not be started stays kept, with the old work tossed; that end
   was not run in a test. The choice stays on the page after the folder changed again, and core does not ask git
   once more whether the change still does not fit before it says the wish's words.
+- Work that did not fit when its run ended is drawn with the picture all waiting work has, whose caption says
+  only that it is not in the folder yet. A drawn note places none of its words, so the two sentences are read
+  after a tap on the picture or on `?`; with no tap the page shows `Make it again` where `Keep it` would be.
+  A picture that says it would be a kit change: one more state of the sheets' picture with its own caption.
 - The note a follow-up was typed under stays, with its field. Before, it went, so that the follow-up's work
   could come by itself; now that work comes under its own words whatever is on show.

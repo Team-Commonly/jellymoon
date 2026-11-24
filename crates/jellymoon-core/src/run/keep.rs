@@ -14,7 +14,7 @@ mod itself;
 mod tapped;
 
 use done::done;
-pub(super) use itself::keep_itself;
+pub(super) use itself::{keep_itself, known};
 use serde::{Deserialize, Serialize};
 pub(super) use tapped::keep_named;
 
@@ -192,7 +192,7 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, yes: Yes) -> Resu
     // The first files asked of are the work's own; the ones after are what one new commit would land of it.
     let mut works = true;
     let mut judged = |files: &[Touched]| judge(files, yes, std::mem::take(&mut works), &mut settings);
-    let landed = copy::keep(of, &mut judged, &mut note);
+    let landed = copy::keep(of, &mut judged, &mut note).inspect_err(|why| itself::unkept(of, &mut record, *why));
     match landed {
         Ok(landed) => {
             let own = landed.commit.as_deref() == Some(of.named.end);

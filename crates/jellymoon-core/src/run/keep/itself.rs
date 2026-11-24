@@ -3,13 +3,16 @@
 //! further yes. It is the keep of `keep.rs` and nothing else, with three differences: it lands only work that
 //! is moved forward or joined; it lands no file the person's tools obey and no change to a `.gitattributes`; and
 //! it leaves the run's branch and writes down the commit the person's branch named before, which is all an undo
-//! goes by (`undo.rs`). Whatever refuses it says nothing: the work waits as it always did.
+//! goes by (`undo.rs`). Whatever refuses it prints nothing: the work waits as it always did, and the reason the
+//! keep came to is written with the run's record ([`unkept`]; ADR 0030, decision 10), for a page to say at once.
 
 use std::path::Path;
 
+use serde::{Deserialize, Deserializer};
+
 use super::super::{RunOptions, WorkState, record};
 use super::{Yes, keep};
-use crate::copy::{self, Keep, Named};
+use crate::copy::{self, Keep, Named, Unkept};
 
 /// Whether a test's build was told that every change waits (`JELLYMOON_TEST_WAITS` is 1), as before F92: the
 /// tests of everything that is done with work that waits. A release holds no read of it: it is not compiled in.
@@ -23,6 +26,23 @@ fn off() -> bool {
 /// Keeps the work of the wish's run by itself, and says whether it is in the person's folder now.
 pub(in super::super) fn keep_itself(home: &Path, options: &RunOptions) -> bool {
     !off() && keep(home, options, false, Yes::Itself).is_ok_and(|kept| kept.how.is_some_and(meant))
+}
+
+/// Writes with the run's record why its keep by itself kept nothing: core's typed reason and no sentence, under
+/// the keep's own lock. It is what was true when the run ended, and no look asks the repo for it again. Nothing
+/// of any other keep; a record that cannot be written leaves the work waiting with no reason, as before.
+pub(super) fn unkept(of: &Keep, record: &mut record::Record, why: Unkept) {
+    if of.itself {
+        record.unkept = Some(why);
+        let _ = record::write(of.home, of.run, record);
+    }
+}
+
+/// The reason in a record, as it is read: none where the word is one this build does not know, so a record a
+/// later build wrote is still a record here.
+pub(in super::super) fn known<'de, D: Deserializer<'de>>(from: D) -> Result<Option<Unkept>, D::Error> {
+    let word = serde_json::Value::deserialize(from)?;
+    Ok(serde_json::from_value(word).ok())
 }
 
 /// Whether a keep landed as a keep by itself means to: the one way it can be undone.

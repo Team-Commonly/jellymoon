@@ -60,6 +60,12 @@ fn ended(script: &str, itself: bool) -> (World, PathBuf) {
 }
 
 impl World {
+    /// The world from now on as it is outside the tests: a finished change is kept by itself (F92).
+    pub fn lands(mut self) -> World {
+        self.vars.push(("JELLYMOON_TEST_WAITS", "0".into()));
+        self
+    }
+
     /// The world's variables as a terminal has them: Jellymoon's home, and the made-up agent beside git.
     fn typed(&self, harness: &str) -> Vec<(&'static str, OsString)> {
         let git = self.vars.iter().find(|(name, _)| *name == "PATH").unwrap().1.clone();

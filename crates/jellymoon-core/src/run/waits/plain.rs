@@ -5,7 +5,7 @@
 
 use super::{UNKEPT, WorkDone, again};
 use crate::copy::{How, Unkept};
-use crate::run::show::Alone;
+use crate::run::show::{Alone, ShownFile};
 use crate::run::{Kept, Tossed};
 use crate::{Wish, WishState};
 
@@ -67,8 +67,10 @@ pub(super) fn kept(kept: &Kept, project: &str) -> Vec<String> {
 }
 
 /// A keep by a tap that core refused as the folder changed in the same place since, and as changes of the
-/// person's own are in the way: what a page says of each, with no run's id and no word of git's.
-const CLASH: &str = "Your folder changed in the same place after this change was made, so the two do not fit together.";
+/// person's own are in the way: what a page says of each, with no run's id and no word of git's. The first is
+/// also what the note of work says at once, where a keep by itself was refused so at the run's end (`unfit.rs`).
+pub(super) const CLASH: &str =
+    "Your folder changed in the same place after this change was made, so the two do not fit together.";
 const UNCHANGED: &str = "Nothing in your folder was changed.";
 const IN_WAY: &str =
     "Your folder has changes of your own that are not saved to the project yet, where this change would go.";
@@ -83,6 +85,20 @@ pub(super) fn unkept(why: Option<Unkept>) -> Option<WorkDone> {
         Unkept::Clash => Some(WorkDone::Offers(UNKEPT, said(&[CLASH, UNCHANGED, again::DOES]), again::AGAIN)),
         Unkept::InWay => Some(WorkDone::Said(UNKEPT, said(&[IN_WAY, SAVE]))),
         _ => None,
+    }
+}
+
+impl ShownFile {
+    /// The title of the note a page shows the file in.
+    pub fn title(&self) -> String {
+        format!("File {} of the work: {}", self.n, self.name)
+    }
+
+    /// The file's text, a line of it each, and after a text that was cut a line that says so.
+    pub fn lines(&self) -> Vec<String> {
+        let mut lines: Vec<String> = self.text.lines().map(str::to_string).collect();
+        lines.extend(self.cut.then(|| "The file goes on past what was read of it.".to_string()));
+        lines
     }
 }
 

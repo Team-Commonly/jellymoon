@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::{RunOutcome, WorkState, asks, dead, finished};
-use crate::copy::{self, Named};
+use crate::copy::{self, Named, Unkept};
 use crate::hook::put;
 use crate::tap::plain;
 use crate::{Error, busy};
@@ -73,6 +73,13 @@ pub(super) struct Record {
     /// The commit an undo is about to put the branch back at, written before it touches the checkout.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub back: Option<String>,
+    /// Why the run's change was not kept by itself when the run ended (`keep/itself.rs`; ADR 0030, decision 10):
+    /// core's typed reason, by its name, and never a sentence. It is the run's end's: nothing asks the repo for
+    /// it again, and a later keep leaves it. None of a change that was kept by itself, in a record from before
+    /// it was written, and of a name this build does not know. It chooses what a page says of work that waits
+    /// and offers under it (`waits/unfit.rs`), and nothing a keep does.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::keep::known")]
+    pub unkept: Option<Unkept>,
     /// The commit the run's branch was to be deleted at, written with `work` saying tossed before anything is
     /// deleted (ADR 0017, decision 7): the run's end, or the start of a run that did not finish. It is how a
     /// toss is undone by hand. None before any toss, and in a tossed record that names no commit.

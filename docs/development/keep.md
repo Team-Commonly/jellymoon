@@ -509,8 +509,15 @@ lock, with four differences:
 
 - **It lands only work that is moved forward or joined.** Work the branch holds already is left to wait.
 - **It lands no file the person's tools obey and no change that touches a `.gitattributes`**, in any folder. It
-  is refused for everything `run keep --ask` refuses, too. A refusal changes nothing and says nothing: the work
-  waits, and `jellymoon run` prints no `kept_itself`.
+  is refused for everything `run keep --ask` refuses, too. A refusal changes nothing in the repo and prints
+  nothing: the work waits, and `jellymoon run` prints no `kept_itself`.
+- **A refusal writes why with the run's record**: `unkept`, core's typed reason (`copy/keep/why.rs`) as one
+  word, `clash`, `in_way`, `no_branch` and so on (`{"unread": ...}` for work that could not be read), and no
+  sentence. It is written under the keep's lock, by this keep alone: a keep by a tap or by `run keep` neither
+  writes nor clears it, and a change that was kept by itself has none. It is what was true when the run
+  ended. A record without it, as every record from before it was written, reads as no reason, and so does a
+  word this build does not know. A page reads it for one thing ([show.md](show.md), "Work that did not fit
+  when its run ended"); no command prints it.
 - **The record gets `before`**, the commit the person's branch named, in the same write as `kept` and `onto` and
   so before the checkout is touched. A keep that landed anywhere but as meant ("A checkout moved just before the
   step") clears it.

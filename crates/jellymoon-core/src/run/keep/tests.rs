@@ -90,3 +90,22 @@ fn another_repos_entry_is_never_kept_and_a_file_tools_obey_only_when_asked() {
     // A character nobody sees does not hide a name: the name is asked as it is printed too.
     assert_eq!(asked(&[file(".git\u{200b}modules", false)], true).0, Err(Unkept::Repos));
 }
+
+#[test]
+fn a_records_reason_is_a_name_and_a_record_with_none_or_with_one_unknown_reads_as_none() {
+    let start = r#"{"wish":"m1","day":"2026-03-10","started":1,"outcome":"completed","denied":0,"skipped":0"#;
+    let read = |more: &str| serde_json::from_str::<record::Record>(&format!("{start}{more}}}")).unwrap();
+    // A record from before the reason was written, and one whose change landed, hold no such word.
+    let mut record = read("");
+    assert_eq!(record.unkept, None);
+    assert!(!serde_json::to_string(&record).unwrap().contains("unkept"));
+    assert_eq!(read(r#","unkept":"clash""#).unkept, Some(Unkept::Clash));
+    assert_eq!(read(r#","unkept":{"unread":"moved"}"#).unkept, Some(Unkept::Unread(copy::Unread::Moved)));
+    // A name a later build wrote, or what is no name at all, is no reason here, and the record is still read.
+    for unknown in [r#""a_later_reason""#, r#""Clash""#, "7", "null", r#"{"unread":"later"}"#, r#"["clash"]"#] {
+        assert_eq!(read(&format!(r#","unkept":{unknown}"#)).unkept, None, "{unknown}");
+    }
+    // It is written as that name and nothing else: no sentence is kept.
+    record.unkept = Some(Unkept::InWay);
+    assert!(serde_json::to_string(&record).unwrap().contains(r#""unkept":"in_way""#));
+}

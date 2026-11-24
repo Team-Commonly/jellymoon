@@ -227,6 +227,34 @@ fn it_waits_where_a_keep_would_be_refused_and_the_folder_is_untouched() {
     }
 }
 
+/// Why a change was not kept by itself is written with its run's record, as core's name of the reason and no
+/// sentence (ADR 0030, decision 10); a change that landed, and one no keep was tried for, have none.
+#[test]
+fn why_a_change_was_not_kept_by_itself_is_in_its_record_and_a_change_that_landed_has_none() {
+    type Meanwhile = fn(&Open);
+    let cases: [(&str, Meanwhile); 3] = [
+        // The person committed another first line of `a.txt` while the run worked: the two do not fit.
+        ("clash", |open| {
+            fs::write(open.repo.join("a.txt"), "the person's own first line\n").unwrap();
+            let who = ["-c", "user.name=Ada Example", "-c", "user.email=ada@example.test"];
+            open.git(&[&who[..], &["commit", "-q", "-am", "the person's own commit"][..]].concat());
+        }),
+        ("in_way", |open| fs::write(open.repo.join("a.txt"), "half an edit\n").unwrap()),
+        ("no_branch", |open| drop(open.git(&["checkout", "-q", "--detach"]))),
+    ];
+    for (reason, meanwhile) in cases {
+        let open = open();
+        meanwhile(&open);
+        let before = open.w.persons(&open.repo);
+        let (made, said) = open.close();
+        waits(&made, &said, &before);
+        assert_eq!(made.record()["unkept"], json!(reason), "{}", made.record());
+    }
+    assert_eq!(landed().record().get("unkept"), None);
+    // In a world where every change waits no keep is tried, so there is no reason to write.
+    assert_eq!(finished().record().get("unkept"), None);
+}
+
 #[test]
 fn it_waits_while_the_lock_is_busy_and_where_the_folder_is_not_found() {
     // Another keep, toss or undo is at work in this home.

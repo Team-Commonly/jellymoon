@@ -762,7 +762,12 @@ that fit and counts the rest in a last line, `+N more`.
   `Keep it` are core's plain sentences with no run's id ([show.md](show.md#work-that-waits-jellymoon-run-waiting),
   "A keep a tap could not do"): the folder changed in the same place, and changes of the person's own are in the
   way. The first has one choice on `said-<wish>`, `Make it again`, under a sentence that says what it does;
-  the second has none, as `Keep it` works once the person saved their changes. A tap on `Make it again` is
+  the second has none, as `Keep it` works once the person saved their changes. Where the change did not fit
+  already when its run ended (a finished change is kept by itself, and core wrote why this one was not), the
+  note `work-<wish>` itself has the choices `Show me`, `Make it again`, `Toss it` and says the first sentence
+  and what `Make it again` does before the wish's words: no tap on a `Keep it` is needed to learn it. The
+  note's picture is the one all waiting work has, and a drawn note places no words: the sentences are read
+  after a tap on the picture or on `?`. A tap on `Make it again` is
   carried as every choice is (`OnShow::carrying`, which takes a choice of `said-<wish>` too; the words of the tap
   are compared first, `Showing::chose`), shows `busy-<wish>` with "That wish is being made again.", and then,
   off the window's thread (`Today::asked`):

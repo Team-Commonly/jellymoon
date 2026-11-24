@@ -36,15 +36,23 @@ fn whole(cx: &Ctx, text: &str, width: f32, role: Role) -> Option<Lines> {
     uncut.then(|| wrap(&kept, width, usize::MAX, role, cx.size(role), cx.measure))
 }
 
-/// A row's label lines, its quotes and the words beside them: the name on the label's line when it holds no blank,
-/// unseen or control character and the two lay out as one line; else the label alone and the name the first quote.
+/// Whether a name is one a line of the note's own may carry: not empty, and no blank, unseen or control character.
+pub(super) fn plain(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(|c| !(is_blank(c) || is_unseen(c) || c.is_control()))
+}
+
+/// `text` when it is drawn whole on one line of `width`.
+pub(super) fn one_line(cx: &Ctx, text: &str, width: f32, role: Role) -> Option<(String, f32)> {
+    whole(cx, text, width, role).filter(|lines| lines.len() == 1)?.pop()
+}
+
+/// A row's label lines, its quotes and the words beside them: the name on the label's line when it is [`plain`]
+/// and the two lay out as one line; else the label alone and the name the first quote.
 fn named(cx: &Ctx, inner: f32, row: &ToldRow) -> Option<(Lines, Vec<String>, Vec<String>)> {
-    let plain = |c: char| !(is_blank(c) || is_unseen(c) || c.is_control());
-    if !row.name.is_empty() && row.name.chars().all(plain) {
-        let joined = whole(cx, &format!("{} {}", row.label, row.name), inner, LABEL);
-        if let Some(label) = joined.filter(|lines| lines.len() == 1) {
-            return Some((label, row.quotes.clone(), row.marks.clone()));
-        }
+    if plain(&row.name)
+        && let Some(label) = one_line(cx, &format!("{} {}", row.label, row.name), inner, LABEL)
+    {
+        return Some((vec![label], row.quotes.clone(), row.marks.clone()));
     }
     let label = whole(cx, &row.label, inner, LABEL)?;
     if row.name.is_empty() {

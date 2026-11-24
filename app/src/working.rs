@@ -25,7 +25,7 @@ use crate::wishing::Seen;
 
 /// The starts of the ids of this file's notes, each followed by the wish's id: work that waits with its choices,
 /// the same asked once more, what is being done, what was done, and a wish with no work waiting.
-const WORK: &str = "work-";
+pub(crate) const WORK: &str = "work-";
 const SURE: &str = "sure-";
 pub(crate) const BUSY: &str = "busy-";
 pub(crate) const SAID: &str = "said-";
@@ -54,7 +54,7 @@ pub(crate) fn text(id: String, title: &str, body: Vec<String>, options: Vec<&str
 
 pub(crate) fn id_of(note: &Note) -> Option<&str> {
     match note {
-        Note::Text { id, .. } | Note::Told { id, .. } => Some(id),
+        Note::Text { id, .. } | Note::Told { id, .. } | Note::Drawn { id, .. } => Some(id),
         _ => None,
     }
 }
@@ -82,6 +82,7 @@ pub(crate) fn in_hand(scene: &Scene) -> bool {
             !options.is_empty() || field.is_some() || id.starts_with(BUSY) || at_work(note) == *note
         }
         Note::Plain { title, .. } => title == crate::stopping::STOPPING,
+        Note::Drawn { options, field, .. } => !options.is_empty() || field.is_some(),
         _ => false,
     })
 }
@@ -165,8 +166,9 @@ fn busy(scene: &Scene, wish: &str) -> bool {
     scene.notes.iter().any(|note| id_of(note).and_then(|id| id.strip_prefix(BUSY)) == Some(wish))
 }
 
-/// The note of work that waits, in core's words, with core's choices under it. Before `Show me` (`shown`) it names
-/// no file: core is asked of the same work with every name among those it only counts, and says the same but them.
+/// The note of work that waits and was read, drawn, with core's words and choices (`drawing::sheets`). Before `Show me`
+/// (`shown`) it names no file: core is asked of the same work with every name among those it only counts, and says
+/// the same but them. Asked once more (`sure`) it is a text note: every name a yes is given to is drawn.
 fn waiting(waits: &Waits, sure: bool, shown: bool) -> Note {
     if sure {
         let (title, body) = waits.asks();
@@ -174,7 +176,11 @@ fn waiting(waits: &Waits, sure: bool, shown: bool) -> Note {
     }
     let counted = Waits { names: Vec::new(), more: waits.more + waits.names.len(), ..waits.clone() };
     let lines = if shown { waits.lines() } else { counted.lines() };
-    text(format!("{WORK}{}", waits.wish), waits.title(), lines, waits.choices(false))
+    if !waits.read {
+        // Core's reason is the whole note, and it has no choice: it stays sentences.
+        return text(format!("{WORK}{}", waits.wish), waits.title(), lines, waits.choices(false));
+    }
+    crate::drawing::sheets(waits, lines)
 }
 
 /// The notes of work that waits: what its run says it did, when core printed a piece of it, and the work's own
@@ -335,19 +341,20 @@ impl OnShow {
     ///
     /// The note's texts are what was drawn: the kit's view gives a tap only on an option it placed, and it places
     /// a text note's options only under a body drawn whole, every text to its last character. So the names a
-    /// yes carries to core are names the person was shown.
+    /// yes carries to core are names the person was shown. The drawn note of work that waits has no such choice:
+    /// its words may be closed, and none of its three choices takes a name.
     ///
     /// A carried call that panics is caught where it runs, and answered with a note in core's words in place of
     /// the one that says what is being done: the wish is never left as being worked on for good.
     pub fn carrying(&mut self, note: &str, index: usize, ask: impl Ask) -> Option<(Scene, Working)> {
         let wish = [WORK, SURE, KEPT].iter().find_map(|start| note.strip_prefix(start))?.to_string();
         let at = self.scene.notes.iter().position(|one| id_of(one) == Some(note))?;
-        let Note::Text { body, options, field, .. } = &self.scene.notes[at] else { return None };
+        let (body, options, field) = crate::drawing::held(&self.scene.notes[at])?;
         let after = self.scene.notes.iter().find_map(|one| file_of(one, &wish)).unwrap_or(0);
         let seen = after > 0 || self.scene.notes.iter().any(|one| of(one, &wish) && rows_shown(one));
         let tap = WorkTap::of(options.get(index)?, body, after)?;
         // The field of `More like this` is the wish's, by its key: the kit keeps what is typed in it.
-        let (field, mut doing) = (field.clone(), text(format!("{BUSY}{wish}"), tap.doing(), Vec::new(), Vec::new()));
+        let (field, mut doing) = (field.cloned(), text(format!("{BUSY}{wish}"), tap.doing(), Vec::new(), Vec::new()));
         if let Note::Text { field: under, .. } = &mut doing {
             *under = field;
         }

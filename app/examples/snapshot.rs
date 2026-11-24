@@ -8,13 +8,16 @@
 //!
 //! `--work <waiting file>` puts the notes of the work that waits, as `jellymoon run waiting` prints it, over the
 //! page's notes, and `--told <shown file>` gives the first work the `result` that `jellymoon run show` printed:
-//! the notes as they first come onto the page, before `Show me`.
+//! the notes as they first come onto the page, before `Show me`. `--made <n>` says the page's last `n` wishes are
+//! made wishes, and `--steps <steps file>` gives the working ones their steps, as core counts them: a list of
+//! `[wish id, {"count": .., "last": [..]}]`. A drawn note is closed, as a page first shows it; `--open` draws
+//! every one open, as after a tap on its picture.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use jellymoon_app::{column::column, file_part, one_line, read, scene, starting, wishing, working};
-use jellymoon_core::{Told, Waiting};
+use jellymoon_app::{drawing, file_part, one_line, read, scene, starting, wishing, working};
+use jellymoon_core::{Steps, Told, Waiting};
 use serde::Deserialize;
 use sticker_kit::draw::headless::{Typing, snapshot_typing};
 use sticker_kit::{Note, Theme};
@@ -38,11 +41,29 @@ fn work(waiting: &str, told: Option<&str>) -> Result<Vec<Note>, String> {
     Ok(waiting.waits.iter().flat_map(|waits| working::waiting_notes(waits, false)).collect())
 }
 
+/// Each working wish's steps in a steps file.
+fn steps(file: &str) -> Result<Vec<(String, Steps)>, String> {
+    let text = std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?;
+    serde_json::from_str(&text).map_err(|e| format!("{file}: {e}"))
+}
+
+/// What the flags ask for, taken out of the arguments: the notes of work, how many wishes are made wishes, their
+/// steps, and whether every drawn note is open.
+type Asked = (Vec<Note>, usize, Vec<(String, Steps)>, bool);
+
+fn asked(args: &mut Vec<String>) -> Result<Asked, String> {
+    let (waiting, told) = (taken(args, "--work"), taken(args, "--told"));
+    let made = taken(args, "--made").and_then(|made| made.parse().ok()).unwrap_or(0);
+    let doing = taken(args, "--steps").map(|file| steps(&file)).transpose()?.unwrap_or_default();
+    let open = args.iter().position(|arg| arg == "--open").map(|at| args.remove(at)).is_some();
+    let notes = waiting.map(|file| work(&file, told.as_deref())).transpose()?.unwrap_or_default();
+    Ok((notes, made, doing, open))
+}
+
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    let (waiting, told) = (taken(&mut args, "--work"), taken(&mut args, "--told"));
-    let notes = match waiting.map(|file| work(&file, told.as_deref())).transpose() {
-        Ok(notes) => notes.unwrap_or_default(),
+    let (notes, made, doing, open) = match asked(&mut args) {
+        Ok(asked) => asked,
         Err(why) => {
             eprintln!("snapshot: {}", one_line(&why));
             return ExitCode::FAILURE;
@@ -50,8 +71,8 @@ fn main() -> ExitCode {
     };
     let [file, folder, name, more @ ..] = args.as_slice() else {
         eprintln!(
-            "usage: snapshot [--work <waiting file> [--told <shown file>]] <page file> <folder> <name> [width height \
-             [words [option [theme file]]]]"
+            "usage: snapshot [--work <waiting file> [--told <shown file>]] [--made <n> [--steps <steps file>]] \
+             [--open] <page file> <folder> <name> [width height [words [option [theme file]]]]"
         );
         return ExitCode::from(2);
     };
@@ -82,7 +103,8 @@ fn main() -> ExitCode {
             }
         }
     }
-    let mut shown = scene::scene(&page);
+    let mut shown = scene::ruled(&page, &[], made);
+    drawing::tracked(made, &mut shown, &doing);
     // With no project the window's empty page says to choose a folder first: the same function says it here.
     if page.data.read.projects.is_empty() {
         starting::no_project(&mut shown);
@@ -91,7 +113,9 @@ fn main() -> ExitCode {
     for theme in themes {
         // A theme file's `name` is the file's text: cleaned, and only a part of the picture's name, never a path.
         let out = PathBuf::from(folder).join(format!("{name}-{}.png", file_part(&theme.name)));
-        let (typing, scene) = (entry.clone().map(|entry| Typing { entry, typed: typed.clone() }), column(&shown));
+        let opened = if open { drawing::every(&shown) } else { Default::default() };
+        let (typing, scene) =
+            (entry.clone().map(|entry| Typing { entry, typed: typed.clone() }), drawing::column(&shown, &opened));
         if let Err(error) = snapshot_typing(scene, theme, typing, side(0, 1440.0), side(1, 900.0), &out) {
             eprintln!("snapshot: could not render {}: {error}", out.display());
             return ExitCode::FAILURE;

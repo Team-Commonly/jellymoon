@@ -1,6 +1,6 @@
 //! Invented scenes for the examples and the tests.
 
-use crate::scene::{Character, Mood, Note, Scene, State};
+use crate::scene::{Bar, Character, Kept, Mood, Note, Picture, Scene, Stage, State};
 
 fn small(id: &str, label: &str, hue: u8, stars: u8, state: State) -> Character {
     Character { id: id.into(), label: label.into(), hue, stars, state, mood: Mood::Happy, says: String::new() }
@@ -55,6 +55,39 @@ impl Scene {
             ],
             footer: "Sample content, made up for the kit.".into(),
         }
+    }
+
+    /// Every picture a drawn note can hold, in each of its states, down one column. The fourth is open, with its
+    /// words and its options; the fifth has words and is closed.
+    pub fn pictures() -> Scene {
+        let track = |steps, stage| Picture::Track { steps, stage, file: "hello.py".into() };
+        let sheets = |made, changed, removed, state| Picture::Sheets { made, changed, removed, state };
+        let bar = |name: &str, added, taken| Bar { name: name.into(), added, taken };
+        let rows = vec![bar("src/hello.py", 30, 10), bar("README.md", 12, 0), bar("notes of mine.txt", 0, 7)];
+        let pictures = vec![
+            track(3, Stage::Thinking),
+            track(7, Stage::Looking),
+            track(26, Stage::Making),
+            sheets(1, 0, 0, Kept::Waiting),
+            sheets(3, 3, 2, Kept::In),
+            sheets(1, 1, 1, Kept::Tossed),
+            sheets(0, 0, 0, Kept::Waiting),
+            Picture::Bars { rows, more: 2 },
+        ];
+        let drawn = |(n, picture): (usize, Picture)| Note::Drawn {
+            id: format!("drawn-{n}"),
+            picture,
+            words: if n == 3 || n == 4 {
+                vec!["Made up: the change is in a copy until it is kept.".into()]
+            } else {
+                Vec::new()
+            },
+            open: n == 3,
+            options: if n == 3 { vec!["Keep it".into(), "Toss it".into()] } else { Vec::new() },
+            field: None,
+        };
+        let notes = pictures.into_iter().enumerate().map(drawn).collect();
+        Scene { date_label: "pencil".into(), title: "what the pencil draws".into(), notes, ..Scene::default() }
     }
 
     /// `count` small characters and nothing else to read, for measuring

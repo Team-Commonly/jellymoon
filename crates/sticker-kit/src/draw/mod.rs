@@ -16,6 +16,7 @@ pub mod headless;
 mod input;
 mod measure;
 mod paint;
+mod pencil;
 mod shapes;
 mod sprites;
 mod stage;
@@ -30,7 +31,7 @@ use gpui::{
 
 use crate::geom::Viewport;
 use crate::layout::{PieceKind, Placed, entry_top, layout, layout_entry, page_scale, scroll_most};
-use crate::scene::{Scene, speaker};
+use crate::scene::{PICTURE_PLACE, Scene, speaker};
 use crate::scroll::Scroll;
 use crate::theme::Theme;
 
@@ -42,6 +43,7 @@ pub use field::MAX_KEPT_FIELDS;
 use measure::hsla;
 pub use measure::{GlyphMeasure, load_fonts};
 use paint::Shape;
+use pencil::Sketched;
 use shapes::Brush;
 use sprites::Sprites;
 use stage::{Stage, is_art};
@@ -52,6 +54,7 @@ pub enum Tap {
     Character {
         id: String,
     },
+    /// An option of a note, or, at [`PICTURE_PLACE`], the picture of a drawn note or its `?`.
     Option {
         note_id: String,
         index: usize,
@@ -105,6 +108,8 @@ pub struct Page {
     most: f32,
     stale: Stale,
     stage: Stage,
+    /// When each picture came, for the pencil that draws it.
+    sketched: Sketched,
     sprites: Sprites,
     themed: bool,
     pressed: Option<usize>,
@@ -133,6 +138,7 @@ impl Page {
             most: 0.0,
             stale: Stale::Spring,
             stage: Stage::default(),
+            sketched: Sketched::default(),
             sprites: Sprites::default(),
             themed: false,
             pressed: None,
@@ -219,6 +225,7 @@ impl Page {
         }
         let animate = self.stale == Stale::Spring && !self.placed.is_empty();
         self.stage.retarget(&self.placed, &placed, &self.scene, animate);
+        self.sketched.meet(&placed, self.started.elapsed().as_secs_f32());
         self.most = scroll_most(&placed, &self.theme, viewport);
         self.scroll.fit(self.most);
         self.placed = placed;
@@ -245,6 +252,7 @@ impl Page {
         let tap = match piece.piece {
             PieceKind::Option => Tap::Option { note_id: piece.id.clone(), index: piece.index },
             PieceKind::Action => Tap::Action { id: piece.id.clone() },
+            PieceKind::Picture => Tap::Option { note_id: piece.id.clone(), index: PICTURE_PLACE },
             // A tap on what the person typed is a tap on the character it is of.
             PieceKind::Quote => Tap::Character { id: speaker(&piece.id).to_string() },
             _ => Tap::Character { id: piece.id.clone() },
@@ -276,6 +284,7 @@ impl Page {
             let mut pose = self.stage.pose(i, t, &motion, still);
             pose.dy -= self.lift(piece);
             brush.add(piece, pose, &mut flat[at]);
+            self.sketched.add(piece, (t, still, k), pose, (&self.theme.palette, &motion), &mut flat[at]);
             if is_art(piece.piece) {
                 let (image, rect) = self.sprites.get(piece, &self.scene, &self.theme, rim, cx);
                 let rect = rect.moved(pose.dx, pose.dy).scaled(pose.scale);
@@ -326,7 +335,8 @@ impl Render for Page {
         let (t, dt) = self.tick();
         let still = self.reduce_motion || cx.reduce_motion() || self.theme.motion.is_still();
         let motion = self.theme.motion;
-        if self.stage.advance(dt, &motion, self.pressed, still) {
+        let moving = self.stage.advance(dt, &motion, self.pressed, still);
+        if moving || self.sketched.moving(&self.placed, t, still, &motion) {
             window.request_animation_frame();
         }
 

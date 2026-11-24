@@ -37,6 +37,10 @@ fn texts(scene: &Option<Scene>) -> Vec<Text<'_>> {
             Note::Text { id, title, body, options, .. } => {
                 Some((id.as_str(), title.as_str(), strs(body), strs(options)))
             }
+            // Work that waits and a change the folder has are drawn: the first word is the title, the rest lines.
+            Note::Drawn { id, words, options, .. } => {
+                Some((id.as_str(), words.first()?.as_str(), strs(&words[1..]), strs(options)))
+            }
             _ => None,
         }
     }

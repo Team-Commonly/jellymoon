@@ -25,6 +25,7 @@ const HOLD: usize = 3;
 fn id_of(note: &Note) -> Option<&str> {
     match note {
         Note::Text { id, .. } | Note::Choice { id, .. } | Note::Told { id, .. } => Some(id),
+        Note::Drawn { id, .. } if id.starts_with("work-") => Some(id),
         _ => None,
     }
 }
@@ -40,7 +41,7 @@ fn note<'a>(scene: &'a Scene, id: &str) -> Option<&'a Note> {
 
 fn options(scene: &Scene, id: &str) -> Vec<String> {
     match note(scene, id) {
-        Some(Note::Text { options, .. }) => options.clone(),
+        Some(Note::Text { options, .. } | Note::Drawn { options, .. }) => options.clone(),
         _ => Vec::new(),
     }
 }
@@ -48,6 +49,7 @@ fn options(scene: &Scene, id: &str) -> Vec<String> {
 fn title<'a>(scene: &'a Scene, id: &str) -> &'a str {
     match note(scene, id) {
         Some(Note::Text { title, .. }) => title,
+        Some(Note::Drawn { words, .. }) => words.first().map_or("", String::as_str),
         _ => "",
     }
 }

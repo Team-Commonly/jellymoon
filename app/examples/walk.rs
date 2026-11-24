@@ -18,6 +18,7 @@
 //!   `needs_you`, `let_go`) or a note of that title or id is on the page; past the bound it fails.
 //! - `poke:<wish id>`: a tap on that wish's character.
 //! - `tap:<note title or id>:<option>`: a tap on that option, only where the page places it.
+//! - `open:<note title or id>`: a tap on that drawn note's picture: closed, its sentences come; open, they go.
 //! - `say:<note title or id>:<words>`: Enter in that note's field with those words, only where the page places it.
 //! - `picture:<name>`: `<name>.png` in the folder, the page as it is now, in its column's order, in the sticker theme.
 //!
@@ -32,7 +33,7 @@ use jellymoon_app::showing::{Entered, Showing};
 use jellymoon_app::starting::{Given, Shown, named};
 use jellymoon_app::taps::OnShow;
 use jellymoon_app::today::{Asked, Today};
-use jellymoon_app::{SMALLEST, column::column, file_part, lines, one_line, sides};
+use jellymoon_app::{SMALLEST, file_part, lines, one_line, sides};
 use serde_json::Value;
 use sticker_kit::draw::headless::{Typing, snapshot_typing};
 use sticker_kit::{Entry, Note, Scene, State, Theme, Viewport};
@@ -55,21 +56,25 @@ fn title(note: &Note) -> &str {
         | Note::Text { title, .. }
         | Note::Whole { title, .. }
         | Note::Told { title, .. } => title,
-        Note::Said { text, .. } => text,
+        Note::Said { text: title, .. } => title,
+        // A drawn note the app makes has its title as its first word: Jellymoon's or core's, never a wish's.
+        Note::Drawn { id, words, .. } => words.first().unwrap_or(id),
     }
 }
 
 /// A note's id and its options, when it has any.
 fn choices(note: &Note) -> Option<(&str, &[String])> {
     match note {
-        Note::Choice { id, options, .. } | Note::Text { id, options, .. } => Some((id, options)),
+        Note::Choice { id, options, .. } | Note::Text { id, options, .. } | Note::Drawn { id, options, .. } => {
+            Some((id, options))
+        }
         _ => None,
     }
 }
 
 fn id_of(note: &Note) -> Option<&str> {
     match note {
-        Note::Told { id, .. } => Some(id),
+        Note::Told { id, .. } | Note::Drawn { id, .. } => Some(id),
         _ => choices(note).map(|(id, _)| id),
     }
 }
@@ -224,7 +229,7 @@ impl Walk {
     fn picture(&self, name: &str) -> Result<(), String> {
         let out = self.folder.join(format!("{}.png", file_part(name)));
         let typing = self.entry.clone().map(|entry| Typing { entry, typed: Some((self.typed.clone(), self.chosen)) });
-        snapshot_typing(column(&self.scene()), Theme::sticker(), typing, self.size.w, self.size.h, &out)
+        snapshot_typing(self.shown.column(&self.scene()), Theme::sticker(), typing, self.size.w, self.size.h, &out)
             .map_err(|error| format!("could not draw {name:?}: {error}"))
     }
 
@@ -254,6 +259,14 @@ impl Walk {
             "tap" => {
                 let (note, option) = split(rest).ok_or("tap:<note>:<option>")?;
                 self.tap(&note, &option)?;
+            }
+            "open" => {
+                let scene = self.scene();
+                let named =
+                    |one: &&Note| matches!(one, Note::Drawn { .. }) && (title(one) == rest || id_of(one) == Some(rest));
+                let id =
+                    scene.notes.iter().find(named).and_then(id_of).ok_or_else(|| format!("no picture {rest:?}"))?;
+                self.shown.chose(id, sticker_kit::PICTURE_PLACE);
             }
             "say" => {
                 let (note, words) = split(rest).ok_or("say:<note>:<words>")?;

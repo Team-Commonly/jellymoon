@@ -5,8 +5,9 @@
 //! the scene's notes are moved and none is changed, added to or taken away, but the list of the made wishes
 //! (`scene::MADE`), whose rows are the words each `Said` now carries.
 //!
-//! It is applied where a scene goes to the kit to be drawn or placed (`window.rs`, `lines.rs`) and nowhere else:
-//! every scene the app makes, keeps and compares is as it was.
+//! It is applied where a scene goes to the kit to be drawn or placed, by `drawing::column` and nowhere else,
+//! after the pass that opens and closes the drawn notes: every scene the app makes, keeps and compares is as it
+//! was.
 
 use sticker_kit::{Note, Scene};
 
@@ -50,7 +51,10 @@ pub fn column(scene: &Scene) -> Scene {
 /// Whether `note` is a note of the wish `wish` of the kind `prefix`: its id is the prefix and then the wish's id,
 /// with or without something of the note's own between them and a `-` (`file-3-m1`).
 fn of(note: &Note, prefix: &str, wish: &str) -> bool {
-    let (Note::Text { id, .. } | Note::Choice { id, .. } | Note::Told { id, .. }) = note else { return false };
+    let (Note::Text { id, .. } | Note::Choice { id, .. } | Note::Told { id, .. } | Note::Drawn { id, .. }) = note
+    else {
+        return false;
+    };
     let Some(rest) = id.strip_prefix(prefix) else { return false };
     rest == wish || rest.strip_suffix(wish).is_some_and(|between| between.ends_with('-'))
 }
@@ -75,9 +79,11 @@ mod tests {
 
     fn ids(scene: &Scene) -> Vec<String> {
         let id = |note: &Note| match note {
-            Note::Text { id, .. } | Note::Choice { id, .. } | Note::Told { id, .. } | Note::Said { id, .. } => {
-                id.clone()
-            }
+            Note::Text { id, .. }
+            | Note::Choice { id, .. }
+            | Note::Told { id, .. }
+            | Note::Said { id, .. }
+            | Note::Drawn { id, .. } => id.clone(),
             Note::Plain { title, .. } | Note::List { title, .. } | Note::Whole { title, .. } => title.clone(),
         };
         scene.notes.iter().map(id).collect()

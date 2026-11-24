@@ -91,6 +91,7 @@ fn done() -> String {
 fn id_of(note: &Note) -> Option<&str> {
     match note {
         Note::Text { id, .. } | Note::Choice { id, .. } | Note::Told { id, .. } => Some(id),
+        Note::Drawn { id, .. } if id.starts_with("work-") => Some(id),
         _ => None,
     }
 }
@@ -190,7 +191,7 @@ fn a_run_that_did_not_finish_shows_no_result_though_one_is_in_its_folder() {
 
 fn options(scene: &Scene, id: &str) -> Vec<String> {
     match note(scene, id) {
-        Note::Text { options, .. } => options.clone(),
+        Note::Text { options, .. } | Note::Drawn { options, .. } => options.clone(),
         _ => Vec::new(),
     }
 }

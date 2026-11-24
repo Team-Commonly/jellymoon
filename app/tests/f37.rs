@@ -69,7 +69,8 @@ fn a_made_wish_is_drawn_working_before_the_day_is_read_and_on_a_day_with_no_logs
     assert_eq!(first.footer, "1 made wish is in your own words.", "nothing was read, and nothing says so");
     let rows = vec![(Mark::Busy, MADE.to_string())];
     // Under the note of the reading, the sentence that the wish is being worked on, then the wish itself.
-    assert!(matches!(&first.notes[1], Note::Plain { title, .. } if title == "Your wish is being worked on."));
+    let going = |words: &[String]| words.first().is_some_and(|word| word == "Your wish is being worked on.");
+    assert!(matches!(&first.notes[1], Note::Drawn { id, words, .. } if id == "steps-m1" && going(words)));
     assert_eq!(first.notes[2], Note::Whole { title: "wished here today".to_string(), rows });
     let drawn: Vec<_> = first.characters.iter().map(|one| (one.id.as_str(), one.label.as_str(), one.state)).collect();
     assert_eq!(drawn, [("m1", MADE, State::Busy)]);
@@ -125,7 +126,7 @@ fn on_a_page_with_a_clash_and_no_wish_read_a_made_wish_takes_the_empty_note_away
         let title = |note: &Note| match note {
             Note::Plain { title, .. } | Note::Choice { title, .. } | Note::Whole { title, .. } => title.clone(),
             Note::List { title, .. } | Note::Text { title, .. } | Note::Told { title, .. } => title.clone(),
-            Note::Said { text, .. } => text.clone(),
+            Note::Said { text: title, .. } | Note::Drawn { id: title, .. } => title.clone(),
         };
         scene.notes.iter().map(title).collect()
     };

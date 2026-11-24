@@ -41,11 +41,13 @@ impl Page {
         }
     }
 
-    /// Whether a tap on `piece` is given to the page's handler: a character, an option, the entry's action, and
-    /// what the person typed for a character of the scene.
+    /// Whether a tap on `piece` is given to the page's handler: a character, an option, the entry's action, a
+    /// drawn note's picture and its mark, and what the person typed for a character of the scene.
     pub(super) fn taps(&self, piece: &Placed) -> bool {
         match piece.piece {
             PieceKind::Hero | PieceKind::Character | PieceKind::Option | PieceKind::Action => true,
+            // The mark of a picture is inside it: the picture's own target takes a tap on the mark, once.
+            PieceKind::Picture => true,
             PieceKind::Quote => {
                 let said = |note: &Note| matches!(note, Note::Said { id, .. } if *id == piece.id);
                 self.scene.notes.iter().any(said)

@@ -27,6 +27,8 @@ pub enum Role {
     Footer,
     /// Someone else's words in a bubble: never drawn as the scene's own.
     Quoted,
+    /// A word of a picture (`Note::Drawn`): in the handwriting, in the pencil's ink.
+    Caption,
 }
 
 /// Which of the theme's three font families a role uses.
@@ -41,7 +43,9 @@ impl Role {
     pub fn face(self) -> Face {
         match self {
             Role::Label | Role::LabelStruck => Face::Display,
-            Role::Date | Role::Title | Role::NoteTitle | Role::ChoiceTitle | Role::ChoiceFooter => Face::Hand,
+            Role::Date | Role::Title | Role::NoteTitle | Role::ChoiceTitle | Role::ChoiceFooter | Role::Caption => {
+                Face::Hand
+            }
             _ => Face::Body,
         }
     }
@@ -55,6 +59,7 @@ impl Role {
             Role::Label | Role::LabelStruck => theme.labels.font_size,
             Role::NoteTitle | Role::ChoiceTitle => m.note_title_size,
             Role::ChoiceFooter => m.note_title_size * 0.74,
+            Role::Caption => m.note_title_size * 0.62,
             Role::RowMain => m.body_size,
             Role::Bullet => m.body_size * 1.2,
             Role::Body | Role::Option | Role::OptionStruck | Role::Legend | Role::Quoted => m.body_size - 1.0,

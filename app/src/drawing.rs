@@ -1,0 +1,140 @@
+//! A wish's work, drawn (ADR 0029; `docs/development/app.md`, "A wish at work" and "Work that waits"). A run at
+//! work is a track (`live.rs` makes its note) and work that waits is its sheets ([`sheets`]): notes of the kit's
+//! `Note::Drawn`, whose sentences are not on the page until the person taps the picture or its `?`. Which drawn
+//! notes are open is the window's own state ([`Open`], held by `showing::Showing`): no call to core, and nothing
+//! written.
+//!
+//! One pure pass ([`pass`]) says how a scene is drawn with that state, and [`column`] is the one place it is
+//! applied, just before the scene is put in its column's order: every scene the window shows goes through
+//! `Showing::column`, and `layout`, which has no tap, prints every drawn note open ([`every`]). While the drawn
+//! note of a wish's work is closed, what its run says it did (`told-<wish>`) is not on the page either: a
+//! finished wish is first one picture with its choices. No word is lost: a tap brings every sentence, and the
+//! told note; a second folds them away. A choice means what it meant: its words and its place are core's.
+
+use std::cell::RefCell;
+use std::collections::BTreeSet;
+use std::rc::Rc;
+
+use jellymoon_core::Waits;
+use sticker_kit::{Field, Kept, Note, Picture, Scene};
+
+use crate::landing::KEPT;
+pub use crate::live::tracked;
+use crate::told::{TOLD, rows_shown};
+use crate::working::{FILE, WORK};
+
+/// The note of work that waits, drawn: a sheet for each file core counted, in a copy still, with core's choices
+/// in core's order. Its words are core's title and then `lines`, core's lines of the work, each a sentence of its
+/// own. The counts are core's: nothing is counted here.
+pub(crate) fn sheets(waits: &Waits, lines: Vec<String>) -> Note {
+    let (made, changed, removed) = (waits.made, waits.changed, waits.removed);
+    Note::Drawn {
+        id: format!("{WORK}{}", waits.wish),
+        picture: Picture::Sheets { made, changed, removed, state: Kept::Waiting },
+        words: [waits.title().to_string()].into_iter().chain(lines).collect(),
+        open: false,
+        options: waits.choices(false).into_iter().map(str::to_string).collect(),
+        field: None,
+    }
+}
+
+/// What a tap on a choice of a note is made of: the note's texts under its title, its options and its field. A
+/// drawn note's first word is its title, as [`sheets`] makes it. None of a note that has no choice.
+pub(crate) fn held(note: &Note) -> Option<(&[String], &[String], Option<&Field>)> {
+    match note {
+        Note::Text { body, options, field, .. } => Some((body, options, field.as_ref())),
+        Note::Drawn { words, options, field, .. } => {
+            Some((words.get(1..).unwrap_or_default(), options, field.as_ref()))
+        }
+        _ => None,
+    }
+}
+
+/// The wish whose finished work the drawn note `id` is: work that waits, or a change kept by itself.
+fn wish_of(id: &str) -> Option<&str> {
+    id.strip_prefix(WORK).or_else(|| id.strip_prefix(KEPT))
+}
+
+fn drawn_ids(scene: &Scene) -> impl Iterator<Item = &str> {
+    scene.notes.iter().filter_map(|note| match note {
+        Note::Drawn { id, .. } => Some(id.as_str()),
+        _ => None,
+    })
+}
+
+/// The ids of every drawn note of a scene: what `layout` prints open, as it has no tap.
+pub fn every(scene: &Scene) -> BTreeSet<String> {
+    drawn_ids(scene).map(str::to_string).collect()
+}
+
+/// The scene as it is drawn while the drawn notes whose ids are in `open` are open: each drawn note open or
+/// closed by that, and no `told-<wish>` while the drawn `work-<wish>`, or the drawn `kept-<wish>` of a change kept
+/// by itself, is on the scene and closed. Where a wish's work is not a drawn note (a question, a keep asked once
+/// more, a kept change the folder no longer shows) its told note stays.
+pub fn pass(scene: &Scene, open: &BTreeSet<String>) -> Scene {
+    let closed: Vec<&str> = drawn_ids(scene).filter(|id| !open.contains(*id)).filter_map(wish_of).collect();
+    let folded = |note: &Note| match note {
+        Note::Told { id, .. } => id.strip_prefix(TOLD).is_some_and(|wish| closed.contains(&wish)),
+        _ => false,
+    };
+    let mut notes: Vec<Note> = scene.notes.iter().filter(|note| !folded(note)).cloned().collect();
+    for note in &mut notes {
+        if let Note::Drawn { id, open: is, .. } = note {
+            *is = open.contains(id);
+        }
+    }
+    Scene { notes, ..scene.clone() }
+}
+
+/// [`pass`], and then the scene in the order of its column: the one place a scene is made ready to be drawn.
+pub fn column(scene: &Scene, open: &BTreeSet<String>) -> Scene {
+    crate::column::column(&pass(scene, open))
+}
+
+/// The drawn notes a person opened in one window, by their ids. An id that leaves the page leaves the set.
+#[derive(Clone, Default)]
+pub struct Open(Rc<RefCell<BTreeSet<String>>>);
+
+impl Open {
+    /// [`column`] of `scene` with what is open now. A note that is not on `scene` is open no more; a look, which
+    /// gives the notes it found again, closes nothing.
+    pub(crate) fn column(&self, scene: &Scene) -> Scene {
+        let mut open = self.0.borrow_mut();
+        let on: Vec<&str> = drawn_ids(scene).collect();
+        open.retain(|id| on.contains(&id.as_str()));
+        column(scene, &open)
+    }
+
+    /// A tap on the picture of the note `note`, or on its `?`: open, it is closed, and closed, it is opened.
+    /// Whether `scene` holds that drawn note; of any other id nothing changes.
+    pub(crate) fn tapped(&self, scene: &Scene, note: &str) -> bool {
+        let on = drawn_ids(scene).any(|id| id == note);
+        let mut open = self.0.borrow_mut();
+        if on && !open.remove(note) {
+            open.insert(note.to_string());
+        }
+        on
+    }
+
+    /// `scene`, core's answer to a tap on a choice of work, given back as it is. Where it holds what `Show me`
+    /// brings (a file of a wish's work, or the rows of what its run says it changed) that wish's drawn note is
+    /// opened: the person asked to be shown, and closed, the rows would not be on the page.
+    pub(crate) fn showed(&self, scene: Scene) -> Scene {
+        let brought = |note: &Note, wish: &str| match note {
+            Note::Text { id, .. } => {
+                let of = id.strip_prefix(FILE).and_then(|rest| rest.split_once('-'));
+                of.is_some_and(|(_, of)| of == wish)
+            }
+            Note::Told { id, .. } => id.strip_prefix(TOLD) == Some(wish) && rows_shown(note),
+            _ => false,
+        };
+        let shown =
+            |id: &&str| id.strip_prefix(WORK).is_some_and(|wish| scene.notes.iter().any(|one| brought(one, wish)));
+        let opened: Vec<String> = drawn_ids(&scene).filter(shown).map(str::to_string).collect();
+        self.0.borrow_mut().extend(opened);
+        scene
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -63,6 +63,9 @@ fn note<'a>(scene: &'a Scene, id: &str) -> Option<(&'a str, &'a [String], Option
         Note::Text { id: own, title, options, field, .. } if own == id => {
             Some((title.as_str(), &options[..], field.as_ref()))
         }
+        Note::Drawn { id: own, words, options, field, .. } if own == id => {
+            Some((words.first()?.as_str(), &options[..], field.as_ref()))
+        }
         _ => None,
     })
 }
@@ -101,7 +104,12 @@ fn a_done_wish_that_changed_nothing_has_the_field_and_enter_there_follows_its_ru
     // The done note keeps its words, has the follow-up's field under no offer, and no choice of work.
     let opened = scene(&printed[0]);
     assert_eq!(note(&opened, &wish_note), Some((DONE, &[][..], Some(&field("", &asked)))), "{opened:?}");
-    assert!(opened.notes.iter().all(|one| !matches!(one, Note::Text { id, .. } if id.starts_with("work-"))));
+    assert!(
+        opened
+            .notes
+            .iter()
+            .all(|one| !matches!(one, Note::Text { id, .. } | Note::Drawn { id, .. } if id.starts_with("work-")))
+    );
     let text = serde_json::to_string(&opened).unwrap();
     assert!([MORE, CHOICES[0], CHOICES[1], CHOICES[2]].iter().all(|word| !text.contains(word)), "{text}");
     // Enter: core kept the follow-up after the wish. The note it was typed under has nothing left to choose and

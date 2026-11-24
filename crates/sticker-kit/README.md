@@ -7,8 +7,8 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 ## The three data types
 
 - `Scene` (`src/scene.rs`): what is on the page. A date, a title, a hero,
-  characters, notes (`List`, `Choice`, `Plain`, `Text`, `Whole`, `Told`, and `Said`: what a person
-  typed). Plain serde data.
+  characters, notes (`List`, `Choice`, `Plain`, `Text`, `Whole`, `Told`, `Drawn`: a picture in pencil, and
+  `Said`: what a person typed). Plain serde data.
 - `Theme` (`src/theme/`): how it looks. Colours, font names, tilt angles,
   motion amounts and sizes. It names no pictures: the art is the kit's own.
   Two are built in: `Theme::sticker()` and `Theme::plain()`.
@@ -19,7 +19,7 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
   gives the same numbers on every system; `draw::GlyphMeasure` asks GPUI, which
   kerns and knows the system's fonts. The view draws with the second.
 
-`draw::Page` is the GPUI view; taps on characters and options reach `on_tap`. Files or folders dropped on it
+`draw::Page` is the GPUI view; taps on characters, options and pictures reach `on_tap`. Files or folders dropped on it
 from outside the app reach `on_paths`, with their paths, called while the page is in use as `on_tap` is.
 
 ## The entry: one line to type
@@ -209,10 +209,55 @@ options (`layout/typed.rs`, `draw/field.rs`).
   whose note still has one, by the note's id, and drops the field of a note
   that is gone or has none.
 
+A drawn note (`Note::Drawn`) can hold a `field` too. It is a text note's:
+placed under the options, whether the note is open or closed, and drawn,
+typed in and reported by the same code (`tests/pencil.rs`,
+`tests/field_draw.rs`).
+
 `tests/typed.rs` places them; `tests/field_draw.rs` types in them through
 GPUI's dispatch on a headless page. Not done: a field's element stands where
 the layout placed it and does not follow its note while the note moves into
 place.
+
+## A drawn note: a picture in pencil
+
+`Note::Drawn { id, picture, words, open, options, field }` is a card that shows a thing as a small drawing where a text
+note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/pencil.rs`, plain geometry):
+
+- **A stroke** bows a little and ends a little past both its ends, and is laid twice: a wide faint pass under a
+  narrow darker one. Its wobble follows from the note's id, the stroke's place in its picture and the pass, and
+  from nothing else, so a scene is drawn alike in every frame and every run. The marks built from strokes: a
+  line, dashes, a box whose sides pass its corners, hatching at 45 degrees, a circle, a squiggle, an arrow, a
+  tick, a cross, a plus, and tally marks (four upright, the fifth across them).
+- **A picture draws itself** when its note first comes onto a page: stroke after stroke, in a second and a half at
+  most (`pencil::DRAWN_IN`). Then it is still, but for the tool at work in a `Track`, which rocks by the theme's
+  motion. With motion reduced, or in a theme where nothing moves while idle, it is whole at once and nothing rocks.
+- **The pictures** (`enum Picture`, laid out in `src/layout/pictures/`):
+  `Track { steps, stage, file }`, a run at work: tallies for its steps (25 at most, then a small plus), a sheet
+  under a magnifier (`looking`) or a pencil (`making`) or three dots (`thinking`), the stage in two words
+  ("thinking", "looking around", "making the change") with the file's name under it, and a dashed line to the
+  empty circle its result will stand in.
+  `Sheets { made, changed, removed, state }`, finished work: a sheet a file (six at most, then a stack and
+  `+N`), "1 file" or "3 files" under them ("nothing changed" for none), and an arrow to a folder: dashed with
+  "not in your folder yet" while it waits, solid with a tick and "in your folder" once it is in, and for work
+  thrown away no arrow, no folder, every sheet crossed out and "thrown away".
+  `Bars { rows, more }`, changed lines a file: a name, a box in the added ink and one in the taken ink to one
+  scale, `+6 −1`, at most six rows and then `+N more`, and a ruler labelled in lines ("0", "20", "40 lines").
+- **Words.** A caption is the kit's own or a number, in the theme's handwriting (`Role::Caption`). A file's name
+  is someone else's word: it is drawn by the rule a told row's `name` is (no blank, unseen or control character,
+  whole on one line), else left out of a track and written "a file" in a bar's row. The note's `words` are not
+  placed while `open` is false: a `?` in a pencil ring (`PieceKind::Ask`) stands at the picture's top right when
+  there are any. With `open` each is drawn under the picture to its last word. The kit keeps no state for it.
+- **Taps.** An option is a text note's: `Tap::Option` with the note's id and the option's place. A tap on the
+  picture or the `?` is `Tap::Option` with the note's id and `PICTURE_PLACE`, the place of no option.
+- **Inks.** `palette.pencil`, `palette.added`, `palette.taken`. A theme file that sets none gets the sticker
+  theme's; they are held to no floor.
+- **Reading one without a window.** The `Picture` piece carries its `sketch`: the strokes, and its parts by name
+  (`tally`, `sheet made`, `folder dashed`, `bar added`, ...). `print(placed)` writes a line a piece, such as
+  `picture work-1 0 [track steps=7 stage=making file=hello.py] (tally×6, across×1, sheet×1, pencil×1, dashed×1,
+  place×1) "making the change" "hello.py"`. `tests/pencil.rs` reads these.
+
+Not done: no app builds these notes yet, and no stroke was seen in a real window.
 
 ## The edge scene: a character at a corner of the screen
 
@@ -272,7 +317,9 @@ would close it: a floor for `ink` and `soft` on `bubble` as for `quoted`, a fall
 ```sh
 cargo test --no-default-features          # scene, theme, layout: no GPUI
 cargo run --example page                  # a window; press t to switch theme
-cargo run --example snapshot --features headless -- out/   # two PNGs, no window
+cargo run --example snapshot --features headless -- out/   # four PNGs, no window: the sample page and the
+                                                           # pencil's pictures, in both themes
+cargo run --example snapshot --features headless -- out/ --at 0.6   # the same, each picture 0.6 s into drawing itself
 cargo test --features headless            # the drawing tests, headless
 ```
 

@@ -39,10 +39,14 @@ pub const UNANSWERED: &str = "That answer was not taken.";
 /// core's sentence for what failed.
 pub const UNSETTLED: &str = "The answer was given, but what came after it failed.";
 
+/// `note` with `field` under it. A drawn note takes the field and no quoted words: it is never a note that asks.
 fn fielded(note: Note, quoted: &str, field: Field) -> Note {
     match note {
         Note::Text { id, title, body, options, .. } => {
             Note::Text { id, title, body, options, quoted: quoted.to_string(), field: Some(field) }
+        }
+        Note::Drawn { id, picture, words, open, options, .. } => {
+            Note::Drawn { id, picture, words, open, options, field: Some(field) }
         }
         other => other,
     }
@@ -89,6 +93,7 @@ fn more(wish: &str, offer: &str) -> Field {
 fn field_of(scene: &Scene, note: &str) -> Option<(usize, String, bool)> {
     let more = |one: &Note| match one {
         Note::Text { id, field: Some(_), .. } if id == note => Some(!asks(one)),
+        Note::Drawn { id, field: Some(_), .. } if id == note => Some(true),
         _ => None,
     };
     let (at, more) = scene.notes.iter().enumerate().find_map(|(at, one)| Some((at, more(one)?)))?;

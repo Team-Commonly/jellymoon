@@ -10,8 +10,10 @@ use std::fmt;
 use std::path::Path;
 
 mod done;
+mod itself;
 
 use done::done;
+pub(super) use itself::keep_itself;
 use serde::{Deserialize, Serialize};
 
 use super::obeyed::{modules, named};
@@ -38,11 +40,13 @@ pub struct KeepOptions {
 }
 
 /// Which files the person's tools obey a keep may land: all of them or none, as a command says, or for a page
-/// the ones the person was named and said yes to, which must be the work's own, all of them and no other.
+/// the ones the person was named and said yes to, which must be the work's own, all of them and no other. A keep
+/// by itself has no yes at all: it lands none of them, and no change to a `.gitattributes` (`itself.rs`).
 #[derive(Clone, Copy)]
 enum Yes<'a> {
     Said(bool),
     To(&'a [String]),
+    Itself,
 }
 
 /// What `jellymoon run keep` prints.
@@ -130,12 +134,18 @@ fn keep(home: &Path, options: &RunOptions, ask: bool, yes: Yes) -> Result<Kept, 
     };
     let named = Named { repo: &repo, start: &start, end: &end };
     let was = was.as_ref().map(|was| (was.0.as_str(), was.1.as_str()));
-    let of = |folder| Keep { home, folder, run: &run, named: &named, was, ask, held: held.as_deref() };
+    let itself = matches!(yes, Yes::Itself);
+    let of = |folder| Keep { home, folder, run: &run, named: &named, was, ask, held: held.as_deref(), itself };
     if state == WorkState::Kept {
         let Some((commit, onto)) = was else { return Err(not_cores(&run)) };
+        if found.record.back.is_some() {
+            return Err(refused(format!("an undo of the work of run {run} was cut off: `run undo` goes on with it")));
+        }
         // A keep that was cut off after the record said kept left the run's branch: it goes now, unless the
-        // work is on no branch, where the run's branch is the one name it has.
-        if let (Ok(folder), false, true) = (&folder, ask, onto != copy::LOOSE) {
+        // work is on no branch, where the run's branch is the one name it has, or was kept by itself, where an
+        // undo goes by it.
+        let swept = onto != copy::LOOSE && found.record.before.is_none();
+        if let (Ok(folder), false, true) = (&folder, ask, swept) {
             copy::swept(&of(folder));
         }
         let why = format!("the work of run {run} was kept before: nothing was changed");
@@ -147,7 +157,12 @@ fn keep(home: &Path, options: &RunOptions, ask: bool, yes: Yes) -> Result<Kept, 
     if was.is_some_and(|was| was.1 == copy::LOOSE) {
         return Err(not_cores(&run));
     }
-    landed(&of(&folder?), wish, found.record, yes)
+    let (folder, day) = (folder?, found.day.clone());
+    let kept = landed(&of(&folder), wish, found.record, yes)?;
+    if itself && matches!(kept.how, Some(How::Forward | How::Joined)) {
+        itself::sweep(&of(&folder), &day);
+    }
+    Ok(kept)
 }
 
 /// The keep itself, and what it prints. What it notes for the record is written there as it goes; a
@@ -160,8 +175,15 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, yes: Yes) -> Resu
                 pointed = if matches!(note, Note::Pointed) { POINTED } else { UNASKED };
                 return true;
             }
-            Note::Intent(commit, onto) => (commit, onto, false),
-            Note::Kept(commit, onto) => (commit, onto, true),
+            Note::Intent(commit, onto, before) => {
+                record.before = before.map(str::to_string);
+                (commit, onto, false)
+            }
+            Note::Kept(commit, onto, meant) => {
+                // Only a keep by itself that landed as it meant can be undone.
+                record.before = record.before.take().filter(|_| meant);
+                (commit, onto, true)
+            }
             Note::Stayed(path) => {
                 // One past what a list holds says that there are more.
                 stayed.extend((stayed.len() <= LISTED).then(|| statement(&String::from_utf8_lossy(path), NAME_MAX)));
@@ -243,7 +265,7 @@ fn short(onto: &str) -> Option<String> {
 fn judge(files: &[Touched], yes: Yes, works: bool, settings: &mut Vec<String>) -> Result<(), Unkept> {
     let asked: HashSet<&str> = match yes {
         Yes::To(names) => names.iter().map(String::as_str).collect(),
-        Yes::Said(_) => HashSet::new(),
+        Yes::Said(_) | Yes::Itself => HashSet::new(),
     };
     let (mut unasked, mut found) = (false, HashSet::new());
     for file in files {
@@ -252,10 +274,12 @@ fn judge(files: &[Touched], yes: Yes, works: bool, settings: &mut Vec<String>) -
         if file.repo || modules(&raw) || modules(&name) {
             return Err(Unkept::Repos);
         }
+        unasked |= matches!(yes, Yes::Itself) && itself::attributes(&raw);
         if obeys {
             unasked |= match yes {
                 Yes::Said(all) => !all,
                 Yes::To(_) => !asked.contains(name.as_str()),
+                Yes::Itself => true,
             };
             if settings.len() < LISTED && !settings.contains(&name) {
                 settings.push(name.clone());

@@ -288,7 +288,8 @@ a name, `onto` may be the one word `HEAD`, only with `work: kept`: the work land
 ("A checkout moved just before the step"). Anything else, one without the other, or `work: kept` with neither,
 is not core's record, and nothing is done for it. Whoever can write the home can write a record, here as everywhere ([show.md](show.md),
 "What the record names, and how far it is trusted"): a record made to say a commit landed can end a keep with
-nothing landed and the run's branch deleted, and cannot make a keep write to a checkout.
+nothing landed and the run's branch deleted, and cannot make a keep write to a checkout. A record's `before`
+is believed by no undo: it must be the only parent of `kept`, as the repo says it ("Undone").
 
 ## How the working tree and the index are written
 
@@ -499,6 +500,113 @@ git when it is 2.40 or later, and the follow-up made after the keep. `tests/f53/
 need no base under a git that says it is 2.39.5: `--ask` says `fits: true`, and the branch is moved forward to
 the follow-up's commit.
 
+## Kept by itself
+
+Since F92 ([ADR 0028](../adr/0028-a-finished-change-is-kept-by-itself.md)) a finished change is kept with no yes
+asked. When a run's end is noted, and before its wish is told, core does this keep itself
+(`crates/jellymoon-core/src/run/keep/itself.rs`, called from `run/end.rs`). It is the keep above, under the same
+lock, with four differences:
+
+- **It lands only work that is moved forward or joined.** Work the branch holds already is left to wait.
+- **It lands no file the person's tools obey and no change that touches a `.gitattributes`**, in any folder. It
+  is refused for everything `run keep --ask` refuses, too. A refusal changes nothing and says nothing: the work
+  waits, and `jellymoon run` prints no `kept_itself`.
+- **The record gets `before`**, the commit the person's branch named, in the same write as `kept` and `onto` and
+  so before the checkout is touched. A keep that landed anywhere but as meant ("A checkout moved just before the
+  step") clears it.
+- **The run's branch is not deleted.** The undo's work waits on it.
+
+Once a change was kept by itself, under the same lock, every change of the same repo that was kept by itself on
+an earlier day loses its run's branch and its `before`: the branches kept for an undo are one day's.
+
+A change kept by a tap or by `run keep` is as before F92: no `before`, and its run's branch is deleted.
+
+A test's build keeps nothing by itself while `JELLYMOON_TEST_WAITS` is `1`. The door every test starts a program
+through sets it (`crates/jellymoon/tests/support/door/world.rs`), so every test of work that waits is as it was;
+the tests of F92 set it to `0`. A release holds no read of it.
+
+## Undone
+
+`jellymoon run undo --wish <id> [--ask]` takes a change that was kept by itself out of the person's folder again
+(`crates/jellymoon-core/src/run/undo.rs` the record and every word, `copy/keep/undo.rs` what is done in the
+repo; tests `crates/jellymoon/tests/f92/`). It prints `{"run","wish","why"}`, and with `--ask` also `fits` and
+changes nothing. It is not a revert: no commit is made.
+
+Asked first, under the keeps' lock:
+
+1. the record says kept and has `before`, and `kept` is a commit whose only parent is `before`
+   (`git rev-list --parents -n 1 <kept>` prints exactly the two ids). Every keep by itself leaves that, moved
+   forward or joined; a record edited to name a tree, an unrelated commit or an earlier one does not show it,
+   and is refused before anything else is asked;
+2. `HEAD` names `onto`, its tip is `kept`, and no merge, cherry-pick, revert, rebase or bisect is going on;
+3. nothing is on the disk where a file would come back, ignored or not (`fits::in_way`, the keep's rule with
+   the two commits swapped). A folder there is in the way unless everything on the disk below it, however
+   deep, is a file the move removes: git, writing the file, removes the folder with whatever it ignores in
+   it (`fits::emptied`). An empty folder below does not pass either;
+4. no other name of the repo holds `kept`: a branch, a tag, a remote's branch (`git for-each-ref --contains`).
+   A run's own branch is not such a name, and neither is `refs/stash`;
+5. git's trial of the move passes on a copy of the index (`read-tree -n -m -u <kept> <before>`).
+
+Then the folder's own index is told which files only look changed (`update-index -q --refresh`, as the trial
+told its copy: a file that was touched and holds what it held is no unsaved change), 2 and 3 are asked a second
+time, `back` is written to the record, and the step is taken:
+
+```
+git -c gc.auto=0 read-tree -m -u <kept> <before>          (in the folder: the files and the index)
+git update-ref --no-deref refs/heads/<onto> <before> <kept>   (the branch, by its whole name)
+```
+
+Neither command goes by `HEAD`, so no ref but the named branch is ever written, wherever the folder stands by
+then. After the step the branch is asked for: at `before`, the record's `work`, `kept`, `onto`, `before` and
+`back` are cleared, and the work waits. The wish stays done.
+
+A test's build ends itself after the step `JELLYMOON_TEST_UNDO_CUT` numbers: 1 after `back` is written, 2 after
+`read-tree`, 3 after `update-ref`. The next `run undo` finishes each: it finds the branch at `before` and writes
+the record, or takes the step again (git passes a `read-tree` whose files are there already). A branch that by
+then holds `before` and not `kept`, with commits of the person's since, is an undo that is done: only the record
+is written. While `back`
+stands, `run keep` is refused and says that an undo goes on first. An undo that goes on and finds something in
+its way is refused, and forgets `back`.
+
+Every refusal is one fixed sentence, with nothing changed, no word of git's and no run's id:
+
+| When | The sentence begins |
+|---|---|
+| The record does not say kept | nothing of this wish is kept |
+| No `before`: kept by a tap, or an earlier day's | this change was kept by a tap, or was kept by itself before a later day's change was |
+| `kept`'s only parent is not `before` | the record of this change is not one Jellymoon wrote |
+| The branch's tip has `kept` in its history | the branch has a commit since this change was kept |
+| The branch does not hold `kept` any more | the branch no longer holds this change |
+| That commit is a later change kept by itself | a later change was kept on top of this one, and the newest kept change is undone first |
+| The trial refused | a file of this change has unsaved or staged edits |
+| Something is where a file would come back | a file is in the way where one this change removed would come back |
+| `HEAD` names another branch, or none | the folder stands on another branch than the change was kept on, or on no branch |
+| Something of git's is going on | a merge, a cherry-pick, a revert, a rebase or a bisect is going on in the folder |
+| Another name holds `kept` | another name in the repo holds this change [...] a change that was already sent elsewhere is not undone here |
+| The lock is held | a keep, a toss or the start of a follow-up's run is at work in this home |
+| The repo could not be read | the repo or the folder could not be read as an undo needs it |
+
+### Where a kept change stands
+
+The record says that a change was kept once. Where it is now is asked of the repo at every look
+(`copy/keep/undo.rs`, `stands_now`; nothing is written and no lock is taken), and a page claims no more than
+the answer (`run/waits/itself.rs`). `jellymoon run waiting` prints it as `kept`, a list left out when it is
+empty: `{"waits": <the change, read as work that waits is>, "stands": "here" | "past" | "elsewhere"}`.
+
+| `stands` | When | The note |
+|---|---|---|
+| `here` | `HEAD` names `onto`, and its tip is `kept` | "Your folder has this change now.", the count, `Undo it` |
+| `past` | `HEAD` names `onto`, and its tip has `kept` in its history | the same title, the count, "It cannot be undone here any more: the branch has a commit since.", no choice |
+| `elsewhere` | another branch or none, a tip that does not hold `kept`, a repo that cannot be read, a record whose `before` is not `kept`'s only parent | "This change was put in your folder earlier.", the count, "Your folder stands somewhere else now, so the change is not undone from here.", no choice |
+
+When the change's files cannot be read (its run's branch is gone), the count is "Its details cannot be read
+now." under the title of its row, and there is no choice. The words of work that could not be read, which say
+that the folder is not changed, are never said of a kept change. Tests: `crates/jellymoon/tests/f92/stands.rs`,
+`app/tests/kept_by_itself.rs`.
+
+What is not closed is in ADR 0028, "Open": the moment between the second check and the step, a change pushed
+with no name left here, and the joined commit that nothing names after an undo.
+
 ## Every refusal
 
 Each ends the command with exit 1 and one line on stderr. With `--ask`, the ones marked are printed in `why`
@@ -627,5 +735,6 @@ made only of spaces or of `<>`, and takes an address of either.
 ## What it does not do
 
 It resolves no conflict, makes no merge commit, rebases nothing, fetches nothing and pushes nothing. It does not
-change the wish, whose state and star are its run's. It offers no undo: the commit it lands is the person's to
-revert, and the branch's reflog and `ORIG_HEAD` say where the branch was.
+change the wish, whose state and star are its run's. Only a change that was kept by itself has an undo
+("Undone"): any other commit it lands is the person's to revert, and the branch's reflog and `ORIG_HEAD` say
+where the branch was.

@@ -55,7 +55,7 @@ keeps, compares and prints is as it was. From the top:
 | the header | the date's tape, the title, and the footer as quiet lines under it |
 | a row a wish of the reading | its small character, its label, what it says; the ones let go last |
 | the day's own notes | every note of no made wish, in the scene's order: what was left out, what came true, the clashes, the plain notes, an opened wish of the reading |
-| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `file-`, `sure-`, `busy-`, `wish-`, `said-` |
+| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `kept-`, `file-`, `sure-`, `busy-`, `wish-`, `said-` |
 | a wish that is not made yet | the notes of `shaping.rs` (`shaping`, or `shape-said` and `shape`): the newest thing on the page, so the column's last, over the entry the words were typed in |
 
 The list "wished here today" that `scene::ruled` builds is not drawn: its rows are the words the bubbles carry.
@@ -502,8 +502,8 @@ from a line of its own, options), whose body is drawn as text and as nothing els
 that fit and counts the rest in a last line, `+N more`.
 
 - **A tap on a little one** whose run is not going opens its wish (`OnShow::poked`, off the window's thread). Work
-  that waits: one note, `work-<wish>`, "Your folder is not changed yet.", which says first, in one line, that the change is
-  in a copy and what `Keep it` and `Toss it` do (only `Toss it` where a page has no keep), so a result's note over
+  that waits: one note, `work-<wish>`, "Your folder is not changed yet.", which says first, in one line, that the change
+  waits for a yes and what `Keep it` and `Toss it` do (only `Toss it` where a page has no keep), so a result's note over
   it keeps its room (F86); then the wish's own words, the files as a person counts them ("1 file
   changed", "2 new files, 1 changed"), and the choices `Show me`, `Keep it`, `Toss it`. No run's id is
   on it, and no file's name before `Show me`: core's line of names is on the note once a file was shown, and not
@@ -695,6 +695,27 @@ carries a tap only on an option that is placed, as the kit's view gives a tap on
 repo: a choice of work that waits no more, and a carried call that panics.
 Not tested: the tap itself, on a real window. Not done: a file's text is not scrolled, so of a long file the
 first lines are drawn and the rest counted.
+
+## A change kept by itself (`app/src/landing.rs`, ADR 0028)
+
+A finished change is in the person's folder with no tap wherever core takes no yes
+([keep.md](keep.md#kept-by-itself)). Its wish then has the note `kept-<wish>` where the work's note would be:
+core's title "Your folder has this change now.", core's count of its files, and the one choice `Undo it`, with
+the offer of a follow-up under it as under every finished wish. `layout` prints it; a tap on the wish's
+character opens it. In the column it stands where the work's note does (`column.rs`, `ORDER`).
+
+A tap on `Undo it` is carried as every tap on work is (`working.rs`): "That change is being undone." at once,
+and then core's answer as the note `said-<wish>`. Undone: "The change was undone.", and under it the work's own
+note `work-<wish>` is back with `Show me`, `Keep it` and `Toss it`. Refused: "The change was not undone.", what
+the person can do next and core's one sentence of why ([keep.md](keep.md#undone)), and under it the kept note
+again. The title and the choice are there only while core, asking the repo at that look, finds the folder
+on the change's branch at the change's commit: under later commits the note has no choice and says why, and
+anywhere else it is titled "This change was put in your folder earlier." and has none
+([keep.md](keep.md#where-a-kept-change-stands)). A change that was not kept by itself has the work's note as before, whose first line says that it waits
+for a yes. Every word and every rule is core's (`run/waits/itself.rs`, `run/undo.rs`).
+
+Tests: `app/tests/kept_by_itself.rs`, in worlds that say a finished change is kept by itself
+(`support/worked.rs`, `landed`); every other test's world says that every change waits.
 
 ## A question answered, and more like this (`app/src/answering.rs`)
 

@@ -44,13 +44,13 @@ pub(super) fn cut(step: u8) {
 pub(super) fn forward(
     at: &At,
     commit: String,
-    onto: String,
+    (onto, before): (String, Option<&str>),
     how: How,
     files: &[Touched],
     note: &mut dyn FnMut(Note) -> bool,
 ) -> Result<Landing, Unkept> {
     cut(1);
-    if !note(Note::Intent(&commit, &onto)) {
+    if !note(Note::Intent(&commit, &onto, before)) {
         return Err(Unkept::Unwritten);
     }
     cut(2);

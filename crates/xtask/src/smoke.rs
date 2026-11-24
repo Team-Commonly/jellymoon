@@ -256,10 +256,10 @@ pub fn text(path: &Path) -> String {
     path.display().to_string()
 }
 
-/// Leaves a command no variable of this process, and no login shell to ask: `JELLYMOON_SHELL` is set to nothing,
-/// as the door of the binary's tests sets it (ADR 0021, decision 7).
+/// Leaves a command no variable of this process and no login shell to ask (`JELLYMOON_SHELL` is nothing: ADR 0021,
+/// decision 7), and has every change wait for a yes, as before F92: the steps keep and toss by hand.
 pub fn alone(command: &mut Command) -> &mut Command {
-    command.env_clear().env("JELLYMOON_SHELL", "")
+    command.env_clear().env("JELLYMOON_SHELL", "").env("JELLYMOON_TEST_WAITS", "1")
 }
 
 /// Writes a file and the folders above it.

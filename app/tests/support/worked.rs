@@ -37,7 +37,17 @@ pub fn tree(folder: &Path) -> Files {
 
 /// A made wish for `alpha`, `m1`, and its run ended, with the agent playing `script`: the world, and the repo.
 pub fn finished(script: &str) -> (World, PathBuf) {
-    let w = world();
+    ended(script, false)
+}
+
+/// [`finished`] in a world where a finished change is kept by itself (F92), as it is outside the tests.
+pub fn landed(script: &str) -> (World, PathBuf) {
+    ended(script, true)
+}
+
+fn ended(script: &str, itself: bool) -> (World, PathBuf) {
+    let mut w = world();
+    w.vars.extend(itself.then(|| ("JELLYMOON_TEST_WAITS", "0".into())));
     fs::create_dir(w.at("harness")).unwrap();
     w.play(script);
     let repo = w.at("work").join("alpha");

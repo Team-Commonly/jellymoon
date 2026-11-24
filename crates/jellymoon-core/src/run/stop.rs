@@ -108,5 +108,6 @@ fn ended(home: &Path, day: &str, wish: &MadeWish, run: &str) -> Ran {
     });
     let why = wish.why.clone().filter(|_| tossed).unwrap_or_else(|| by_now(home, run, why));
     let star = (done || (tossed && outcome == RunOutcome::Completed)).then(|| STAR.to_string());
-    Ran { run: Some(run.to_string()), wish: wish.id.clone(), outcome, star, denied, why, question: None }
+    let (run, wish, kept_itself) = (Some(run.to_string()), wish.id.clone(), false);
+    Ran { run, wish, outcome, star, denied, why, question: None, kept_itself }
 }

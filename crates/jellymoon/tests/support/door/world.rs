@@ -88,7 +88,8 @@ pub fn command<K: AsRef<OsStr>, V: AsRef<OsStr>, A: AsRef<OsStr>>(
     }
     assert!(!unguarded_installer(roots, vars.as_slice(), args), "{UNGUARDED}");
     let mut command = Command::new(program);
-    command.args(args).env_clear().env(SHELL, "").env(SYSTEM_BIN, "").envs(vars);
+    // Every change waits for a yes, as before F92, unless a test says that a finished change is kept by itself.
+    command.args(args).env_clear().env(SHELL, "").env(SYSTEM_BIN, "").env("JELLYMOON_TEST_WAITS", "1").envs(vars);
     if let Some(root) = env::var_os("SystemRoot").filter(|_| cfg!(windows)) {
         command.env("SystemRoot", root); // a Windows program needs it to start
     }

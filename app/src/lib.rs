@@ -67,6 +67,7 @@ pub mod column;
 pub mod jelly;
 #[cfg(feature = "window")]
 pub mod jellyfish;
+mod landing;
 pub mod lines;
 mod live;
 mod placing;

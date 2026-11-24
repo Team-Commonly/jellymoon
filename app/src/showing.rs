@@ -4,11 +4,14 @@
 //! make the same calls in the same order (`tests/f43/showing.rs`). No GPUI.
 
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
+use std::time::Instant;
 
 use sticker_kit::{Scene, Theme};
 
 use crate::drawing::Open;
+use crate::newer::Watch;
 use crate::placing::{made, whose};
 use crate::scene::drawn_id;
 use crate::starting::{Given, Listed, Listing, Shown};
@@ -26,8 +29,9 @@ use turns::Turns;
 /// day: every act on it is nothing. With it, the project core listed while no entry offered it (F64): a folder
 /// dropped or a name entered while the day is still being read. And which made wishes' notes a look makes again
 /// (`showing/turns.rs`). And which drawn notes the person opened and which made wish they tapped last (`drawing.rs`).
+/// And the watch of the bundle the window runs from (`newer.rs`).
 #[derive(Clone, Default)]
-pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>, Rc<RefCell<Turns>>, Open);
+pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>, Rc<RefCell<Turns>>, Open, Rc<Watch>);
 
 /// What the window does once core has answered an Enter.
 pub struct Entered {
@@ -42,7 +46,13 @@ pub struct Entered {
 
 impl Showing {
     pub fn of(day: Option<OnShow>) -> Self {
-        Showing(Rc::new(RefCell::new(day)), Rc::default(), Rc::default(), Open::default())
+        Showing(Rc::new(RefCell::new(day)), Rc::default(), Rc::default(), Open::default(), Rc::new(Watch::running()))
+    }
+
+    /// The same day in a window that runs from `bundle`, whose version is read now: a test's bundle is a folder
+    /// of its own.
+    pub fn bundled(self, bundle: Option<&Path>) -> Self {
+        Showing(self.0, self.1, self.2, self.3, Rc::new(Watch::of(bundle)))
     }
 
     /// The project whose chip is chosen as soon as an entry offers it, or none.
@@ -67,8 +77,10 @@ impl Showing {
 
     /// `scene` as the kit's view is given it: its drawn notes open or closed as the person left them, in the order
     /// of its column (`drawing.rs`). Every scene the window shows passes here, and no other place orders one.
+    /// Once a newer build was found installed, its note is the column's last (`newer.rs`): it is on no scene
+    /// that is kept, so no tap, choice or offer knows of it.
     pub fn column(&self, scene: &Scene) -> Scene {
-        self.3.column(scene)
+        self.3.column(&Scene { notes: self.4.noted(scene.notes.clone()), ..scene.clone() })
     }
 
     /// The entry of the first page, as work for another thread.
@@ -93,10 +105,24 @@ impl Showing {
     /// while a note of it is in the person's hand nor in the `turns::HOLD` looks after the person acted on it.
     /// With none to make again, and no run found ended, core is asked nothing of a wish that has ended.
     pub fn look(&self) -> Option<Look> {
+        self.look_at(Instant::now())
+    }
+
+    /// [`Showing::look`] made at `now`. At most once a minute the look also reads the version of the bundle on
+    /// disk, after its own work and off the window's thread with it (`newer.rs`). The look that finds a newer
+    /// build gives the scene on show to be drawn again when it has nothing else to show.
+    pub fn look_at(&self, now: Instant) -> Option<Look> {
         self.with(|on| {
             let (whom, held) = self.2.borrow_mut().asks(&on.scene);
             let (today, page, from) = (on.today.clone(), on.page.clone(), on.scene.clone());
-            Box::new(move || today.looked(page.as_ref(), from, &whom, &held)) as Look
+            let Some(check) = self.4.check(now) else {
+                return Box::new(move || today.looked(page.as_ref(), from, &whom, &held)) as Look;
+            };
+            Box::new(move || {
+                let seen = today.looked(page.as_ref(), from.clone(), &whom, &held);
+                let again = check().then(|| Seen { from: from.clone(), now: from });
+                seen.or(again)
+            })
         })
     }
 

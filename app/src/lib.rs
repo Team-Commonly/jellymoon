@@ -8,6 +8,7 @@
 //! - [`working`]: a tap on a little one opens its wish, and work that waits is shown, kept or tossed through core.
 //! - `live`: what a made wish's run is doing while it works, drawn from core's steps over its little one.
 //! - [`drawing`]: a wish's work as pencil pictures: which drawn notes are open, and the pass every drawn scene takes.
+//! - [`newer`]: a newer build installed under an open window: the bundle's `Info.plist` read, and one note.
 //! - [`answering`]: what is typed under a made wish: an answer to its run's question, or a follow-up, through core.
 //! - [`starting`]: a folder dropped or chosen, or a new project named, given to core as a project.
 //! - [`today`]: the day's page, kept in the user's own folder and read again through core when the day has moved on.
@@ -72,6 +73,7 @@ pub mod jellyfish;
 mod landing;
 pub mod lines;
 mod live;
+pub mod newer;
 mod placing;
 pub mod popup;
 pub mod read;

@@ -865,7 +865,10 @@ max_file_lines = 400
 # window (`tests/column_draw.rs`, 99; `tests/entry_draw.rs`, 1).
 # The place a tap's guard keeps is the window's as a layout moved it, raised the kit by 43: the rule and its own
 # test (`draw/settle.rs`, 10; the view, 1) and two tests at the window of a column held at its end (32).
-"crates/sticker-kit" = 12716
+# Typed ahead raised the kit by 87: the entry that takes every key while an answer is owed, with the words Enter
+# gave kept aside (`src/entry.rs`, 17; the view, 1), a picture of it (`draw/headless.rs`, 6) and its tests
+# (`tests/entry_waits.rs`, 74 more; `tests/entry_draw.rs`, 11 fewer: the test that Escape is not taken went).
+"crates/sticker-kit" = 12803
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1094,7 +1097,9 @@ max_file_lines = 400
 # made, the toss and then the run (`src/again.rs`), the note with its one choice (`src/working.rs`), and its
 # tests at the made-up window (`tests/a_change_that_no_longer_fits.rs`, 169; a pin of `tests/f47/asked.rs`).
 # After the gate 18 more: the installed command is looked for before a wish is made again, with its test.
-"app" = 18993
+# Typed ahead raised the app by 33: its test at the made-up window, a wish typed before core has answered
+# (`tests/f43/window.rs`, 30), and `--since` of the picture example (`examples/snapshot.rs`, 2; `examples/walk.rs`, 1).
+"app" = 19026
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

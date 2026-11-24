@@ -1,8 +1,9 @@
 //! What is typed into a scene's entry, as plain data: one line of text, the part of it an input method is still
 //! composing (marked), a caret and the chosen option. Nothing here draws or knows a window, so every rule is tested
-//! with no display. Enter gives the words and keeps them: the entry waits, and takes no key, until it is answered
-//! ([`EntryState::answer`]), so words never leave it before whoever was given them has kept them. Places are bytes into the text, always between characters; the ranges a platform's input method
-//! speaks are UTF-16 and are turned into bytes here and nowhere else.
+//! with no display. Enter gives the words and keeps them aside until it is answered ([`EntryState::answer`]), so
+//! words are never lost before whoever was given them has kept them. The entry takes every key meanwhile: what is
+//! typed then is the next text, and no key is dropped. Places are bytes into the text, always between characters;
+//! the ranges a platform's input method speaks are UTF-16 and are turned into bytes here and nowhere else.
 
 use std::ops::Range;
 
@@ -31,8 +32,8 @@ pub struct EntryState {
     chosen: usize,
     options: usize,
     most: usize,
-    /// Enter gave the words and no answer has come.
-    waiting: bool,
+    /// The words Enter gave, as they were typed, while no answer has come for them. They are no part of `text`.
+    owed: Option<String>,
 }
 
 impl Default for EntryState {
@@ -47,7 +48,7 @@ impl EntryState {
     pub fn new(options: usize, most: usize) -> Self {
         let most = if most == 0 { MAX_ENTRY_CHARS } else { most.min(MAX_ENTRY_CHARS) };
         let options = options.min(MAX_ENTRY_OPTIONS);
-        Self { text: String::new(), marked: None, caret: 0, chosen: 0, options, most, waiting: false }
+        Self { text: String::new(), marked: None, caret: 0, chosen: 0, options, most, owed: None }
     }
 
     pub fn of(entry: &Entry) -> Self {
@@ -76,26 +77,42 @@ impl EntryState {
 
     /// Whether the entry holds words of the person's, a composition among them: text with a character a person
     /// sees ([`has_visible`]). Spaces alone are none, nor a joiner or a filler alone, as Enter gives nothing for
-    /// them and the hint stays while they are all there is. An entry that waits always does: only words are
-    /// entered. One that does is never taken off its page ([`crate::draw::Page::set_entry`]).
+    /// them and the hint stays while they are all there is. An entry that is owed an answer always does: only words
+    /// are entered. One that does is never taken off its page ([`crate::draw::Page::set_entry`]).
     pub fn holds(&self) -> bool {
-        has_visible(&self.text)
+        self.owed.is_some() || has_visible(&self.text)
     }
 
-    /// Whether Enter gave the words and no answer has come. While it waits the entry takes no key: no text, no
-    /// composition, no caret move, no other option and no second Enter. A key pressed then is not kept for later.
+    /// Whether an answer is owed: Enter gave the words and no answer has come. The entry takes every key
+    /// meanwhile, as at any other time: text, a composition, the editing keys, the caret, another option. Only
+    /// Enter gives nothing then, and what was typed since stays. No key is dropped.
     pub fn waiting(&self) -> bool {
-        self.waiting
+        self.owed.is_some()
     }
 
-    /// The answer to what Enter gave. Kept: the entry is empty again, with the same option chosen. Not kept: the
-    /// words stay as they were typed. Either way the entry takes keys again. Nothing when nothing waits.
+    /// The words an answer is owed for, as they were typed. [`text`](Self::text) is what was typed since.
+    pub fn owed(&self) -> Option<&str> {
+        self.owed.as_deref()
+    }
+
+    /// The answer to what Enter gave. Kept: the words kept aside are forgotten, and what was typed since stays
+    /// as it is, with its caret. Not kept: the words come back as they were typed, in front of what was typed
+    /// since with one space between, as much of them as the cap leaves room for beside it, and the caret is at
+    /// the end (a composition keeps its caret). An option chosen since stays. Nothing when no answer is owed.
     pub fn answer(&mut self, kept: bool) {
-        if self.waiting && kept {
-            self.text.clear();
-            self.caret = 0;
+        let Some(words) = self.owed.take().filter(|_| !kept) else { return };
+        let since = self.text.chars().count();
+        let gap = if since == 0 { "" } else { " " };
+        let back = &words[..prefix(&words, self.most.saturating_sub(since + gap.len()))];
+        // In front of other words they end at their last word: one space between, never two.
+        let back = if since == 0 { back } else { back.trim_end() };
+        if back.is_empty() {
+            return;
         }
-        self.waiting = false;
+        let moved = back.len() + gap.len();
+        self.text.insert_str(0, &format!("{back}{gap}"));
+        self.marked = self.marked.take().map(|marked| marked.start + moved..marked.end + moved);
+        self.caret = if self.marked.is_some() { self.caret + moved } else { self.text.len() };
     }
 
     pub fn text(&self) -> &str {
@@ -146,9 +163,6 @@ impl EntryState {
     /// Replaces a range with as much of `new`, cleaned, as the cap leaves room for. Returns where it now is.
     fn put(&mut self, range_utf16: Option<Range<usize>>, new: &str) -> Range<usize> {
         let caret = self.caret..self.caret;
-        if self.waiting {
-            return caret;
-        }
         let range = range_utf16.map(|range| self.from_utf16(range)).or(self.marked.clone()).unwrap_or(caret);
         // One character more than can ever fit is enough to tell where the last whole one ends, however much is pasted.
         let new: String = new.chars().filter_map(one_line).take(self.most + 1).collect();
@@ -170,7 +184,7 @@ impl EntryState {
     }
 
     fn cut(&mut self, range: Range<usize>) {
-        if self.marked.is_none() && !self.waiting {
+        if self.marked.is_none() {
             self.text.replace_range(range.clone(), "");
             self.caret = range.start;
         }
@@ -199,7 +213,7 @@ impl EntryState {
     }
 
     fn go(&mut self, to: usize) {
-        if self.marked.is_none() && !self.waiting {
+        if self.marked.is_none() {
             self.caret = to.min(self.text.len());
         }
     }
@@ -223,20 +237,23 @@ impl EntryState {
     }
 
     pub fn choose(&mut self, option: usize) {
-        if option < self.options && !self.waiting {
+        if option < self.options {
             self.chosen = option;
         }
     }
 
-    /// What was entered. The words stay in the entry, which waits for [`answer`](Self::answer). Nothing while a
-    /// composition is marked (that Enter belongs to the input method, to confirm it), nothing for text that
-    /// [`holds`](Self::holds) no words, and nothing while the entry waits.
+    /// What was entered. The words are kept aside for [`answer`](Self::answer) and the text is empty from then
+    /// on. Nothing while a composition is marked (that Enter belongs to the input method, to confirm it), nothing
+    /// for text with no words in it, and nothing while an answer is owed: what was typed since stays.
     pub fn enter(&mut self) -> Option<Made> {
-        if self.marked.is_some() || self.waiting || !self.holds() {
+        if self.marked.is_some() || self.waiting() || !has_visible(&self.text) {
             return None;
         }
-        self.waiting = true;
-        Some(Made { text: self.text.trim().to_string(), option: self.chosen() })
+        let words = std::mem::take(&mut self.text);
+        self.caret = 0;
+        let made = Made { text: words.trim().to_string(), option: self.chosen() };
+        self.owed = Some(words);
+        Some(made)
     }
 
     pub fn len_utf16(&self) -> usize {

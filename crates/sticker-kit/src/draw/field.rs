@@ -76,9 +76,9 @@ impl Page {
         self.fields.iter().find(|view| view.names(id)).map(|view| &view.state)
     }
 
-    /// The answer to what Enter gave with the note's id `id`, as [`Page::answer_entry`] is the entry's: kept,
-    /// and the field is empty again; not kept, and its words stay. The field is found by that id wherever it
-    /// is now: under its note, under a note that took its place, or kept apart. Nothing when none waits so.
+    /// The answer to what Enter gave with the note's id `id`, as [`Page::answer_entry`] is the entry's, by the
+    /// same rule for kept and not kept. The field is found by that id wherever it is now: under its note, under a
+    /// note that took its place, or kept apart. Nothing when none waits so.
     pub fn answer_field(&mut self, id: &str, kept: bool, window: &Window, cx: &mut Context<Self>) {
         self.field_answered(id, kept);
         self.entry_changed(window, cx);

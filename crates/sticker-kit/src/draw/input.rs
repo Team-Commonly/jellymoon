@@ -104,9 +104,9 @@ impl EntityInputHandler for Page {
         Some(self.view(self.keyed(window)).state.len_utf16())
     }
 
-    /// Not while the entry waits for its answer: no composition can begin then.
+    /// While an answer is owed too: the text and every range here are of what is typed, never of the words kept
+    /// aside, so a composition begins after Enter as at any other time.
     fn accepts_text_input(&self, window: &mut Window, _: &mut Context<Self>) -> bool {
-        let view = self.view(self.keyed(window));
-        view.what.is_some() && !view.state.waiting()
+        self.view(self.keyed(window)).what.is_some()
     }
 }

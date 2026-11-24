@@ -120,7 +120,7 @@ pub(crate) async fn looks(shown: Showing, page: WeakEntity<Page>, cx: &mut gpui:
     }
 }
 
-/// Enter in the entry, or in a note's field. It keeps its words and waits while core is asked off the window's
+/// Enter in the entry, or in a note's field. It keeps the words aside while core is asked off the window's
 /// thread; then it is answered and the page shown. Then the asking for the wish's run is run, off the window's
 /// thread too, and what it has to say is shown when it ends.
 fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {

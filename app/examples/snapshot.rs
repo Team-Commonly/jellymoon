@@ -13,7 +13,8 @@
 //! `[wish id, {"count": .., "last": [..]}]`. A drawn note is closed, as a page first shows it; `--open` draws
 //! every one open, as after a tap on its picture. `--notes <notes file>` puts a list of the scene's notes, as
 //! `layout` prints them, over the page's: the notes several made wishes have at once (ADR 0030), which core makes
-//! of a day's runs and a picture has none of.
+//! of a day's runs and a picture has none of. `--since <more words>` draws the entry as it is after Enter on
+//! `words` and before the answer, with `more words` typed meanwhile (`""` for none: `words` are then shown pale).
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -50,8 +51,8 @@ fn steps(file: &str) -> Result<Vec<(String, Steps)>, String> {
 }
 
 /// What the flags ask for, taken out of the arguments: the notes of work, how many wishes are made wishes, their
-/// steps, and whether every drawn note is open.
-type Asked = (Vec<Note>, usize, Vec<(String, Steps)>, bool);
+/// steps, whether every drawn note is open, and what was typed since Enter.
+type Asked = (Vec<Note>, usize, Vec<(String, Steps)>, bool, Option<String>);
 
 fn asked(args: &mut Vec<String>) -> Result<Asked, String> {
     let (waiting, told) = (taken(args, "--work"), taken(args, "--told"));
@@ -63,12 +64,12 @@ fn asked(args: &mut Vec<String>) -> Result<Asked, String> {
         let text = std::fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
         notes.extend(serde_json::from_str::<Vec<Note>>(&text).map_err(|e| format!("{file}: {e}"))?);
     }
-    Ok((notes, made, doing, open))
+    Ok((notes, made, doing, open, taken(args, "--since")))
 }
 
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    let (notes, made, doing, open) = match asked(&mut args) {
+    let (notes, made, doing, open, since) = match asked(&mut args) {
         Ok(asked) => asked,
         Err(why) => {
             eprintln!("snapshot: {}", one_line(&why));
@@ -78,7 +79,8 @@ fn main() -> ExitCode {
     let [file, folder, name, more @ ..] = args.as_slice() else {
         eprintln!(
             "usage: snapshot [--work <waiting file> [--told <shown file>]] [--made <n> [--steps <steps file>]] \
-             [--notes <notes file>] [--open] <page file> <folder> <name> [width height [words [option [theme file]]]]"
+             [--notes <notes file>] [--open] [--since <more words>] <page file> <folder> <name> [width height \
+             [words [option [theme file]]]]"
         );
         return ExitCode::from(2);
     };
@@ -120,8 +122,8 @@ fn main() -> ExitCode {
         // A theme file's `name` is the file's text: cleaned, and only a part of the picture's name, never a path.
         let out = PathBuf::from(folder).join(format!("{name}-{}.png", file_part(&theme.name)));
         let opened = if open { drawing::every(&shown) } else { Default::default() };
-        let (typing, scene) =
-            (entry.clone().map(|entry| Typing { entry, typed: typed.clone() }), drawing::column(&shown, &opened));
+        let typing = entry.clone().map(|entry| Typing { entry, typed: typed.clone(), since: since.clone() });
+        let scene = drawing::column(&shown, &opened);
         if let Err(error) = snapshot_typing(scene, theme, typing, side(0, 1440.0), side(1, 900.0), &out) {
             eprintln!("snapshot: could not render {}: {error}", out.display());
             return ExitCode::FAILURE;

@@ -134,19 +134,19 @@ fn a_click_gives_a_note_s_field_the_keys_and_enter_gives_its_words_once_with_the
     keys(cx, "t h e space o l d");
     assert_eq!(typed(&page, cx), (String::new(), "the old".into(), String::new(), true));
 
-    // Enter gives the words with the note's id and no option; a second Enter, and every key, is nothing while
-    // the field waits for its answer.
-    keys(cx, "enter enter x backspace enter");
+    // Enter gives the words with the note's id and no option; a second Enter is nothing while the field is owed
+    // its answer, and every other key is typed as at any time.
+    keys(cx, "enter enter x y backspace enter");
     assert_eq!(*entered.borrow(), [made("asks", "the old")]);
-    assert_eq!(typed(&page, cx).1, "the old", "the words stay until they are taken");
+    assert_eq!(typed(&page, cx).1, "x", "a key was dropped while the answer was owed");
     assert!(page.read_with(cx, |page, _| page.field("asks").is_some_and(|field| field.waiting())));
 
-    // Not taken: the words stay, and the field takes keys again. Taken: it is empty.
+    // Not taken: the words come back in front of what was typed since. Taken: it is empty.
     answer(&page, cx, "asks", false);
     keys(cx, "!");
-    assert_eq!(typed(&page, cx).1, "the old!");
+    assert_eq!(typed(&page, cx).1, "the old x!");
     keys(cx, "enter");
-    assert_eq!(entered.borrow().last(), Some(&made("asks", "the old!")));
+    assert_eq!(entered.borrow().last(), Some(&made("asks", "the old x!")));
     answer(&page, cx, "asks", true);
     assert_eq!(typed(&page, cx), (String::new(), String::new(), String::new(), true));
     // An answer for a note with no field changes nothing.
@@ -173,17 +173,17 @@ fn each_field_and_the_entry_hold_their_own_words_and_a_tap_on_the_offer_gives_it
     assert_eq!(typed(&page, cx).2, "ab1234567890");
     keys(cx, "enter");
     assert_eq!(*entered.borrow(), [made("more", "ab1234567890")]);
-    // The other field and the entry take keys while that one waits.
+    // The other field and the entry take keys while that one is owed its answer, with its words kept aside.
     press(&page, cx, PieceKind::Field, "asks");
     keys(cx, "!");
     assert_eq!(typed(&page, cx).1, "cd!");
     // Escape gives the entry the keys, and so does a press anywhere else on the page.
     keys(cx, "escape z");
-    assert_eq!(typed(&page, cx), ("efz".into(), "cd!".into(), "ab1234567890".into(), true));
+    assert_eq!(typed(&page, cx), ("efz".into(), "cd!".into(), String::new(), true));
     press(&page, cx, PieceKind::Field, "asks");
     click(cx, (4.0, 4.0));
     keys(cx, "?");
-    assert_eq!(typed(&page, cx), ("efz?".into(), "cd!".into(), "ab1234567890".into(), true));
+    assert_eq!(typed(&page, cx), ("efz?".into(), "cd!".into(), String::new(), true));
     // Someone else's words, the field and the offer are no tap: nothing was tapped in all of this.
     press(&page, cx, PieceKind::Quote, "asks");
     assert!(taps.borrow().is_empty(), "{:?}", taps.borrow());
@@ -280,9 +280,9 @@ fn a_keyed_field_keeps_its_words_while_no_note_has_it_and_under_another_note_wit
     keys(cx, "enter");
     assert_eq!(*entered.borrow(), [made("stands", "next")]);
     show(&page, cx, vec![keyed("work", "k")]);
-    assert_eq!(field(&page, cx, "work"), Some(("next".to_string(), true)));
+    assert_eq!(field(&page, cx, "work"), Some((String::new(), true)));
     answer(&page, cx, "work", true);
-    assert_eq!(field(&page, cx, "work"), Some(("next".to_string(), true)), "an answer for another Enter was taken");
+    assert_eq!(field(&page, cx, "work"), Some((String::new(), true)), "an answer for another Enter was taken");
     answer(&page, cx, "stands", true);
     assert_eq!(field(&page, cx, "work"), has(""));
     // A field with no key goes with its note, words and all, as before.
@@ -373,7 +373,7 @@ fn a_drawn_note_s_field_is_typed_in_and_entered_as_a_text_note_s_is() {
     assert_eq!(field(&page, cx, "work"), has("one"));
     keys(cx, "enter enter");
     assert_eq!(*entered.borrow(), [made("work", "one")]);
-    assert_eq!(field(&page, cx, "work"), Some(("one".to_string(), true)), "it waits for its answer");
+    assert_eq!(field(&page, cx, "work"), Some((String::new(), true)), "its answer is owed");
     answer(&page, cx, "work", true);
     assert_eq!(field(&page, cx, "work"), has(""));
     // A text note with the same key and offer takes the drawn note's place: one field.

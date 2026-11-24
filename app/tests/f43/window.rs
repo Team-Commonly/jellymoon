@@ -5,14 +5,16 @@
 
 use std::ops::Deref;
 
-use gpui::{ClipboardItem, Entity, Modifiers, TestAppContext, TestDispatcher, VisualTestContext, point, px, size};
+use gpui::{
+    ClipboardItem, Entity, Keystroke, Modifiers, TestAppContext, TestDispatcher, VisualTestContext, point, px, size,
+};
 use jellymoon_app::showing::Showing;
 use jellymoon_app::window::page;
 use sticker_kit::draw::headless::text_system;
 use sticker_kit::draw::{Page, load_fonts};
 use sticker_kit::{Entry, PieceKind, Scene, Theme, Viewport};
 
-use super::wished_alone;
+use super::{DAY, wished_alone};
 use crate::support::wished::SAID;
 
 fn context() -> TestAppContext {
@@ -45,6 +47,34 @@ fn enters(page: &Entity<Page>, cx: &mut VisualTestContext, words: &str) -> (Stri
     cx.write_to_clipboard(ClipboardItem::new_string(words.into()));
     cx.simulate_keystrokes("cmd-v enter");
     entry(page, cx)
+}
+
+/// One key, and nothing after it: what the window left for its other thread has not begun.
+fn key(cx: &mut VisualTestContext, key: &'static str) {
+    cx.update(|window, cx| window.dispatch_keystroke(Keystroke::parse(key).expect("a key"), cx));
+}
+
+// Typed ahead: a person presses Enter and types the next wish at once, before core has answered.
+#[test]
+fn what_is_typed_before_core_has_answered_is_all_in_the_entry_and_the_wish_is_made_with_its_own_words() {
+    const FIRST: &str = "tidy the uploader";
+    let (world, on) = wished_alone();
+    let shown = Showing::of(Some(on));
+    let wish = shown.offering().unwrap()().expect("alpha was typed in today");
+    let mut cx = context();
+    let (page, cx) = opened(&mut cx, shown, wish);
+    let field = page.read_with(cx, |page, _| page.placed().iter().find(|p| p.piece == PieceKind::Entry).cloned());
+    let (x, y) = field.expect("the entry is placed").rect.center();
+    cx.simulate_click(point(px(x), px(y)), Modifiers::default());
+    cx.write_to_clipboard(ClipboardItem::new_string(FIRST.into()));
+    let held = |cx: &mut VisualTestContext| {
+        page.read_with(cx, |page, _| (page.entry().text().to_string(), page.entry().waiting()))
+    };
+    "cmd-v enter n e x t space o n e".split(' ').for_each(|one| key(cx, one));
+    assert_eq!(held(cx), ("next one".to_string(), true), "a key was dropped while core was asked");
+    assert_eq!(entry(&page, cx), ("next one".to_string(), false), "core kept the wish: what was typed since stays");
+    let said: Vec<String> = jellymoon_core::made(&world.home, DAY).into_iter().map(|wish| wish.said).collect();
+    assert_eq!(said, [SAID, FIRST], "the wish was made with other words than its own");
 }
 
 #[test]

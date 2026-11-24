@@ -286,7 +286,7 @@ fn a_look_takes_away_a_note_of_the_page_s_own_that_no_longer_holds() {
 }
 
 // The kit's part, with the app's own entry: Enter while an input method is composing confirms the composition,
-// and the words that are entered stay in the entry until core has answered.
+// and the words that are entered are kept aside by the entry until core has answered.
 #[test]
 fn enter_during_a_composition_enters_nothing() {
     let world = read();
@@ -299,7 +299,7 @@ fn enter_during_a_composition_enters_nothing() {
     typed.next_option();
     let made = typed.enter().expect("the composition is confirmed");
     assert_eq!((made.text.as_str(), made.option), ("牛奶を買う", Some(1)));
-    assert_eq!((typed.text(), typed.waiting()), ("牛奶を買う", true), "the words left before core kept them");
+    assert_eq!((typed.text(), typed.waiting()), ("", true), "the entry takes the next words while core is asked");
     typed.answer(true);
     assert_eq!((typed.text(), typed.waiting()), ("", false));
 }

@@ -19,7 +19,7 @@ fn enter_gives_the_text_and_the_chosen_option_and_the_entry_is_empty_once_they_a
     let mut entry = typed("  water the basil ");
     entry.next_option();
     assert_eq!(entry.enter(), made("water the basil", Some(1)));
-    assert_eq!(entry.text(), "  water the basil ", "the words stay until they are kept");
+    assert_eq!((entry.text(), entry.waiting()), ("", true), "the words are kept aside until they are kept");
     entry.answer(true);
     assert_eq!((entry.text(), entry.caret(), entry.chosen()), ("", 0, Some(1)), "the option stays chosen");
     assert_eq!(entry.enter(), None, "nothing typed is nothing entered");
@@ -293,6 +293,6 @@ fn text_of_no_character_a_person_sees_is_no_words() {
     for words in ["\u{2764}\u{FE0F}", "\u{1F469}\u{200D}\u{1F4BB}", "\u{2800}a", "\u{3164} 가"] {
         let mut entry = typed(words);
         assert!(entry.holds(), "{words:?} is words");
-        assert_eq!(entry.enter(), made(entry.text().trim(), Some(0)), "{words:?}");
+        assert_eq!(entry.enter(), made(words.trim(), Some(0)), "{words:?}");
     }
 }

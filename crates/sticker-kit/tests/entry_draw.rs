@@ -119,7 +119,7 @@ fn the_entry_has_the_keys_from_the_first_frame_and_enter_gives_what_was_typed() 
     assert_eq!(state(&page, cx).2, Some(1), "Tab chooses the next option");
     keys(cx, "enter");
     assert_eq!(*made.borrow(), [wish("tea at 4", "kitchen")]);
-    assert_eq!(state(&page, cx), ("tea at 4".into(), 8, Some(1), true), "the words stay until they are kept");
+    assert_eq!(state(&page, cx), (String::new(), 0, Some(1), true), "the words are kept aside until they are kept");
     answer(&page, cx, true);
     assert_eq!(state(&page, cx), (String::new(), 0, Some(1), true), "the entry is empty and keeps its option");
 
@@ -232,8 +232,9 @@ fn a_chip_chooses_its_option_and_the_page_under_the_entry_still_takes_taps() {
     );
 }
 
+// Typed ahead: a person presses Enter and types the next words at once, before the answer has come.
 #[test]
-fn an_entry_waits_with_its_words_for_its_answer_and_takes_no_key_or_composition_meanwhile() {
+fn an_entry_that_is_owed_an_answer_takes_every_key_and_only_its_enter_gives_nothing() {
     let mut cx = context();
     let (page, cx, made, _) = open(&mut cx);
     let accepts = |cx: &mut VisualTestContext| {
@@ -244,37 +245,38 @@ fn an_entry_waits_with_its_words_for_its_answer_and_takes_no_key_or_composition_
     let field = piece(&page, cx, PieceKind::Entry, 0);
     click(cx, field.rect.center());
     keys(cx, "t e a tab enter");
-    let waits = ("tea".to_string(), 3, Some(1), true);
-    assert_eq!((state(&page, cx), waiting(cx)), (waits.clone(), true), "the words stay while the entry waits");
-    assert!(!accepts(cx), "an entry that waits takes no text input, so no composition begins");
-    keys(cx, "x backspace left home delete tab shift-tab enter secondary-v");
+    assert_eq!((state(&page, cx), waiting(cx)), ((String::new(), 0, Some(1), true), true), "the words are kept aside");
+    assert!(accepts(cx), "an entry that is owed an answer takes text input, so a composition can begin");
+    // Before the answer: letters, the editing keys, Escape, a paste, a second Enter, a composition, a chip, a click.
+    cx.write_to_clipboard(ClipboardItem::new_string("k".into()));
+    keys(cx, "m i x l k backspace backspace home delete escape end secondary-v enter");
     cx.update(|window, cx| {
         page.update(cx, |page, cx| page.replace_and_mark_text_in_range(None, "ni", None, window, cx));
+        let marked = page.update(cx, |page, cx| page.marked_text_range(window, cx));
+        assert_eq!(marked, Some(3..5), "the ranges are of the typed text, never of the words kept aside");
         page.update(cx, |page, cx| page.replace_text_in_range(None, "你", window, cx));
     });
     let chip = piece(&page, cx, PieceKind::Chip, 2);
     click(cx, chip.rect.center());
     click(cx, (field.rect.x + 15.0, field.rect.center().1));
-    assert_eq!((state(&page, cx), waiting(cx)), (waits.clone(), true), "a key was taken while the entry waited");
-    assert_eq!(*made.borrow(), [wish("tea", "kitchen")], "a second Enter entered the words again");
+    let since = ("ixk你".to_string(), 0, Some(2), true);
+    assert_eq!((state(&page, cx), waiting(cx)), (since.clone(), true), "a key was dropped while an answer was owed");
+    assert_eq!(*made.borrow(), [wish("tea", "kitchen")], "a second Enter gave words while an answer was owed");
 
-    // Not kept: the words are still there, and the keys are the entry's again. Twice over.
-    for nth in 1..3 {
-        answer(&page, cx, false);
-        assert_eq!((state(&page, cx), waiting(cx), accepts(cx)), (waits.clone(), false, true));
-        keys(cx, "s backspace enter");
-        assert_eq!(made.borrow().len(), nth + 1);
-        assert_eq!((state(&page, cx), waiting(cx)), (waits.clone(), true), "refusal {nth} lost the words");
-    }
-    // The options move while it waits: the option is kept by its name. Then the words are kept.
-    let moved = Entry { options: ["kitchen", "letters", "garden"].map(String::from).to_vec(), ..entry() };
+    // Kept: what was typed since is whole, with its caret, and is what the next Enter gives.
+    answer(&page, cx, true);
+    assert_eq!((state(&page, cx), waiting(cx), accepts(cx)), (since, false, true));
+    keys(cx, "enter t w o");
+    // The options move while the answer is owed: the option is kept by its name. Then the words are not kept:
+    // they come back in front of what was typed since.
+    let moved = Entry { options: ["letters", "kitchen", "garden"].map(String::from).to_vec(), ..entry() };
     page.update(cx, |page, cx| page.set_entry(Some(moved), cx));
     cx.run_until_parked();
-    assert_eq!((state(&page, cx).2, waiting(cx)), (Some(0), true), "kitchen is still the chosen option");
-    answer(&page, cx, true);
-    assert_eq!((state(&page, cx), waiting(cx)), ((String::new(), 0, Some(0), true), false));
-    keys(cx, "o k enter");
-    assert_eq!(made.borrow().last(), Some(&wish("ok", "kitchen")), "the option is given by its name");
+    assert_eq!((state(&page, cx).2, waiting(cx)), (Some(0), true), "letters is still the chosen option");
+    answer(&page, cx, false);
+    assert_eq!((state(&page, cx), waiting(cx)), (("ixk你 two".into(), 10, Some(0), true), false));
+    keys(cx, "enter");
+    assert_eq!(made.borrow().last(), Some(&wish("ixk你 two", "letters")), "the option is given by its name");
 
     answer(&page, cx, true);
     take_away(&page, cx);
@@ -289,7 +291,7 @@ fn an_entry_taken_away_stays_with_its_words_and_goes_once_it_is_empty_and_answer
     take_away(&page, cx);
     assert_eq!(pieces(&page, cx), 0, "an empty entry that does not wait goes at once");
 
-    // Words that wait: the entry stays as it was, chips and all, and a refusal leaves them to be changed.
+    // Words an answer is owed for: the entry stays, chips and all, and a refusal gives them back to be changed.
     page.update(cx, |page, cx| page.set_entry(Some(entry()), cx));
     cx.run_until_parked();
     let field = piece(&page, cx, PieceKind::Entry, 0);
@@ -297,7 +299,7 @@ fn an_entry_taken_away_stays_with_its_words_and_goes_once_it_is_empty_and_answer
     keys(cx, "d r a f t tab enter");
     take_away(&page, cx);
     let held = ("draft".to_string(), 5, Some(1), true);
-    assert_eq!((pieces(&page, cx), state(&page, cx), waiting(cx)), (4, held.clone(), true));
+    assert_eq!((pieces(&page, cx), state(&page, cx), waiting(cx)), (4, (String::new(), 0, Some(1), true), true));
     answer(&page, cx, false);
     assert_eq!((pieces(&page, cx), state(&page, cx), waiting(cx)), (4, held, false), "the refusal found no words");
     keys(cx, "backspace s enter");
@@ -334,7 +336,7 @@ fn an_entry_taken_away_stays_with_its_words_and_goes_once_it_is_empty_and_answer
 }
 
 #[test]
-fn an_answer_is_always_for_the_words_on_show_since_an_entry_that_waits_cannot_go_and_come_back_empty() {
+fn an_entry_that_is_owed_an_answer_cannot_go_and_come_back_empty_and_keeps_what_is_typed_meanwhile() {
     let mut cx = context();
     let (page, cx, made, _) = open(&mut cx);
     let field = piece(&page, cx, PieceKind::Entry, 0);
@@ -345,23 +347,10 @@ fn an_answer_is_always_for_the_words_on_show_since_an_entry_that_waits_cannot_go
     cx.run_until_parked();
     keys(cx, "s e c o n d enter");
     let waiting = page.read_with(cx, |page, _| page.entry().waiting());
-    assert_eq!((state(&page, cx).0.as_str(), waiting), ("first", true), "a second wish was typed under the first");
+    assert_eq!((state(&page, cx).0.as_str(), waiting), ("second", true), "what was typed since was dropped");
     assert_eq!(*made.borrow(), [wish("first", "garden")], "one Enter, so one answer to come");
-    answer(&page, cx, true);
-    assert_eq!((pieces(&page, cx), state(&page, cx).0.as_str()), (4, ""), "the entry given back is the page's");
-}
-
-#[test]
-fn an_entry_that_waits_does_not_take_escape_so_the_keys_stay_its_own() {
-    let mut cx = context();
-    let (page, cx, _, _) = open(&mut cx);
-    let field = piece(&page, cx, PieceKind::Entry, 0);
-    click(cx, field.rect.center());
-    keys(cx, "t e a enter escape");
-    assert_eq!(state(&page, cx), ("tea".into(), 3, Some(0), true), "Escape was taken while the entry waited");
     answer(&page, cx, false);
-    keys(cx, "escape");
-    assert!(state(&page, cx).3, "after the answer Escape leaves the keys with the entry too");
+    assert_eq!((pieces(&page, cx), state(&page, cx).0.as_str()), (4, "first second"), "the answer found its words");
 }
 
 #[test]

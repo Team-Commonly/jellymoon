@@ -77,7 +77,9 @@ Not measured: Windows, Linux, an older Claude Code, and a link inside the projec
 
 - The app does not end the shaping call when it quits: the child goes on to its 20 seconds at most, and its
   `shaping/call-…` folder is left. At the limit only the child itself is ended, not what it started.
-- The entry takes no key from Enter until the reading's answer, 20 seconds at most.
+- The entry took no key from Enter until the reading's answer, 20 seconds at most. Amended 2026-11-24: it takes
+  every key now, and what is typed meanwhile is the next words (the kit's `README.md`, "The entry is then owed an
+  answer"). Enter gives nothing until the answer has come.
 - A wish refused after a tap (the day has its eight wishes; the project is no longer on offer) leaves a note with
   the start of the typed words, not the whole of them in the entry.
 - Enter while a sharper wish stands reads the new words in its place; the first words are gone with no note.

@@ -25,8 +25,6 @@ pub const TYPED: &str = "What you typed";
 /// The two choices, in their order.
 pub const GO: &str = "Go with this";
 pub const GO_TYPED: &str = "Go with what I typed";
-/// Said when `Go with this` was tapped and the wish could only be kept as typed: its run has the typed words.
-pub const WENT_TYPED: &str = "It goes on with the words you typed.";
 /// The labels of the sharper wish's rows, in order; an empty row is left out. The question stands before the reason.
 pub const LABELS: [&str; 5] = ["The wish", "Done when", "Not touching", "Only you know", "Why"];
 
@@ -95,12 +93,7 @@ impl OnShow {
         let (today, page, from) = (self.today.clone(), self.page.clone(), self.scene.clone());
         let work = move || {
             let why = match jellymoon_core::wish_of_shape(&today.read(), &said, index == 0) {
-                Ok((made, carried)) => {
-                    let unstarted = (today.asking(made.wish.id, made.wish.said))();
-                    let went = (index == 0 && !carried)
-                        .then(|| (WENT_TYPED, of(&said, "the sharper wish could not be kept.")));
-                    unstarted.or(went)
-                }
+                Ok(made) => (today.asking(made.wish.id, made.wish.said))(),
                 Err(refused) => Some((UNKEPT, of(&said, &format!("{refused}.")))),
             };
             let mut now = today.again(page.as_ref(), &from);

@@ -44,9 +44,10 @@ the heart of the decision.
    typed words and the project, written for the person alone. It is read back within a size and checked again.
 7. **A wish is kept from a shape only for the same words and project.** `jellymoon wish --shaped` keeps the wish
    with `shaped`: the run's prompt, built by core on one line from fixed labels, with the person's own words
-   quoted last. With no such shape the wish is kept as typed, and the command says so; the window says so too
-   when `Go with this` was tapped and the wish could only be kept as typed (the day's file was busy). `said` is the typed words
-   everywhere; a run is given `shaped` when the wish has one. The shape is removed when a wish is kept from it.
+   quoted last. With no such shape the wish is kept as typed, and the command says so. The wish and its prompt
+   are kept in one write, so a wish is never kept without the shape it was to go with: a wish that is refused (a
+   busy day, a day with its eight) keeps nothing, and its shape still waits. `said` is the typed words everywhere;
+   a run is given `shaped` when the wish has one. The shape is removed when a wish is kept from it.
 8. **In the window** Enter shows at once that the wish is being read. `clear` and `as_typed` go on as a typed
    wish always did. `shaped` keeps nothing and shows the sharper wish, every word of the model's a quote under a
    label of Jellymoon's, with `Go with this` and `Go with what I typed` (`docs/development/app.md`).

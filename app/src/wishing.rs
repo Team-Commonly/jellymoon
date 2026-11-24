@@ -122,8 +122,7 @@ pub(crate) fn of(words: &str, why: &str) -> String {
 }
 
 fn of_a_wish(note: &Note) -> bool {
-    const OURS: [&str; 10] =
-        [UNKEPT, UNSTARTED, UNANSWERED, UNSETTLED, ADDED, MADE, UNADDED, UNMADE, UNREADY, crate::shaping::WENT_TYPED];
+    const OURS: [&str; 9] = [UNKEPT, UNSTARTED, UNANSWERED, UNSETTLED, ADDED, MADE, UNADDED, UNMADE, UNREADY];
     matches!(note, Note::Plain { title, .. } if OURS.contains(&&**title))
 }
 

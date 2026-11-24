@@ -194,14 +194,16 @@ fn checked(answer: &str) -> Option<Shape> {
     Some(Shape { clear: false, wish: own(&raw.wish, WISH_MAX)?, done_when, not_touching, why, ask })
 }
 
-/// The shape that waits on `day`, when it is of the words `said`: a plain file of the person's own, within its
-/// size, of that day, and every text of it what the check leaves. It is a file's word: checked again here.
-fn waiting(home: &Path, day: &str, said: &str) -> Option<Kept> {
+/// The shape that waits on `day`, when it is of the words `said`, with the run's prompt of it: a plain file of
+/// the person's own, within its size, of that day, every text of it what the check leaves, and its prompt one
+/// that can be built. It is a file's word: checked again here.
+fn waiting(home: &Path, day: &str, said: &str) -> Option<(Kept, String)> {
     let bytes = tap::plain(&file(home, day), KEPT_MAX).ok()?;
     let kept: Kept = serde_json::from_slice(&bytes).ok()?;
     let passes =
         serde_json::to_string(&kept.shape).ok().and_then(|shape| checked(&shape)).as_ref() == Some(&kept.shape);
-    (kept.day == day && kept.said == said && !kept.shape.clear && passes).then_some(kept)
+    let shaped = prompt(&kept.shape, said).filter(|_| kept.day == day && kept.said == said && passes)?;
+    (!kept.shape.clear).then_some((kept, shaped))
 }
 
 /// The run's prompt of a wish kept from a shape, on one line: Jellymoon's labels, each before the model's text,
@@ -222,42 +224,31 @@ pub(crate) fn kept(shaped: &str) -> bool {
     !shaped.is_empty() && still(shaped, SHAPED_MAX, false).is_ok_and(|made| made == shaped)
 }
 
-/// A wish that was just kept, with its prompt from the shape `waits` when `go`. A shape a wish is kept from is
-/// removed, used or not. Whether the wish carries the prompt is said too: it does not when the day was locked.
-fn given(home: &Path, day: &str, mut made: Wished, waits: Option<Kept>, go: bool) -> (Wished, bool) {
-    let Some(waits) = waits else { return (made, false) };
-    let _ = fs::remove_file(file(home, day));
-    let shaped = go.then(|| prompt(&waits.shape, &made.wish.said)).flatten();
-    let carried = shaped.and_then(|shaped| {
-        let carry = |wish: &mut wish::MadeWish| {
-            wish.shaped = Some(shaped);
-            Ok(())
-        };
-        wish::change(home, day, &made.wish.id, Duration::ZERO, carry).ok()
-    });
-    let carries = carried.is_some();
-    made.wish = carried.unwrap_or(made.wish);
-    (made, carries)
-}
-
 /// `jellymoon wish --shaped`: keeps the wish as [`wish::wish`] does, and with the shape that waits for these same
 /// words and this project when there is one. Whether it was kept with it is said. No shape, or one of other
-/// words or another project, changes nothing: the wish is kept as typed.
+/// words or another project, changes nothing: the wish is kept as typed. The prompt is kept in the same write as
+/// the wish, so a wish is never kept without the shape it was to go with; a shape a wish is kept from waits no
+/// more, and one whose wish was refused still waits.
 pub fn wish_shaped(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Result<(Wished, bool), Error> {
     let (day, said) = (wish::day_of(day)?, wish::words(typed)?);
-    let waits = waiting(home, &day, &said).filter(|kept| kept.project == project);
-    let made = wish::wish(home, Some(&day), typed, project)?;
-    Ok(given(home, &day, made, waits, true))
+    let shaped = waiting(home, &day, &said).filter(|kept| kept.0.project == project).map(|kept| kept.1);
+    let with_shape = shaped.is_some();
+    let made = wish::wish_with(home, &day, typed, project, shaped)?;
+    if with_shape {
+        let _ = fs::remove_file(file(home, &day));
+    }
+    Ok((made, with_shape))
 }
 
 /// A tap under a shape on a page: keeps the wish of the words `typed`, for the project the shape that waits for
-/// those words is of, as [`wish::wish_offered`] keeps one, with the shape (`go`) or as typed. Refused, with
-/// nothing written, when no shape waits for those words. Whether the wish carries the shape's prompt is said too.
-pub fn wish_of_shape(read: &DayOptions, typed: &str, go: bool) -> Result<(Wished, bool), Error> {
+/// those words is of, as [`wish::wish_offered`] keeps one, with the shape (`go`) or as typed, in one write.
+/// Refused, with nothing written, when no shape waits for those words.
+pub fn wish_of_shape(read: &DayOptions, typed: &str, go: bool) -> Result<Wished, Error> {
     let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };
-    let waits = waiting(home, day, &wish::words(typed)?).ok_or_else(|| Error::Wish(GONE.to_string()))?;
-    let made = wish::wish_offered(read, typed, &waits.project)?;
-    Ok(given(home, day, made, Some(waits), go))
+    let (waits, shaped) = waiting(home, day, &wish::words(typed)?).ok_or_else(|| Error::Wish(GONE.to_string()))?;
+    let made = wish::offered_with(read, typed, &waits.project, go.then_some(shaped))?;
+    let _ = fs::remove_file(file(home, day));
+    Ok(made)
 }
 
 #[cfg(test)]

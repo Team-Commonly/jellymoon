@@ -22,7 +22,7 @@ use crate::project::Offer;
 use crate::reader::{self, parse};
 use crate::reading::{LABEL_MAX, STAR_MAX, STARS_MAX};
 use crate::redact::line;
-use crate::still::{MARKS, Unkept, marks_only, statement, still};
+use crate::still::{MARKS, Unkept, marks_only, still};
 use crate::tap::{locked, plain};
 use crate::{DayOptions, Error, PageData, Wish, WishState, copy, run};
 
@@ -161,19 +161,18 @@ pub fn offered(read: &DayOptions) -> Vec<String> {
 /// [`wish`] for a project chosen on a page: kept only when `wishable` offers that project now, on `read`'s day
 /// and in `read.home`. A refusal has written nothing.
 pub fn wish_offered(read: &DayOptions, typed: &str, project: &str) -> Result<Wished, Error> {
+    offered_with(read, typed, project, None)
+}
+
+/// [`wish_offered`], with the run's prompt of a sharper wish (`run/shape.rs`) kept in the same write.
+pub(crate) fn offered_with(read: &DayOptions, typed: &str, project: &str, shaped: Shaped) -> Result<Wished, Error> {
     let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };
     if wishable(read, &[project.to_string()]).is_empty() {
         return Err(refused(format!(
             "no folder of that project that is switched on was typed in on {day}, so this wish was not kept"
         )));
     }
-    wish(home, Some(day), typed, project)
-}
-
-/// The start of the words typed for a wish, for a note to name the wish by: cleaned as a kept wish's words are,
-/// then cut to `most` characters. Words that cannot be cleaned are the mark of a redaction and nothing else.
-pub fn wish_start(typed: &str, most: usize) -> String {
-    statement(typed, most)
+    wish_with(home, &day_of(Some(day))?, typed, project, shaped)
 }
 
 /// A wish read from the file, when it is what [`wish`] would have written at that place. Its words are cleaned as
@@ -214,23 +213,19 @@ fn kept(home: &Path, day: &str) -> Result<Vec<MadeWish>, String> {
 /// is started. A refusal has written nothing: words that are empty once cleaned or over 200 characters, a project
 /// that is not one folder's name, a day that has its eight, made wishes that cannot be used, a day that is locked.
 pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Result<Wished, Error> {
-    let (day, said) = (day_of(day)?, words(typed)?);
+    wish_with(home, &day_of(day)?, typed, project, None)
+}
+
+type Shaped = Option<String>;
+pub(crate) fn wish_with(home: &Path, day: &str, typed: &str, project: &str, shaped: Shaped) -> Result<Wished, Error> {
+    let said = words(typed)?;
     // A name with something unseen comes in only as the name of a project the list holds already; when the list
     // cannot be used, that is why such a name is refused, and the list's own sentence is said.
     if !named(project) && !(kept_name(project) && crate::project::lists(home, project)?) {
         let no = "no path, nothing that cannot be seen and nothing shaped like a credential";
         return Err(refused(format!("--project takes one folder's name of at most {PROJECT_MAX} characters: {no}")));
     }
-    keep(home, &day, said, project.to_string(), None)
-}
-
-/// Keeps a follow-up (F53): a wish the person made of the work of the wish `after`, a made wish of `day`. It
-/// is a made wish as [`wish`] keeps one, for the followed wish's project, and names the wish it follows. A
-/// refusal has written nothing: every one of [`wish`]'s, and a wish that cannot be followed (`run/follow.rs`).
-pub fn wish_after(home: &Path, day: Option<&str>, typed: &str, after: &str) -> Result<Wished, Error> {
-    let (day, said) = (day_of(day)?, words(typed)?);
-    let project = run::followed(home, &day, after)?;
-    keep(home, &day, said, project, Some(after.to_string()))
+    keep(home, day, (said, project.to_string()), (None, shaped))
 }
 
 /// A wish's words as they are kept, or why they are not.
@@ -248,7 +243,12 @@ pub(crate) fn words(typed: &str) -> Result<String, Error> {
     Ok(said)
 }
 
-fn keep(home: &Path, day: &str, said: String, project: String, after: Option<String>) -> Result<Wished, Error> {
+pub(crate) fn keep(
+    home: &Path,
+    day: &str,
+    (said, project): (String, String),
+    (after, shaped): (Option<String>, Shaped),
+) -> Result<Wished, Error> {
     // Looked at once before the lock, so a refusal makes no folder, and once behind it, where it cannot change.
     let room = || match kept(home, day) {
         Ok(wishes) if wishes.len() >= MADE_MAX => {
@@ -261,7 +261,7 @@ fn keep(home: &Path, day: &str, said: String, project: String, after: Option<Str
     let _lock = behind(home, day, Duration::ZERO, "this wish was not kept")?;
     let mut wishes = room()?;
     let (id, state, stars) = (format!("m{}", wishes.len() + 1), WishState::Working, Vec::new());
-    let (run, why, question, answer, shaped) = (None, None, None, None, None);
+    let (run, why, question, answer) = (None, None, None, None);
     let wish = MadeWish { id, said, project, state, stars, run, why, question, answer, after, shaped };
     wishes.push(wish.clone());
     write(home, day, wishes)?;

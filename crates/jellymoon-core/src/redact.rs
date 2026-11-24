@@ -207,5 +207,11 @@ fn bounded(text: &str, limit: usize, tidy: fn(&str) -> String) -> String {
     if kept.is_empty() { kept } else { cut(&format!("{kept}…"), limit) }
 }
 
+/// The start of the words typed for a wish, for a note to name the wish by: cleaned as a kept wish's words are,
+/// then cut to `most` characters. Words that cannot be cleaned are the mark of a redaction and nothing else.
+pub fn wish_start(typed: &str, most: usize) -> String {
+    crate::still::statement(typed, most)
+}
+
 #[cfg(test)]
 mod tests;

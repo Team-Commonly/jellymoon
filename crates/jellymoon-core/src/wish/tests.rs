@@ -1,5 +1,5 @@
 use super::*;
-use crate::PageRead;
+use crate::{PageRead, wish_start};
 
 // `jellymoon page` prints a merged page. One that is merged again must not hold a made wish twice.
 #[test]

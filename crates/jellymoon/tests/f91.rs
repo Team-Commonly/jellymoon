@@ -244,7 +244,7 @@ fn shaped_with_no_shape_or_with_another_s_keeps_the_wish_as_typed_and_says_so() 
     let (w, _) = shaping();
     let typed = |say: &str, project: &str| {
         let ran = w.run(&["wish", "--date", DAY, "--say", say, "--project", project, "--shaped"]);
-        let said = "jellymoon: the wish is kept as typed: no sharper wish was kept with these words and this project\n";
+        let said = "jellymoon: no sharper wish waits for these words and this project: the wish is kept as typed\n";
         assert_eq!((ran.code, ran.stderr.as_str()), (0, said), "{}", ran.stdout);
         let made: Value = serde_json::from_str(&ran.stdout).unwrap();
         assert_eq!((&made["wish"]["said"], &made["wish"]["shaped"]), (&json!(say), &Value::Null), "{made}");
@@ -261,4 +261,12 @@ fn shaped_with_no_shape_or_with_another_s_keeps_the_wish_as_typed_and_says_so() 
     let waits = fs::read_to_string(w.waits()).unwrap();
     fs::write(w.waits(), waits.replace(DONE, &"d".repeat(161))).unwrap();
     typed(SAID, "alpha");
+    // A wish that is refused is not kept without its shape, and the shape still waits: the day has its eight.
+    fs::write(w.waits(), waits).unwrap();
+    for more in ["five", "six", "seven", "eight"] {
+        typed(&format!("make the uploader retry {more} times"), "alpha");
+    }
+    let full = w.run(&["wish", "--date", DAY, "--say", SAID, "--project", "alpha", "--shaped"]);
+    assert!(full.code != 0 && full.stdout.is_empty() && w.waits().is_file(), "{}", full.stderr);
+    assert!(!fs::read_to_string(w.wishes()).unwrap().contains(WISH), "no wish was kept of it");
 }

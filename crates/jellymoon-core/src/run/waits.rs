@@ -19,14 +19,18 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+mod itself;
 mod plain;
 
+pub use itself::kept_itself;
+pub use plain::stands;
+
 use super::keep::keep_named;
-use super::show::{self, Alone, FileChange, FileKind, Shown, ShownFile, show_file};
+use super::show::{self, FileChange, FileKind, Shown, ShownFile, show_file};
 use super::told::Told;
 use super::toss::toss_run;
 use super::{RunOptions, followable, refused};
-use crate::{Error, Wish, WishState, wish};
+use crate::{Error, wish};
 
 /// The most names of files that are said of a run's work, and the most files the person's tools obey that the
 /// note that asks names. Each is a text of its own there, and a text note draws its choices only under a body
@@ -89,6 +93,9 @@ pub struct Waits {
     /// The folder the wish is for, by the name it is kept with: a page says it, `run waiting` never prints it.
     #[serde(skip)]
     pub project: String,
+    /// The change was kept by itself and can be undone: the note says so, and its one choice is the undo.
+    #[serde(skip)]
+    pub itself: bool,
 }
 
 /// What `jellymoon run waiting` prints.
@@ -123,6 +130,8 @@ pub enum WorkTap {
         yes_to: Option<Vec<String>>,
     },
     Toss,
+    /// Under the note of a change that was kept by itself (`itself.rs`).
+    Undo,
 }
 
 /// What a tap on a choice came to.
@@ -145,6 +154,7 @@ impl WorkTap {
             KEEP => Some(WorkTap::Keep { yes_to: None }),
             KEEP_TOO => Some(WorkTap::Keep { yes_to: Some(drawn.to_vec()) }),
             TOSS => Some(WorkTap::Toss),
+            itself::UNDO => Some(WorkTap::Undo),
             _ => None,
         }
     }
@@ -163,6 +173,7 @@ impl WorkTap {
             WorkTap::Show { .. } => "That work is being read.",
             WorkTap::Keep { .. } => "That work is being kept.",
             WorkTap::Toss => "That work is being tossed.",
+            WorkTap::Undo => "That change is being undone.",
         }
     }
 
@@ -172,6 +183,7 @@ impl WorkTap {
             WorkTap::Show { .. } => (UNSHOWN, "no file was shown"),
             WorkTap::Keep { .. } => (UNKEPT, "it was not kept"),
             WorkTap::Toss => (UNTOSSED, "it was not thrown away"),
+            WorkTap::Undo => (itself::NOT_UNDONE, "it was not undone"),
         };
         (title, format!("Open the wish again to see where the change stands. Here is why {not}:"))
     }
@@ -196,7 +208,11 @@ fn named(names: &[String], beside: usize) -> String {
 impl Waits {
     /// The title of the note of this work.
     pub fn title(&self) -> &'static str {
-        if self.read { WAITS } else { UNREAD }
+        match (self.read, self.itself) {
+            (true, true) => itself::TITLE,
+            (true, false) => WAITS,
+            (false, _) => UNREAD,
+        }
     }
 
     /// Whether the work touches more files the person's tools obey than a note names, or one whose name is not
@@ -214,11 +230,11 @@ impl Waits {
             let listed = self.made + self.changed + self.removed;
             let of = (self.names.len() + self.more > listed).then_some(listed);
             let counted = plain::counted(self.made, self.changed, self.removed, of);
-            vec![plain::waits(!self.over()).to_string(), said, counted]
+            if self.itself { vec![counted] } else { vec![plain::waits(!self.over()).to_string(), said, counted] }
         } else {
             vec![plain::unread(project), said, format!("{}.", self.why)]
         };
-        lines.extend((!self.names.is_empty()).then(|| named(&self.names, self.more)));
+        lines.extend((!self.names.is_empty() && !self.itself).then(|| named(&self.names, self.more)));
         lines.extend(self.over().then(|| OVER.to_string()));
         lines
     }
@@ -228,6 +244,7 @@ impl Waits {
     pub fn choices(&self, sure: bool) -> Vec<&'static str> {
         match (self.read, self.over()) {
             (false, _) => Vec::new(),
+            (true, _) if self.itself => vec![itself::UNDO],
             (true, true) => vec![SHOW, TOSS],
             (true, false) => vec![SHOW, if sure { KEEP_TOO } else { KEEP }, TOSS],
         }
@@ -260,33 +277,9 @@ impl ShownFile {
     }
 }
 
-/// What a page says after the wish's words of a run that did not finish (told alone): what came of it and what the
-/// person can do, and no reason of core's, which names a run and a word of the harness's. True of every failed
-/// run: some stopped early, and some had finished when their work could not be committed or their end recorded.
-const UNFINISHED: [&str; 2] = [
-    "It did not finish, and nothing in your folder was changed.",
-    "You can type the wish again, or type it with what should be different.",
-];
-
-/// What a page says of a wish that has no work waiting: how it stands, and the wish's own words; and of a wish
-/// that needs the person because its run did not finish, [`UNFINISHED`]. `alone` is how its run ended.
-pub fn stands(wish: &Wish, alone: Option<&Alone>) -> (&'static str, Vec<String>) {
-    let stands = match wish.state {
-        WishState::Working => "This wish is being worked on.",
-        WishState::Done => "This wish is done.",
-        WishState::NeedsYou => "This wish needs you.",
-        WishState::LetGo => "This wish was let go.",
-    };
-    let mut said = vec![format!("“{}”", wish.said)];
-    if wish.state == WishState::NeedsYou && alone == Some(&Alone::Unfinished) {
-        said.extend(UNFINISHED.map(str::to_string));
-    }
-    (stands, said)
-}
-
 /// The work of the wish's run when it waits, and the list `run show` gives of it when the repo could be read.
-fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
-    let found = show::waiting(home, options)?;
+fn read(home: &Path, options: &RunOptions, itself: bool) -> Option<(Waits, Option<Shown>)> {
+    let found = show::waiting(home, options, itself)?;
     let (wish, run, said, project) = (options.wish.clone(), found.run, found.made.said, found.made.project);
     // Of work that was not read nothing is counted or named, and `why` is the refusal.
     let (shown, obeyed, plain, unread) = match show::whole(home, options) {
@@ -303,8 +296,23 @@ fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
         || format!("the work of run {run} waits: files made {made}, changed {changed}, removed {removed}{first}");
     let (read, why) = (unread.is_none(), unread.unwrap_or_else(counted));
     let result = shown.as_ref().and_then(|shown| shown.result.clone());
-    let waits =
-        Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why, result, project };
+    let waits = Waits {
+        wish,
+        run,
+        said,
+        read,
+        made,
+        changed,
+        removed,
+        names,
+        more,
+        obeyed,
+        plain,
+        why,
+        result,
+        project,
+        itself,
+    };
     Some((waits, shown))
 }
 
@@ -312,7 +320,7 @@ fn read(home: &Path, options: &RunOptions) -> Option<(Waits, Option<Shown>)> {
 /// names that commit and says neither kept nor tossed. None of any other wish, and then no repo is asked
 /// anything. The repo is found as `run show` finds it; when it is not, the answer says why and names no file.
 pub fn waits(home: &Path, options: &RunOptions) -> Option<Waits> {
-    read(home, options).map(|(waits, _)| waits)
+    read(home, options, false).map(|(waits, _)| waits)
 }
 
 /// [`waits`] of every made wish of the day `options` names: its `wish` is not read.
@@ -353,7 +361,10 @@ fn next(home: &Path, options: &RunOptions, shown: &Shown, after: usize) -> Resul
 pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone {
     let (undone, then) = tap.undone();
     let no = |why: String| WorkDone::Said(undone, vec![then.clone(), format!("{why}.")]);
-    let Some((waits, shown)) = read(home, options) else {
+    if tap == WorkTap::Undo {
+        return itself::undo(home, options, then.clone());
+    }
+    let Some((waits, shown)) = read(home, options, false) else {
         return no("no work of that wish waits any more, so nothing was changed".to_string());
     };
     let Some(shown) = shown else { return no(waits.why) };
@@ -374,6 +385,7 @@ pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone 
                 Err(unkept) => no(unkept.to_string()),
             }
         }
+        WorkTap::Undo => itself::undo(home, options, then.clone()),
         WorkTap::Toss => match toss_run(home, options) {
             Ok(tossed) => WorkDone::Said(TOSSED, vec![plain::tossed(&tossed, &waits.project)]),
             Err(untossed) => no(untossed.to_string()),

@@ -98,7 +98,7 @@ pub fn answer_run(home: &Path, options: &RunOptions, typed: &[u8]) -> Result<Ran
         }),
     };
     let ran = match (ended, never) {
-        (Ok(ended), None) => settle(home, (&day, id), (&copy, &start), &ended, limit),
+        (Ok(ended), None) => settle(home, (&day, options), (&copy, &start), &ended, limit),
         (_, never) => {
             put_back(home, on, &record, wish);
             Err(refused(format!("{}; run {run} still asks its question", never.unwrap_or_default())))

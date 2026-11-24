@@ -35,6 +35,7 @@ mod stop;
 mod stream;
 mod told;
 mod toss;
+mod undo;
 mod unrun;
 mod waits;
 mod words;
@@ -68,7 +69,8 @@ pub use steps::{Step, Steps, Tool, doing};
 pub use stop::stop_run;
 pub use told::{Piece, Told};
 pub use toss::{Tossed, toss_run};
-pub use waits::{Waiting, Waits, WorkDone, WorkTap, stands, waiting, waits, work_tapped};
+pub use undo::{Undone, undo_run};
+pub use waits::{Waiting, Waits, WorkDone, WorkTap, kept_itself, stands, waiting, waits, work_tapped};
 use words::{asking, by_now, cancelled, cut, cut_late, failed, finished, going, had, no_wish};
 
 use crate::busy::{self, or_test};
@@ -174,6 +176,10 @@ pub struct Ran {
     /// characters. It is data to draw as text. Left out of every other run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
+    /// Whether the run's change was kept by itself, so it is in the person's folder already (F92). Left out
+    /// when it was not: the change waits, or there is none.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub kept_itself: bool,
 }
 
 impl fmt::Display for Ran {
@@ -204,7 +210,8 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     unrun::open(&wish)?;
     let not_started = |why: String| {
         let (run, outcome) = (None, RunOutcome::NotStarted);
-        Ok(Ran { run, wish: wish.id.clone(), outcome, star: None, denied: 0, why, question: None })
+        let (wish, kept_itself) = (wish.id.clone(), false);
+        Ok(Ran { run, wish, outcome, star: None, denied: 0, why, question: None, kept_itself })
     };
     let harness = match find::named_or_found(options.harness.as_deref()) {
         Ok(harness) => harness,
@@ -258,7 +265,7 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
         never::undo(home, (&day, &wish.id), &copy.run, &why, (lock, held))?;
         return ended.and_then(|_| not_started(why));
     }
-    let ran = ended.and_then(|ended| settle(home, (&day, &wish.id), (&copy, &began_at), &ended, limit));
+    let ran = ended.and_then(|ended| settle(home, (&day, options), (&copy, &began_at), &ended, limit));
     // The start lock goes first: while the run's own is held, nothing takes this run for one left behind.
     drop(held);
     let _ = fs::remove_file(copy::start_lock(home, &copy.run));
@@ -339,6 +346,8 @@ fn name(home: &Path, (day, wish): (&str, &str), run: &str, from: MadeFrom, under
         work: None,
         kept: None,
         onto: None,
+        before: None,
+        back: None,
         tossed: None,
         session: Some(session.to_string()),
         question: None,

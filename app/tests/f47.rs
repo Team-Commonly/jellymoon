@@ -28,7 +28,7 @@ use support::worked::{finished, tree};
 pub const WORK: &str = "Your folder is not changed yet.";
 /// What the note of work that waits says first, under its title, before the wish's words: where the change is,
 /// and what `Keep it` and `Toss it` do to the folder.
-pub const READY: &str = "It is in a copy: Keep it puts it in; Toss it throws it away.";
+pub const READY: &str = "It waits for your yes: Keep it puts it in; Toss it throws it away.";
 pub const KEPT: &str = "The change was kept.";
 /// What a keep that landed the work says.
 pub const IN_FOLDER: &str = "The change is in your folder alpha now.";

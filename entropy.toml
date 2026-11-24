@@ -426,7 +426,9 @@ max_file_lines = 400
 # F91's gate raised it by 4 (`run/shape.rs`): no text of a shape holds a mark the run's prompt is built with, and a
 # shape whose prompt cannot be built is not shown.
 # F91's second gate raised it by 6: a wish and its prompt are kept in one write (`wish.rs`, `run/shape.rs`).
-"crates/jellymoon-core" = 18808
+# F92 raised it by 472: a finished change is kept by itself and can be undone (`run/keep/itself.rs`,
+# `run/undo.rs`, `copy/keep/undo.rs`, `run/waits/itself.rs`), with the record's two words and their tests.
+"crates/jellymoon-core" = 19280
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -670,7 +672,9 @@ max_file_lines = 400
 # (`tests/f91.rs`), and the made-up harnesses asked to shape 53 (`tests/support/fake_agent/shape.rs`, 44).
 # F91's gate raised it by 16, all tests (`tests/f91.rs`): the two marks refused, and words the prompt cannot hold.
 # F91's second gate raised it by 7, all tests: a refused wish keeps nothing and its shape still waits.
-"crates/jellymoon" = 30474
+# F92 raised it by 577: the `run undo` command (`src/parse.rs`, `src/main.rs`) and its tests, nearly all of
+# it (`tests/f92.rs`, `tests/f92/`): when a change is kept by itself, every refusal of an undo, and a cut-off undo.
+"crates/jellymoon" = 31051
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -1043,7 +1047,9 @@ max_file_lines = 400
 # the pins of the old canvas, made true of the column, are 26 fewer.
 # Joined with F91, the column's order raised it by 7: a wish that is not made yet (`src/shaping.rs`'s notes) stands
 # last in the column, over the entry, with its test (`src/column.rs`).
-"app" = 17076
+# F92 raised it by 166: the note of a change kept by itself and its one choice (`src/landing.rs`), with its
+# tests (`tests/kept_by_itself.rs`).
+"app" = 17242
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

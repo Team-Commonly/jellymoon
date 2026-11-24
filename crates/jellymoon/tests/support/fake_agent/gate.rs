@@ -68,6 +68,12 @@ pub fn play(script: &str, number: usize, rec: &Path) -> i32 {
             1
         }
         "rules" => rules(),
+        // F92. The work, and beside it a file that changes how git writes other files.
+        "attrs" => {
+            edits();
+            fs::write(".gitattributes", "*.txt text\n").unwrap();
+            ends_with(&success())
+        }
         "many" | "past" | "walls" | "wall8" => beside(script),
         "crowd" | "long" | "longs" | "six" | "seven" | "eight" | "masked" | "blank" | "object" | "joined"
         | "counted" => obeyed(script),

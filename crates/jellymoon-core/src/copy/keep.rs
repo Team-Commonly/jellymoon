@@ -17,6 +17,7 @@ mod fits;
 mod made;
 mod step;
 mod toss;
+mod undo;
 mod why;
 
 use std::fs::{self, File};
@@ -27,6 +28,7 @@ use std::time::Duration;
 pub(crate) use fits::Touched;
 pub(crate) use step::LOOSE;
 pub(crate) use toss::{Branch, Left, Untossed, toss};
+pub(crate) use undo::{Back, Stays, undo};
 pub(crate) use why::{How, Unkept};
 
 use super::git::{Git, Repo, Unopened};
@@ -64,10 +66,11 @@ pub(crate) struct Landing {
 /// What a keep has the record say: the commit it is about to land on a branch, and that it has landed. And what
 /// it has the answer name: a `.gitattributes` the work removes that is at its path all the same after the step,
 /// and that the run's branch is left: as a name of the person's points at it, or as the repo could not be asked
-/// what stands on it or points at it.
+/// what stands on it or points at it. With the intent of a keep by itself goes the commit the branch names
+/// before it; with what landed, whether it landed as that keep meant, so that it can be undone (`undo.rs`).
 pub(crate) enum Note<'a> {
-    Intent(&'a str, &'a str),
-    Kept(&'a str, &'a str),
+    Intent(&'a str, &'a str, Option<&'a str>),
+    Kept(&'a str, &'a str, bool),
     Stayed(&'a [u8]),
     Pointed,
     Unasked,
@@ -86,6 +89,9 @@ pub(crate) struct Keep<'a> {
     /// Of a follow-up's work whose start is the followed work's own commit, when that work was kept as another
     /// commit: that commit. The branch's history holds it and not the start, and the merge is told the start.
     pub held: Option<&'a str>,
+    /// A keep by itself (F92): it lands only work that is moved forward or joined, writes down the commit the
+    /// branch named before, and leaves the run's branch, which an undo and the keep after it go by.
+    pub itself: bool,
 }
 
 /// What the steps of one keep share.
@@ -156,6 +162,35 @@ pub(crate) fn keep(
     judge: &mut dyn FnMut(&[Touched]) -> Result<(), Unkept>,
     note: &mut dyn FnMut(Note) -> bool,
 ) -> Result<Landing, Unkept> {
+    opened(of, |at| {
+        let landing = match before(at) {
+            Some(landing) => landing,
+            None => land(at, judge, note)?,
+        };
+        // By itself nothing is said kept that the branch held already: that work waits for its tap.
+        if of.itself && landing.how == How::Held {
+            return Err(Unkept::Settings);
+        }
+        let (Some(commit), false) = (landing.commit.as_deref(), of.ask) else { return Ok(landing) };
+        let meant = of.itself && matches!(landing.how, How::Forward | How::Joined);
+        if !note(Note::Kept(commit, &landing.onto, meant)) {
+            return Err(Unkept::Unwritten);
+        }
+        step::cut(4);
+        // The run's branch goes only when a branch holds the commit: work on a detached `HEAD` has no other
+        // name. And it stays after a keep by itself, for the undo.
+        if landing.how != How::Loose
+            && !meant
+            && let Some(left) = drop_branch(at)
+        {
+            note(left);
+        }
+        Ok(landing)
+    })
+}
+
+/// Opens the repo of the person's checkout for a keep or an undo, and does `with` there.
+fn opened<T>(of: &Keep, with: impl FnOnce(&At) -> Result<T, Unkept>) -> Result<T, Unkept> {
     let git = Git::find(&Places::of(of.home).runs, true).map_err(|_| Unread::Home)?;
     let (shared, own) = checkout(&git, of)?;
     // What is switched off is what the config names as git reads it through the shared git folder and through
@@ -167,23 +202,7 @@ pub(crate) fn keep(
     let mine = git.opened(&shared).and_then(|repo| repo.seen_from(&own)).map_err(unopened)?;
     let repo = mine.through(&shared);
     let name = format!("refs/heads/{}", branch(of.run));
-    let at = At { of, repo: &repo, mine: &mine, shared: &shared, own: &own, name };
-    let landing = match before(&at) {
-        Some(landing) => landing,
-        None => land(&at, judge, note)?,
-    };
-    let (Some(commit), false) = (landing.commit.as_deref(), of.ask) else { return Ok(landing) };
-    if !note(Note::Kept(commit, &landing.onto)) {
-        return Err(Unkept::Unwritten);
-    }
-    step::cut(4);
-    // The run's branch goes only when a branch holds the commit: work on a detached `HEAD` has no other name.
-    if landing.how != How::Loose
-        && let Some(left) = drop_branch(&at)
-    {
-        note(left);
-    }
-    Ok(landing)
+    with(&At { of, repo: &repo, mine: &mine, shared: &shared, own: &own, name })
 }
 
 /// What is left of a keep whose record says kept: the run's branch, when the keep was cut off before it went.
@@ -348,5 +367,5 @@ fn land(
         Some(who) => made::commit(at, &who, &tip, &target)?,
         None => target,
     };
-    step::forward(at, commit, onto, how, &files, note)
+    step::forward(at, commit, (onto, of.itself.then_some(tip.as_str())), how, &files, note)
 }

@@ -17,9 +17,11 @@ use crate::scene::MADE;
 pub const TYPED: &str = "typed-";
 
 /// The notes of one wish, by what their ids begin with, in the order they stand under what the person typed: what
-/// its run is doing and the choice to stop it, what the run says it did, the work that waits and its files, a
+/// its run is doing and the choice to stop it, what the run says it did, the work that waits or the change that
+/// was kept by itself, the work's files, a
 /// choice to be sure of, what is being done with the work, the wish's own note, and last the answer.
-pub const ORDER: [&str; 9] = ["steps-", "stop-", "told-", "work-", "file-", "sure-", "busy-", "wish-", "said-"];
+pub const ORDER: [&str; 10] =
+    ["steps-", "stop-", "told-", "work-", "kept-", "file-", "sure-", "busy-", "wish-", "said-"];
 
 /// The scene in the order of its column.
 pub fn column(scene: &Scene) -> Scene {
@@ -108,7 +110,7 @@ mod tests {
         notes.extend([text("wish-w1"), own, text("work-m11")]);
         let ordered = ids(&column(&day(notes)));
         let of = |wish: &str| {
-            let kinds = ["steps-", "stop-", "told-", "work-", "file-3-", "sure-", "busy-", "wish-", "said-"];
+            let kinds = ["steps-", "stop-", "told-", "work-", "kept-", "file-3-", "sure-", "busy-", "wish-", "said-"];
             [vec![format!("typed-{wish}")], kinds.iter().map(|kind| format!("{kind}{wish}")).collect()].concat()
         };
         let own = ["wish-w1", "own", "work-m11"].map(String::from).to_vec();

@@ -95,16 +95,16 @@ pub(super) fn fits(
     let _ = clear();
     let passed = trial(mine, places, &copy, moved, files);
     let _ = clear();
-    if !passed? {
-        return Err(Unkept::InWay);
-    }
+    if !passed? || in_way(mine, folder, files, again)? { Err(Unkept::InWay) } else { Ok(()) }
+}
+
+/// The last check of [`fits`], which an undo asks by itself too (`undo.rs`): whether something is on the disk
+/// where a file the move makes would go, ignored or not.
+pub(super) fn in_way(mine: &Repo, folder: &Path, files: &[Touched], again: bool) -> Result<bool, Unkept> {
     let removed: Vec<&[u8]> = files.iter().filter(|file| file.removed).map(|file| &file.path[..]).collect();
     let made = files.iter().filter(|file| file.made && taken(folder, &file.path, &removed));
     let there: Vec<&[u8]> = made.map(|file| &file.path[..]).collect();
-    if there.is_empty() {
-        return Ok(());
-    }
-    if !again || ignored(mine, folder, &there)? { Err(Unkept::InWay) } else { Ok(()) }
+    Ok(!there.is_empty() && (!again || ignored(mine, folder, &there)?))
 }
 
 /// Whether the disk does not take a file's name: a part of it is longer than any disk of the three systems

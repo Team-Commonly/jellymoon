@@ -1045,6 +1045,25 @@
         "F41",
         "F42"
       ]
+    },
+    {
+      "id": "F92",
+      "category": "journal",
+      "description": "A finished change is kept by itself where a keep would take no further yes, and `jellymoon run undo` takes it out of the folder again",
+      "steps": [
+        "when a run's end is noted and before its wish is told, core does the keep of `run keep` with no yes given, under the same lock: a change that is moved forward or joined is in the person's folder, `jellymoon run` prints `kept_itself: true`, the record has `kept`, `onto` and `before` (the commit the branch named, written with the intent), and the run's branch stays",
+        "it waits, with the folder untouched and nothing said, for a file the person's tools obey, a change that touches a `.gitattributes`, and everything `run keep --ask` refuses: a file in the way, an unsaved change in a file of the change, a detached HEAD, a repo that is not found, followed work that waits, history rewritten, a busy lock",
+        "`jellymoon run undo --wish <id> [--ask]` puts the branch back at `before` with the files and the index as that commit has them, by `git read-tree -m -u <kept> <before>` and `git update-ref` of the branch's whole name with its old value: no commit is made, an unsaved change in any other file stays, the work waits, and `run keep` or `run toss` takes it from there",
+        "an undo is refused with one fixed sentence and nothing changed: nothing kept; kept by a tap or on an earlier day; a commit since; a later kept change on top (the newest is undone first); unsaved or staged edits in the change's files; a file in the way, ignored or not; another branch or a detached HEAD; a merge or rebase going on; another name of the repo holding the commit; a busy lock",
+        "an undo cut off after any of its steps is finished by the next `run undo`, and a checkout switched to another branch just before the step has that branch left where it was: the step writes no ref but the one it names",
+        "on the page a change kept by itself has the note `kept-<wish>` with the count of its files and one choice, `Undo it`; the answer is a note, with the work's own note back under it, or the kept note again when core refused (`cargo test -p jellymoon-app --test kept_by_itself --features sticker-kit/headless,sticker-kit/runtime_shaders`)"
+      ],
+      "test": "cargo test -p jellymoon --test f92",
+      "passes": true,
+      "blockedBy": [
+        "F45",
+        "F47"
+      ]
     }
   ],
   "dead": {

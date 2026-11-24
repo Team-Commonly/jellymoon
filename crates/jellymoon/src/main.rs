@@ -33,6 +33,7 @@ const USAGE: &str = "usage:
   jellymoon run answer --wish <id> [--date <YYYY-MM-DD>]   (takes your answer on its input, and goes on with a run that asks, in its copy, and waits)
   jellymoon run show --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--file <n>]   (what that run made, read from the repo's store: its files, or one file's text; writes nothing)
   jellymoon run keep --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>] [--ask] [--with-settings]   (lands that run's work on the branch your checkout stands on, as one commit; --ask only says what it would do; --with-settings keeps files your tools obey too)
+  jellymoon run undo --wish <id> [--ask] [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (takes a change that was kept by itself out of the folder again: the branch names the commit it named before, and the work waits; --ask only says whether it would)
   jellymoon run toss --wish <id> [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (refuses what that run left: its branch is deleted, the kept copy of a run that did not finish is removed, and the wish is let go)
   jellymoon run waiting [--date <YYYY-MM-DD>] [--repo <folder>] [--logs <dir>] [--skip <names>]   (the day's made wishes whose run's work waits to be kept or tossed, each with its files counted and named; writes nothing)
   jellymoon hear [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <names>] [--run]   (reads key, ear and tick events on stdin, a line of JSON each, and prints what the jellyfish shows at each change; a heard wish is made a wish after four seconds, and --run starts its run)
@@ -236,6 +237,9 @@ fn run() -> Result<String, Failure> {
             Ok(format!("{}\n", jellymoon_core::keep_run(&home()?, &options, how).map_err(failed)?))
         }
         Command::Toss(options) => Ok(format!("{}\n", jellymoon_core::toss_run(&home()?, &options).map_err(failed)?)),
+        Command::Undo(options, ask) => {
+            Ok(format!("{}\n", jellymoon_core::undo_run(&home()?, &options, ask).map_err(failed)?))
+        }
         Command::Waiting(options) => Ok(format!("{}\n", jellymoon_core::waiting(&home()?, &options).map_err(failed)?)),
         Command::HookStatus => {
             let installed = home().is_ok_and(|home| jellymoon_core::hook_installed(&home));

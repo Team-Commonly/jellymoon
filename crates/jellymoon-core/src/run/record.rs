@@ -66,6 +66,13 @@ pub(super) struct Record {
     /// The branch that commit was landed on, by its whole name. Written with `kept`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub onto: Option<String>,
+    /// Of a change that was kept by itself (F92, ADR 0028): the commit the person's branch named before the keep,
+    /// written with `kept`, before the checkout is touched. Only a change with one can be undone (`undo.rs`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<String>,
+    /// The commit an undo is about to put the branch back at, written before it touches the checkout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub back: Option<String>,
     /// The commit the run's branch was to be deleted at, written with `work` saying tossed before anything is
     /// deleted (ADR 0017, decision 7): the run's end, or the start of a run that did not finish. It is how a
     /// toss is undone by hand. None before any toss, and in a tossed record that names no commit.
@@ -149,6 +156,13 @@ pub(super) fn kept(home: &Path, run: &str) -> Option<Record> {
     serde_json::from_slice(&bytes).ok()
 }
 
+/// Every run of the home whose record can be used, with that record.
+pub(super) fn all(home: &Path) -> Vec<(String, Record)> {
+    let runs = std::fs::read_dir(copy::kept_at(home, "")).into_iter().flatten().flatten();
+    let runs = runs.filter_map(|entry| entry.file_name().into_string().ok()).filter(|run| copy::is_run_id(run));
+    runs.filter_map(|run| kept(home, &run).map(|record| (run, record))).collect()
+}
+
 /// Whether the run finished with work of its own that the person has neither kept nor tossed: what the record
 /// says, with no look at the repo.
 pub(crate) fn work_waits(home: &Path, run: &str) -> bool {
@@ -226,7 +240,14 @@ mod tests {
         assert_eq!(TOSSED.split(",\"work\":").next(), EXAMPLE.strip_suffix("}\n"));
         // What is named is text, or the record is not read: nothing is made of a number or a list.
         let named = ["\"repo\":7", "\"start\":[\"main\"]", "\"end\":{}", "\"kept\":1", "\"onto\":[]", "\"tossed\":1"];
-        let last = ["\"session\":7", "\"question\":[\"which?\"]", "\"question\":{}", "\"follows\":7"];
+        let last = [
+            "\"before\":1",
+            "\"back\":[]",
+            "\"session\":7",
+            "\"question\":[\"which?\"]",
+            "\"question\":{}",
+            "\"follows\":7",
+        ];
         for odd in named.into_iter().chain(last).chain(["\"forked\":\"yes\""]) {
             let changed = BEFORE.replace("\"began\":true", &format!("\"began\":true,{odd}"));
             assert!(serde_json::from_str::<Record>(&changed).is_err(), "{odd}");

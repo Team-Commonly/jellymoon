@@ -55,7 +55,7 @@ keeps, compares and prints is as it was. From the top:
 | the header | the date's tape, the title, and the footer as quiet lines under it |
 | a row a wish of the reading | its small character, its label, what it says; the ones let go last |
 | the day's own notes | every note of no made wish, in the scene's order: what was left out, what came true of the reading's wishes, the clashes, the plain notes, an opened wish of the reading |
-| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `kept-`, `file-`, `sure-`, `busy-`, `wish-`, `said-`. `steps-` and the note of work that waits are drawn notes (pictures, below), and `told-` is not on the page while that wish's drawn `work-` is closed. Every made wish has its notes at once: a track while its run goes, its result when it has ended (ADR 0030, "Every wish keeps its place", below) |
+| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `kept-`, `file-`, `sure-`, `busy-`, `wish-`, `said-`. `steps-` and the note of work that waits are drawn notes (pictures, below), and `told-` is not on the page while that wish's drawn `work-` is closed. Every made wish has its notes at once: a track while its run goes, its result when it has ended (ADR 0030, "Every wish keeps its place", below). A settled wish that is tucked away has its bubble and its character and no note under them |
 | a wish that is not made yet | the notes of `shaping.rs` (`shaping`, or `shape-said` and `shape`): the newest thing on the page, so the column's last, over the entry the words were typed in |
 | a newer build installed | one plain note, once a look found one ("A newer build is installed", below): under everything, the wish that is not made yet too, just over the entry |
 
@@ -621,7 +621,8 @@ that fit and counts the rest in a last line, `+N more`.
   `window::poked`): what is typed stays, nothing starts, and the hold after a choice is not changed. A tap on a
   made wish, or on a wish whose project has no chip, chooses nothing (`app/tests/open_a_wish.rs`).
 - **Every wish keeps its place** (`app/src/placing.rs`, `showing/turns.rs`, ADR 0030). Every made wish of the day
-  has its own notes under its own typed words, all at once, while the day's page is on show.
+  has its own notes under its own typed words, all at once, while the day's page is on show, until it is
+  settled and the next wish is made (*Finished wishes tuck away*, below).
   - *At work.* Each made wish whose run goes has its track, `steps-<wish>`, with core's count of its own steps;
     one core has no step for is thinking, with none. A page with a clash has no track: a working wish there has
     its pill only.
@@ -659,12 +660,25 @@ that fit and counts the rest in a last line, `+N more`.
     and the notes are made again under it.
   - *What stays.* What was said of work kept or tossed (`said-<wish>`) stays under its wish until that wish is
     acted on again. A note made again stands where the wish's notes stood.
+  - *Finished wishes tuck away* (`app/src/drawing/tucked.rs`, ADR 0030, decision 11). A made wish that is
+    settled has none of its notes drawn once the next wish is made: its bubble and its little one stay.
+    Settled (`tucked::settled`) is read from the scene: the little one is idle or greyed (core says done or
+    let go), no `work-<wish>` is on it, no note of the wish is in the person's hand (`placing::in_hand`), its
+    `said-<wish>` has no choice, and no note of it has a field to answer in. The settled wishes are tucked
+    away when a made wish is kept in the window (`Showing::answered` with a run asked for; `Showing::ended`
+    when core's answer to a choice made a wish, the wish of that answer staying), and all but the newest when
+    the window opens (`Open::opening`). A wish that settles between those moments stays on the page. A tap on
+    a tucked wish's little one or bubble brings its notes back, made again from core, until the next wish is
+    made; a tucked wish that is settled no more comes back by itself (`Tucked::away`). It is the window's own
+    state, in `drawing::Open`, applied in `drawing::passed`: the scene the app keeps holds every note, core
+    is asked nothing, and `layout` prints every wish's notes.
 
   `app/tests/several_wishes.rs` holds these at the made-up window (two at work, two kept by themselves, a keep
-  and a toss on two wishes, `Show me` on one of two, the looks that ask nothing, a wish of the reading), and
-  `app/src/showing/tests.rs` and `placing.rs` the rules alone. Not proved: the kit's keeping of the entry's words
-  and keys under a new scene, which is the window's (`set_scene`, as every look); a very long column in a real
-  window.
+  and a toss on two wishes, `Show me` on one of two, the looks that ask nothing, a wish of the reading),
+  `app/tests/finished_wishes_tuck_away.rs` the tucking away (a wish made after one landed, a tap, a change that
+  lands after the next wish, a window opened on four wishes), and `app/src/showing/tests.rs`, `placing.rs` and
+  `drawing/tucked.rs` the rules alone. Not proved: the kit's keeping of the entry's words and keys under a new
+  scene, which is the window's (`set_scene`, as every look); a long column in a real window.
 - **What the run says it did** (F86, ADR 0023, `app/src/told.rs`): when core prints a `result` with a piece
   that passed, the work's note has one more note before it, `told-<wish>`, the kit's `Note::Told`. Its title is
   "What it says it did", which is also the label of what the run did: that text is the first thing under it.

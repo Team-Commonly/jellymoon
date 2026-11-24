@@ -28,7 +28,8 @@ use turns::Turns;
 /// The day's page on show, shared by the window's handlers, which all run on its thread. A page-data file has no
 /// day: every act on it is nothing. With it, the project core listed while no entry offered it (F64): a folder
 /// dropped or a name entered while the day is still being read. And which made wishes' notes a look makes again
-/// (`showing/turns.rs`). And which drawn notes the person opened and which made wish they tapped last (`drawing.rs`).
+/// (`showing/turns.rs`). And which drawn notes the person opened, which made wish they tapped last and which made
+/// wishes are tucked away (`drawing.rs`).
 /// And the watch of the bundle the window runs from (`newer.rs`).
 #[derive(Clone, Default)]
 pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>, Rc<RefCell<Turns>>, Open, Rc<Watch>);
@@ -46,7 +47,8 @@ pub struct Entered {
 
 impl Showing {
     pub fn of(day: Option<OnShow>) -> Self {
-        Showing(Rc::new(RefCell::new(day)), Rc::default(), Rc::default(), Open::default(), Rc::new(Watch::running()))
+        let open = day.as_ref().map_or_else(Open::default, |on| Open::opening(&on.scene));
+        Showing(Rc::new(RefCell::new(day)), Rc::default(), Rc::default(), open, Rc::new(Watch::running()))
     }
 
     /// The same day in a window that runs from `bundle`, whose version is read now: a test's bundle is a folder
@@ -147,11 +149,17 @@ impl Showing {
     }
 
     /// Core's answer to an Enter, or none when there was no day to ask. The entry, or the field, is always
-    /// answered, so it never waits for ever, and it is told its words were kept only when core took them.
+    /// answered, so it never waits for ever, and it is told its words were kept only when core took them. An
+    /// answer that asks for a run is of a new made wish, typed in the entry or as a follow-up: every settled
+    /// wish tucks away then (`drawing/tucked.rs`).
     pub fn answered(&self, answer: Option<Answer>) -> Entered {
         let kept = answer.as_ref().is_some_and(Answer::kept);
         let (scene, asking) = answer.and_then(|answer| self.with(|on| on.answered(answer))).unzip();
-        Entered { kept, scene, asking: asking.flatten() }
+        let asking: Option<Asking> = asking.flatten();
+        if let (Some(scene), Some(_)) = (&scene, &asking) {
+            self.3.made(scene, None);
+        }
+        Entered { kept, scene, asking }
     }
 
     /// `Start` tapped while the entry `id` held no words: the scene to show.
@@ -183,13 +191,18 @@ impl Showing {
 
     /// A tap on a character, as work for another thread. What it gives goes to [`Showing::seen`]. Of a made wish
     /// it is also the tap that takes the offer of a follow-up under that wish and opens or closes the drawn note
-    /// of its finished work (`drawing::Open`), which the scene it gives is drawn with.
+    /// of its finished work (`drawing::Open`), which the scene it gives is drawn with. Of a made wish that was
+    /// tucked away it brings the notes back: the scene on show is given to be drawn again even when core says
+    /// nothing new of the wish.
     pub fn poked(&self, id: &str) -> Option<Look> {
         self.with(|on| {
-            if made(&on.scene).iter().any(|one| one.id == id) {
-                self.3.poked(&on.scene, id);
+            let back = made(&on.scene).iter().any(|one| one.id == id) && self.3.poked(&on.scene, id);
+            let (look, from) = (on.poked(id), on.scene.clone());
+            if back {
+                Box::new(move || look().or_else(|| Some(Seen { now: from.clone(), from }))) as Look
+            } else {
+                look
             }
-            on.poked(id)
         })
     }
 
@@ -234,13 +247,18 @@ impl Showing {
     /// What the work a tap left gave: the scene to show. Core's answer to a choice on a wish's work may change
     /// what core says of every other wish (a keep or an undo moves the folder under their changes), so every
     /// ended wish is owed its notes, and the next look makes them again; the answered wish's own are held, from
-    /// here again, so an answer that was long in coming is read as long as a quick one.
+    /// here again, so an answer that was long in coming is read as long as a quick one. An answer that made a
+    /// wish (a sharper wish gone with, `Make it again`) tucks every settled wish away but the answered one.
     pub fn ended(&self, ended: Ended) -> Option<Scene> {
         self.with(|on| match ended {
             Ended::Stopped(stopped) => on.stopped(stopped),
             Ended::Worked(worked) => {
                 let wish = worked.wish.clone();
+                let fresh = made(&worked.seen.now).len() > made(&worked.seen.from).len();
                 let scene = self.3.showed(on.worked(worked));
+                if fresh {
+                    self.3.made(&scene, Some(&wish));
+                }
                 let mut turns = self.2.borrow_mut();
                 turns.owe(&scene);
                 turns.acted(Some(wish));

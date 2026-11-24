@@ -11,7 +11,9 @@ use gpui::{
 };
 use sticker_kit::draw::headless::text_system;
 use sticker_kit::draw::{Page, Tap, load_fonts};
-use sticker_kit::{Entry, Note, PieceKind, Placed, Rect, Scene, Theme, Viewport, entry_top, scroll_most};
+use sticker_kit::{
+    Entry, Kept, Note, PICTURE_PLACE, Picture, PieceKind, Placed, Rect, Scene, Theme, Viewport, entry_top, scroll_most,
+};
 
 type Taps = Rc<RefCell<Vec<Tap>>>;
 
@@ -177,4 +179,24 @@ fn a_click_on_what_a_person_typed_is_a_tap_on_the_character_it_is_of() {
     click(cx, who.center());
     assert_eq!(taps.borrow().last(), Some(&Tap::Character { id: last }), "a tap in a moved column");
     assert_eq!(taps.borrow().len(), 3);
+}
+
+#[test]
+fn a_tap_on_a_drawn_note_s_option_is_a_text_note_s_and_one_on_its_picture_or_its_mark_is_the_note_s_own() {
+    let mut cx = context();
+    let mut scene = long(0);
+    scene.notes.push(Note::Drawn {
+        id: "work-garden".into(),
+        picture: Picture::Sheets { made: 1, changed: 0, removed: 0, state: Kept::Waiting },
+        words: vec!["Your folder is not changed yet.".into()],
+        open: false,
+        options: vec!["Keep it".into(), "Toss it".into()],
+    });
+    let (page, cx, taps) = open(&mut cx, scene);
+    for (kind, index) in [(PieceKind::Option, 1), (PieceKind::Picture, 0), (PieceKind::Ask, 0)] {
+        let at = shown(&page, cx, kind, "work-garden", index);
+        click(cx, at.center());
+    }
+    let tap = |index: usize| Tap::Option { note_id: "work-garden".into(), index };
+    assert_eq!(*taps.borrow(), [tap(1), tap(PICTURE_PLACE), tap(PICTURE_PLACE)], "the picture's place is no option's");
 }

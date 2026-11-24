@@ -92,6 +92,10 @@ pub struct Palette {
     /// The chosen chip, filled, and the colour of the name on it.
     pub chip_chosen: Color,
     pub chip_chosen_ink: Color,
+    /// The pencil a picture is drawn with, and the inks of what a change added and of what it took away.
+    pub pencil: Color,
+    pub added: Color,
+    pub taken: Color,
     pub hues: Vec<Hue>,
 }
 

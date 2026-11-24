@@ -125,7 +125,7 @@ fn on_a_page_with_a_clash_and_no_wish_read_a_made_wish_takes_the_empty_note_away
         let title = |note: &Note| match note {
             Note::Plain { title, .. } | Note::Choice { title, .. } | Note::Whole { title, .. } => title.clone(),
             Note::List { title, .. } | Note::Text { title, .. } | Note::Told { title, .. } => title.clone(),
-            Note::Said { text, .. } => text.clone(),
+            Note::Said { text: title, .. } | Note::Drawn { id: title, .. } => title.clone(),
         };
         scene.notes.iter().map(title).collect()
     };

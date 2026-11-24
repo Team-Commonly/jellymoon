@@ -73,9 +73,11 @@ mod tests {
 
     fn ids(scene: &Scene) -> Vec<String> {
         let id = |note: &Note| match note {
-            Note::Text { id, .. } | Note::Choice { id, .. } | Note::Told { id, .. } | Note::Said { id, .. } => {
-                id.clone()
-            }
+            Note::Text { id, .. }
+            | Note::Choice { id, .. }
+            | Note::Told { id, .. }
+            | Note::Said { id, .. }
+            | Note::Drawn { id, .. } => id.clone(),
             Note::Plain { title, .. } | Note::List { title, .. } | Note::Whole { title, .. } => title.clone(),
         };
         scene.notes.iter().map(id).collect()

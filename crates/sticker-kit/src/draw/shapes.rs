@@ -151,6 +151,7 @@ impl Brush<'_> {
             (_, Role::ChoiceTitle) => p.choice_title,
             (_, Role::ChoiceFooter) => p.choice_footer,
             (_, Role::Bullet) => p.star,
+            (_, Role::Caption) => p.pencil,
             _ => p.ink,
         }
     }

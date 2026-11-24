@@ -18,6 +18,7 @@ mod fonts;
 pub mod geom;
 pub mod layout;
 pub mod motion;
+pub mod pencil;
 mod sample;
 pub mod scene;
 pub mod scroll;
@@ -33,10 +34,13 @@ pub use fonts::BundledMeasure;
 pub use geom::{Rect, Viewport};
 pub use layout::{
     EdgeKind, EdgePiece, EdgePlaced, EdgeWindow, MAX_BUBBLE_LINES, MAX_BUBBLE_TEXTS, MAX_PIECES, MAX_QUOTED_LINES,
-    MAX_TEXT_LINES, PieceKind, Placed, TextRun, edge_windows, entry_top, layout, layout_edge, layout_entry,
+    MAX_TEXT_LINES, PieceKind, Placed, TextRun, edge_windows, entry_top, layout, layout_edge, layout_entry, print,
     scroll_most,
 };
-pub use scene::{Character, Entry, Field, Mark, Mood, Note, Scene, State, ToldRow, speaker};
+pub use pencil::{Ink, Part, Pencil, Sketch, Stroke};
+pub use scene::{
+    Bar, Character, Entry, Field, Kept, Mark, Mood, Note, PICTURE_PLACE, Picture, Scene, Stage, State, ToldRow, speaker,
+};
 pub use scroll::Scroll;
 pub use text::{FixedAdvance, Measure, Role};
 pub use theme::{Loaded, Theme, ThemeError};

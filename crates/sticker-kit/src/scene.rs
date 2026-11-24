@@ -138,6 +138,66 @@ pub enum Note {
         id: String,
         text: String,
     },
+    /// A picture drawn in pencil, which draws itself when the note first comes onto a page. `options` are the
+    /// choices under it, tapped as a text note's are. `words` are the note's own sentences: while `open` is
+    /// false none of them is drawn and a small `?` stands at the picture's top right when there are any; with
+    /// `open` each is drawn under the picture, on a line of its own, to its last word. A tap on the picture or
+    /// on the `?` is the note's `id` at [`PICTURE_PLACE`]. The scene carries `open`; the kit keeps no state for it.
+    Drawn {
+        id: String,
+        picture: Picture,
+        #[serde(default)]
+        words: Vec<String>,
+        #[serde(default)]
+        open: bool,
+        #[serde(default)]
+        options: Vec<String>,
+    },
+}
+
+/// The place a tap on a drawn note's picture is reported at: the place of no option.
+pub const PICTURE_PLACE: usize = usize::MAX;
+
+/// What a drawn note shows (`layout/pictures`). Every count is drawn as marks, and every word in the theme's
+/// handwriting.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Picture {
+    /// A run at work: its steps so far as tally marks, what it is doing now, and the empty place its result
+    /// will stand in. `file` is someone else's word: drawn by the rule a told row's `name` is, or left out.
+    Track { steps: usize, stage: Stage, file: String },
+    /// Work a run finished: a sheet for each file it made, changed or removed, and whether they are in the
+    /// person's folder.
+    Sheets { made: usize, changed: usize, removed: usize, state: Kept },
+    /// Changed lines a file, to one scale. `more` counts the files that have no row.
+    Bars { rows: Vec<Bar>, more: usize },
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Stage {
+    #[default]
+    Thinking,
+    Looking,
+    Making,
+}
+
+/// Where finished work is: in a copy still, in the person's folder, or thrown away.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Kept {
+    #[default]
+    Waiting,
+    In,
+    Tossed,
+}
+
+/// One file's row of a [`Picture::Bars`]: its name, someone else's word, and the lines added and taken.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Bar {
+    pub name: String,
+    pub added: usize,
+    pub taken: usize,
 }
 
 /// The id of the character a [`Note::Said`] of this id is of: what follows the id's first `-`.

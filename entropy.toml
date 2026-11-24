@@ -1099,7 +1099,10 @@ max_file_lines = 400
 # After the gate 18 more: the installed command is looked for before a wish is made again, with its test.
 # Typed ahead raised the app by 33: its test at the made-up window, a wish typed before core has answered
 # (`tests/f43/window.rs`, 30), and `--since` of the picture example (`examples/snapshot.rs`, 2; `examples/walk.rs`, 1).
-"app" = 19026
+# Finished wishes tuck away raised the app by 372: which wishes are settled and tucked away, with its tests
+# (`src/drawing/tucked.rs`, 175), its test at the made-up window (`tests/finished_wishes_tuck_away.rs`, 106), the
+# pass and the window's state that apply it (`src/drawing.rs`, 30; `src/showing.rs`, 18) and their test (43).
+"app" = 19398
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

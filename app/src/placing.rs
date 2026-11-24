@@ -33,7 +33,7 @@ fn stands_of(note: &Note) -> Option<&str> {
 }
 
 /// Whether a note is one of `wish`, the one that says how it stands among them.
-fn any_of(note: &Note, wish: &str) -> bool {
+pub(crate) fn any_of(note: &Note, wish: &str) -> bool {
     of(note, wish) || stands_of(note) == Some(wish)
 }
 

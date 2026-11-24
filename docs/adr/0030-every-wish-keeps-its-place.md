@@ -6,7 +6,8 @@ notes when it has ended, under its own typed words, all at once. Proved at the m
 `answering.rs`, `live.rs`, `scene.rs` and `column.rs`. Nobody has seen it in a real window. It builds on the
 column of [ADR 0026](0026-the-page-is-one-column.md) and the pictures of [ADR 0029](0029-a-wish-s-work-is-drawn.md).
 Core and the binary are as they were, but for decision 10, which is core's words and the app's carrying
-(`app/tests/a_change_that_no_longer_fits.rs`).
+(`app/tests/a_change_that_no_longer_fits.rs`). Decision 11, that finished wishes tuck away, amends decision 2
+and is the app's alone (`app/tests/finished_wishes_tuck_away.rs`, `app/src/drawing/tucked.rs`).
 
 ## Why
 
@@ -113,11 +114,47 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     their note points at `Keep it` again. The waiting note does not offer it: whether a change fits is asked
     of git when a keep is tapped, not at every look, and the reason a change was not kept by itself is written
     nowhere (`run/keep/itself.rs` keeps only whether it landed).
+11. **Finished wishes tuck away.** Decision 2 put the notes of every ended wish on the page at once. After
+    three wishes the column was several screens of cards, most of them about wishes that need nothing from
+    the person, and the wish being made was under all of them. So a made wish that is settled has none of
+    its notes drawn once the next wish is made. Its typed words and its little one stay, and the little one
+    says how it ended (its star; greyed when it was let go).
+
+    - *Settled* (`drawing/tucked.rs`, `settled`), read from the scene the app holds and from nothing else:
+      core says the wish is done or was let go (its little one is neither at work nor needing the person,
+      so no run goes and no question waits); no work of it waits (no `work-<wish>`); no note of it is in
+      the person's hand (`placing::in_hand`: `busy-`, `sure-`, a file, the rows `Show me` brought); core's
+      answer under it (`said-<wish>`) offers no choice, as `Make it again` is one; and no note of it has a
+      field to answer in. A wish core says needs the person, which a run that failed is too, is never
+      tucked away.
+    - *When.* When a new made wish is kept: an Enter in the entry or in a follow-up's field
+      (`Showing::answered`, an answer that asks for a run), and core's answer to a choice that made a wish
+      (`Showing::ended`: a sharper wish gone with, `Make it again`, where the wish the answer is under
+      stays, so that answer is read). Every wish that is settled then is tucked away. And when the window
+      opens on a day that has made wishes: every settled wish but the newest.
+    - *Why at the making of the next wish, and not when a wish settles.* A wish settles by itself: its run
+      ends, its change lands. Tucked away then, the result of what the person asked for would go from the
+      page as it came. It stays until they ask for the next thing, which is when they have stopped
+      reading it.
+    - *What brings it back.* A tap on its little one or its bubble (decision 5's tap, so its notes are also
+      made again from core): the notes are back as an ended wish first has them, its drawn note closed, and
+      stay until the next wish is made. That tap opens no drawn note; the next one does. A tucked wish
+      that is settled no more (a change outside the window makes its work wait again, core has something to
+      say of it) is shown again by itself, and stays shown when it settles.
+    - *Where.* Which wishes are tucked away is the window's own state, held with which drawn notes are open
+      (`drawing::Open`): no call to core, nothing written, and a new window starts from the rule for an
+      opening. It is applied where a scene is made ready to be drawn (`drawing::passed`). The scene the app
+      keeps holds every note, so a look, a choice and the making again of notes are as they were, and
+      `layout`, which has no tap, prints every wish's notes. A tucked wish has no offer of a follow-up
+      under it: the offer is under a wish whose notes are drawn (decision 4).
 
 ## Open
 
-- A day of many made wishes makes a very long column: each ended wish holds a picture and its choices. Nobody
-  has seen such a page in a real window, and nothing folds an older wish away.
+- A day of many made wishes made a very long column. Settled wishes now tuck away (decision 11); a day of
+  many wishes that are not settled (work that waits, runs that failed) is as long as before, and its bubbles
+  alone can fill a window. Nobody has seen either page in a real window.
+- A tucked wish's notes are still made again from core at the moments of decision 6, though nobody sees them.
+  A wish made outside the window (`jellymoon wish`) tucks nothing away: only a wish made in the window does.
 - A wish whose notes are made again higher up moves the cards under it. The window holds the column's end while
   the reader is there; what a reader in the middle of a long page sees was not looked at. A click that such a
   move would have put on another choice is closed (decision 9); what is still open of it: a choice whose words

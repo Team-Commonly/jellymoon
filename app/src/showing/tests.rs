@@ -172,3 +172,46 @@ fn an_act_on_a_wish_s_note_holds_that_wish_and_gives_it_the_offer_and_a_tap_on_a
     assert_eq!(shown.scene(), Some(scene.clone()), "nothing was carried: no note says a tap did nothing");
     assert_eq!(held(&shown), [""; 0]);
 }
+
+// Finished wishes tuck away (ADR 0030, decision 11) when a wish is made, by each way one is made in the window,
+// and at no other answer. The scenes are typed here, and the home is empty: core has nothing to say of a wish.
+#[test]
+fn a_wish_made_by_an_enter_or_by_core_s_answer_to_a_choice_tucks_the_settled_wishes_away() {
+    let home = tempfile::tempdir().unwrap();
+    let notes = || vec![text("kept-m1", &["Undo it"]), text("wish-m2", &[])];
+    let (before, after) =
+        (page(&[State::Idle, State::Idle], notes()), page(&[State::Idle, State::Idle, State::Busy], notes()));
+    let opened = || Showing::of(Some(OnShow { today: today(home.path()), page: None, scene: before.clone() }));
+    let seen = |now: &Scene| Seen { from: before.clone(), now: now.clone() };
+    let on = |shown: &Showing, scene: &Scene| -> Vec<String> {
+        let column = shown.column(scene);
+        column.notes.iter().filter_map(|note| crate::working::id_of(note).map(String::from)).collect()
+    };
+    // The window opens on the newest wish's notes, the older settled wish tucked away. Words core did not keep
+    // tuck nothing away; an Enter core kept as a wish tucks every settled wish away.
+    let shown = opened();
+    assert_eq!(on(&shown, &before), ["wish-m2"]);
+    assert!(!shown.answered(Some(Answer::of(seen(&before), None, None))).kept);
+    assert_eq!(on(&shown, &before), ["wish-m2"]);
+    assert!(shown.answered(Some(Answer::of(seen(&after), None, Some(Box::new(|| None))))).kept);
+    assert_eq!(on(&shown, &after), [""; 0]);
+    // A tap brings a tucked wish back: its look gives the scene to be drawn again though core says nothing new
+    // of the wish. A tap on a wish that is shown is the tap it was, and gives nothing when nothing changed.
+    let shown = opened();
+    let look = shown.poked("m1").expect("a day is on show");
+    assert!(look().is_some_and(|seen| shown.seen(seen) == Some(before.clone())));
+    assert_eq!(on(&shown, &before), ["kept-m1", "wish-m2"]);
+    assert!(shown.poked("m1").expect("a day is on show")().is_none());
+    // Core's answer to a choice that made no wish tucks nothing away. One that made a wish (`Make it again`)
+    // tucks every settled wish away but the answered one, and a sharper wish gone with, which is of no wish, all.
+    let worked = |now: &Scene, wish: &str| {
+        Ended::Worked(crate::working::Worked { seen: seen(now), wish: wish.to_string(), notes: Vec::new() })
+    };
+    shown.ended(worked(&before, "m2"));
+    assert_eq!(on(&shown, &before), ["kept-m1", "wish-m2"]);
+    shown.ended(worked(&after, "m2"));
+    assert_eq!(on(&shown, &after), ["wish-m2"]);
+    let shown = opened();
+    shown.ended(worked(&after, ""));
+    assert_eq!(on(&shown, &after), [""; 0]);
+}

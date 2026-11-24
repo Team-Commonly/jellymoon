@@ -45,6 +45,10 @@ pub fn texts(scene: &Scene) -> Vec<Text<'_>> {
     fn text(note: &Note) -> Option<Text<'_>> {
         match note {
             Note::Text { id, title, body, options, .. } => Some((id, title, strs(body), strs(options))),
+            // Work that waits is drawn: its first word is its title, and the rest its lines.
+            Note::Drawn { id, words, options, .. } if id.starts_with("work-") => {
+                Some((id, words.first()?, strs(&words[1..]), strs(options)))
+            }
             _ => None,
         }
     }

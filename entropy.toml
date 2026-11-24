@@ -844,7 +844,9 @@ max_file_lines = 400
 # (`layout/pictures/`, 395), the drawn note and the headless print (`layout/drawn.rs`, `layout/print.rs`, 89), a
 # picture drawing itself in the view (`draw/pencil.rs`, 165), the sample page, the palette's three inks and the
 # rest of the view (221), and its tests (`tests/pencil.rs`, 320).
-"crates/sticker-kit" = 12322
+# A wish's work is drawn raised the kit by 68: a drawn note's field, placed and typed in by the text note's code
+# (`src/scene.rs`, `layout/drawn.rs`, `layout/notes.rs`, `draw/field.rs`, 12), and its two tests (56).
+"crates/sticker-kit" = 12390
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1048,7 +1050,12 @@ max_file_lines = 400
 # Joined with F91, the column's order raised it by 7: a wish that is not made yet (`src/shaping.rs`'s notes) stands
 # last in the column, over the entry, with its test (`src/column.rs`).
 # The kit's drawn note raised the app by 2: the one arm of the column's test that names a note by its id.
-"app" = 17078
+# A wish's work is drawn raised the app by 538: the drawn notes, which of them are open and the pass every drawn
+# scene takes (`src/drawing.rs`, 134) with its tests (`src/drawing/tests.rs`, 228); the track of a wish at work and
+# its test (`src/live.rs`, 64); the wiring in the window, the note of work and the field (`src/showing.rs` with
+# `showing/after.rs`, `window.rs`, `working.rs`, `answering.rs`, `column.rs`, `lines.rs`, `lib.rs`, 39); the walk's
+# `open` step and the picture example's flags (37); and the arms of the tests that name a note's kind (36).
+"app" = 17616
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

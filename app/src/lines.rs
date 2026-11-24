@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use crate::column::column;
+use crate::drawing::{column, every};
 use sticker_kit::{
     BundledMeasure, Entry, PieceKind, Placed, Rect, Role, Scene, State, TextRun, Theme, Viewport, layout, layout_entry,
 };
@@ -44,9 +44,10 @@ pub(crate) struct At {
 
 /// Every placed piece as one line of JSON, in the order the kit placed them: the scene's, in the order of its column
 /// and in the column's own places, which no scroll moves, then the entry's field and a chip for each of its
-/// options, in the window's, when the page has an entry.
+/// options, in the window's, when the page has an entry. Every drawn note is printed open, with its sentences
+/// and what its run says it did: the print has no tap to ask for them with (`drawing.rs`).
 pub fn lines(scene: &Scene, entry: Option<&Entry>, theme: &Theme, viewport: Viewport) -> String {
-    let (scene, measure) = (&column(scene), BundledMeasure::new(theme));
+    let (scene, measure) = (&column(scene, &every(scene)), BundledMeasure::new(theme));
     let mut placed = layout(scene, theme, viewport, &measure);
     placed.extend(entry.into_iter().flat_map(|entry| layout_entry(entry, theme, viewport, &measure)));
     placed.iter().filter_map(|piece| Some(format!("{}\n", serde_json::to_string(&line(piece, scene)).ok()?))).collect()

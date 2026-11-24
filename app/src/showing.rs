@@ -10,19 +10,24 @@ use std::sync::{Arc, Mutex};
 
 use sticker_kit::{Character, Note, Scene, State, Theme};
 
+use crate::drawing::Open;
 use crate::scene::drawn_id;
 use crate::starting::{Given, Listed, Listing, Shown};
-use crate::stopping::{Chosen, Stopped, Stopping};
+use crate::stopping::Chosen;
 use crate::taps::OnShow;
 use crate::today::{Later, Next};
 use crate::wishing::{Answer, Asking, Look, Offering, Reading, Said, Seen, Wishing};
-use crate::working::{self, Worked, Working};
+use crate::working;
+
+mod after;
+pub use after::{After, Ended};
 
 /// The day's page on show, shared by the window's handlers, which all run on its thread. A page-data file has no
 /// day: every act on it is nothing. With it, the project core listed while no entry offered it (F64): a folder
-/// dropped or a name entered while the day is still being read. And whose work a look may show by itself.
+/// dropped or a name entered while the day is still being read. And whose work a look may show by itself. And
+/// which drawn notes the person opened (`drawing.rs`).
 #[derive(Clone, Default)]
-pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>, Rc<RefCell<Turns>>);
+pub struct Showing(Rc<RefCell<Option<OnShow>>>, Rc<RefCell<Option<String>>>, Rc<RefCell<Turns>>, Open);
 
 /// Whose work that waits a look may show with no tap. Kept on the window's thread.
 #[derive(Default)]
@@ -185,31 +190,9 @@ pub struct Entered {
     pub asking: Option<Asking>,
 }
 
-/// What a tap on an option left to do: work for another thread.
-pub enum After {
-    Stop(Stopping),
-    Work(Working),
-}
-
-/// What an [`After`] gave.
-pub enum Ended {
-    Stopped(Stopped),
-    Worked(Worked),
-}
-
-impl After {
-    /// The work itself: it asks core, which reads files and a repo, or waits for a run to end.
-    pub fn run(self) -> Ended {
-        match self {
-            After::Stop(stop) => Ended::Stopped(stop()),
-            After::Work(work) => Ended::Worked(work()),
-        }
-    }
-}
-
 impl Showing {
     pub fn of(day: Option<OnShow>) -> Self {
-        Showing(Rc::new(RefCell::new(day)), Rc::default(), Rc::default())
+        Showing(Rc::new(RefCell::new(day)), Rc::default(), Rc::default(), Open::default())
     }
 
     /// The project whose chip is chosen as soon as an entry offers it, or none.
@@ -230,6 +213,12 @@ impl Showing {
     /// kit's view gives none out, so a test of the window reads what is on show from this.
     pub fn scene(&self) -> Option<Scene> {
         self.with(|on| on.scene.clone())
+    }
+
+    /// `scene` as the kit's view is given it: its drawn notes open or closed as the person left them, in the order
+    /// of its column (`drawing.rs`). Every scene the window shows passes here, and no other place orders one.
+    pub fn column(&self, scene: &Scene) -> Scene {
+        self.3.column(scene)
     }
 
     /// The entry of the first page, as work for another thread.
@@ -351,8 +340,12 @@ impl Showing {
     }
 
     /// A tap on an option: the scene to show at once, and, when it was the choice to stop a run or a choice of
-    /// work that waits, core's part of it as work for another thread. None for a tap that is nothing.
+    /// work that waits, core's part of it as work for another thread. None for a tap that is nothing. A tap on a
+    /// drawn note's picture opens the note or closes it: the scene is the one on show, and core is not asked.
     pub fn chose(&self, note: &str, index: usize) -> Option<(Scene, Option<After>)> {
+        if index == sticker_kit::PICTURE_PLACE {
+            return self.scene().filter(|scene| self.3.tapped(scene, note)).map(|scene| (scene, None));
+        }
         let chosen = match self.with(|on| on.chose(note, index))? {
             Chosen::Stop(scene, stop) => Some((scene, Some(After::Stop(stop)))),
             Chosen::Work(scene, work) => Some((scene, Some(After::Work(work)))),
@@ -368,7 +361,7 @@ impl Showing {
         self.2.borrow_mut().acted();
         self.with(|on| match ended {
             Ended::Stopped(stopped) => on.stopped(stopped),
-            Ended::Worked(worked) => on.worked(worked),
+            Ended::Worked(worked) => self.3.showed(on.worked(worked)),
         })
     }
 }

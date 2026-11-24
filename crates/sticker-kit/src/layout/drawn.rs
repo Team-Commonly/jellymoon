@@ -1,23 +1,24 @@
 //! A drawn note (`Note::Drawn`): a card of the column's width with a picture, the note's own words under it when
 //! the scene says it is open, and its options under those. While it is closed none of its words is placed, and a
 //! small `?` in a pencil ring stands at the picture's top right when it has any. The kit keeps no state for
-//! this: `open` is the scene's.
+//! this: `open` is the scene's. A field, when it has one, is a text note's (`typed.rs`), under the options.
 
 use super::notes::{MAX_OPTIONS, OPTION_LINES, Sheet, choice_option, close, open};
-use super::{Ctx, PieceKind, Placed, line_height, pictures, piece, run};
+use super::{Ctx, PieceKind, Placed, line_height, pictures, piece, run, typed};
 use crate::geom::Rect;
 use crate::pencil::{Part, Pencil, Sketch};
-use crate::scene::Picture;
+use crate::scene::{Field, Picture};
 use crate::text::{Role, clean, has_visible, wrap};
 
 /// What a card keeps clear at each side of its picture, in design units.
 pub(super) const SIDE: f32 = 24.0;
 
-/// The sheet of the drawn note `id` at `top`.
+/// The sheet of the drawn note `id` at `top`, with its options and its field under the picture and the words.
 pub(super) fn sheet(
     cx: &Ctx,
     id: &str,
-    (picture, words, opened, options): (&Picture, &[String], bool, &[String]),
+    (picture, words, opened): (&Picture, &[String], bool),
+    (options, field): (&[String], Option<&Field>),
     top: f32,
 ) -> Sheet {
     let mut sheet = open(cx, top, (22.0, SIDE));
@@ -41,6 +42,9 @@ pub(super) fn sheet(
     }
     for (index, option) in options.iter().take(MAX_OPTIONS).enumerate() {
         choice_option(cx, &mut sheet, (id, index), option, Role::Option, OPTION_LINES);
+    }
+    if let Some(field) = field {
+        typed::field(cx, &mut sheet, id, field);
     }
     close(cx, sheet, 20.0)
 }

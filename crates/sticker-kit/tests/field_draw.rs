@@ -9,7 +9,7 @@ use std::rc::Rc;
 use gpui::{Entity, Modifiers, TestAppContext, TestDispatcher, VisualTestContext, point, px, size};
 use sticker_kit::draw::headless::text_system;
 use sticker_kit::draw::{EntryMade, Page, Tap, load_fonts};
-use sticker_kit::{Entry, Field, Note, PieceKind, Placed, Scene, Theme};
+use sticker_kit::{Entry, Field, Kept, Note, Picture, PieceKind, Placed, Scene, Theme};
 
 type Seen<T> = Rc<RefCell<Vec<T>>>;
 
@@ -347,4 +347,38 @@ fn at_most_eight_fields_are_kept_apart_and_the_oldest_goes_first() {
     };
     let kept: Vec<bool> = (0..count).map(|n| kept(n, cx)).collect();
     assert_eq!(kept, [false, true, true, true, true, true, true, true, true]);
+}
+
+// A drawn note's field is the same field: a click gives it the keys, a key is typed in it, and Enter gives its
+// words once with the note's id, as under a text note.
+#[test]
+fn a_drawn_note_s_field_is_typed_in_and_entered_as_a_text_note_s_is() {
+    let mut cx = context();
+    let (page, cx, entered, _) = open(&mut cx);
+    let drawn = |open: bool| Note::Drawn {
+        id: "work".into(),
+        picture: Picture::Sheets { made: 1, changed: 0, removed: 0, state: Kept::Waiting },
+        words: vec!["Your folder is not changed yet.".into()],
+        open,
+        options: vec!["Keep it".into()],
+        field: Some(Field { offer: "More of it".into(), hint: "Type here".into(), most: 12, key: "more".into() }),
+    };
+    show(&page, cx, vec![drawn(false)]);
+    assert_eq!(field(&page, cx, "work"), has(""));
+    press(&page, cx, PieceKind::Field, "work");
+    keys(cx, "o n e");
+    assert_eq!(field(&page, cx, "work"), has("one"));
+    // Opened by the scene, the note is the same note: its field keeps the words.
+    show(&page, cx, vec![drawn(true)]);
+    assert_eq!(field(&page, cx, "work"), has("one"));
+    keys(cx, "enter enter");
+    assert_eq!(*entered.borrow(), [made("work", "one")]);
+    assert_eq!(field(&page, cx, "work"), Some(("one".to_string(), true)), "it waits for its answer");
+    answer(&page, cx, "work", true);
+    assert_eq!(field(&page, cx, "work"), has(""));
+    // A text note with the same key and offer takes the drawn note's place: one field.
+    press(&page, cx, PieceKind::Field, "work");
+    keys(cx, "t w o");
+    show(&page, cx, vec![keyed("busy", "more")]);
+    assert_eq!(field(&page, cx, "busy"), has("two"));
 }

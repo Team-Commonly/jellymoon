@@ -143,6 +143,7 @@ pub enum Note {
     /// false none of them is drawn and a small `?` stands at the picture's top right when there are any; with
     /// `open` each is drawn under the picture, on a line of its own, to its last word. A tap on the picture or
     /// on the `?` is the note's `id` at [`PICTURE_PLACE`]. The scene carries `open`; the kit keeps no state for it.
+    /// `field` is a text note's: one line a person types in, under the options, open or closed.
     Drawn {
         id: String,
         picture: Picture,
@@ -152,6 +153,8 @@ pub enum Note {
         open: bool,
         #[serde(default)]
         options: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        field: Option<Field>,
     },
 }
 

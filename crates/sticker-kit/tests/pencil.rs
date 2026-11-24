@@ -4,14 +4,14 @@
 
 use sticker_kit::pencil::{DRAWN_IN, REACH};
 use sticker_kit::{
-    Bar, BundledMeasure, Kept, Note, Pencil, Picture, PieceKind, Placed, Rect, Scene, Sketch, Stage, Stroke, Theme,
-    Viewport, layout, print,
+    Bar, BundledMeasure, Field, Kept, Note, Pencil, Picture, PieceKind, Placed, Rect, Scene, Sketch, Stage, Stroke,
+    Theme, Viewport, layout, print,
 };
 
 const SIZE: Viewport = Viewport { w: 1440.0, h: 900.0 };
 
 fn drawn(id: &str, picture: Picture) -> Note {
-    Note::Drawn { id: id.into(), picture, words: Vec::new(), open: false, options: Vec::new() }
+    Note::Drawn { id: id.into(), picture, words: Vec::new(), open: false, options: Vec::new(), field: None }
 }
 
 fn place(notes: Vec<Note>) -> Vec<Placed> {
@@ -245,7 +245,8 @@ fn bars_are_drawn_to_one_scale_with_a_ruler_and_a_row_of_nothing_has_no_box() {
 fn worded(open: bool, words: &[&str]) -> Vec<Placed> {
     let words = words.iter().map(|word| word.to_string()).collect();
     let options = vec!["Keep it".to_string(), "Toss it".to_string()];
-    place(vec![Note::Drawn { id: "work".into(), picture: sheets(1, 0, 0, Kept::Waiting), words, open, options }])
+    let picture = sheets(1, 0, 0, Kept::Waiting);
+    place(vec![Note::Drawn { id: "work".into(), picture, words, open, options, field: None }])
 }
 
 #[test]
@@ -317,4 +318,25 @@ fn a_drawn_note_is_a_card_of_the_column_under_the_piece_before_it_and_ten_of_the
     for (n, a) in pictures.iter().enumerate() {
         assert!(pictures[n + 1..].iter().all(|b| !a.rect.overlaps(&b.rect)), "picture {n} lies over another");
     }
+}
+
+// A drawn note's field is a text note's: its offer and then the field itself, under the options, open or closed.
+#[test]
+fn a_drawn_note_s_field_is_placed_under_its_options_as_a_text_note_s_is() {
+    let field = Field { offer: "More like this".into(), hint: "Type here".into(), most: 40, key: "more-m1".into() };
+    let options = vec!["Keep it".to_string(), "Toss it".to_string()];
+    for open in [false, true] {
+        let (picture, words) = (sheets(1, 0, 0, Kept::Waiting), vec!["Your folder is not changed yet.".to_string()]);
+        let (id, field) = ("work".to_string(), Some(field.clone()));
+        let placed = place(vec![Note::Drawn { id, picture, words, open, options: options.clone(), field }]);
+        let (offer, typed) = (piece(&placed, PieceKind::Offer, "work"), piece(&placed, PieceKind::Field, "work"));
+        let (offer, typed) = (offer.expect("the offer is placed"), typed.expect("the field is placed"));
+        assert_eq!((texts(&offer), texts(&typed)), (vec!["More like this".to_string()], vec!["Type here".to_string()]));
+        let card = piece(&placed, PieceKind::Note, "work").unwrap();
+        let lowest = placed.iter().filter(|piece| piece.piece == PieceKind::Option).map(|piece| piece.rect.bottom());
+        let lowest = lowest.fold(0.0, f32::max);
+        assert!(offer.rect.y >= lowest && typed.rect.y >= offer.rect.bottom(), "open {open}: under the options");
+        assert!(typed.rect.inside(&card.rect) && typed.rect.x == offer.rect.x, "open {open}: {:?}", typed.rect);
+    }
+    assert!(piece(&place(vec![drawn("work", sheets(1, 0, 0, Kept::Waiting))]), PieceKind::Field, "work").is_none());
 }

@@ -176,7 +176,7 @@ fn a_picture_taken_while_a_run_waits_between_its_steps_has_what_it_is_doing() {
     wait_until("the end of the run", free);
     assert_eq!(code, Some(0), "{said}");
     let midway = &lines[steps.len()];
-    assert!(midway.contains("\"What it is doing\"") && midway.contains("wishes: m1 working"), "{midway}");
+    assert!(midway.contains("\"Your wish is being worked on.\"") && midway.contains("wishes: m1 working"), "{midway}");
     assert!(fs::read(w.at("pictures").join("midway.png")).unwrap().starts_with(b"\x89PNG"));
     assert!(!lines.join("\n").contains("b.txt"), "{lines:#?}");
 }

@@ -191,6 +191,7 @@ fn a_tap_on_a_drawn_note_s_option_is_a_text_note_s_and_one_on_its_picture_or_its
         words: vec!["Your folder is not changed yet.".into()],
         open: false,
         options: vec!["Keep it".into(), "Toss it".into()],
+        field: None,
     });
     let (page, cx, taps) = open(&mut cx, scene);
     for (kind, index) in [(PieceKind::Option, 1), (PieceKind::Picture, 0), (PieceKind::Ask, 0)] {

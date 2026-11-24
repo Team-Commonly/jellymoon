@@ -87,8 +87,9 @@ pub(super) fn fill(cx: &Ctx, note: &Note, index: usize, top: f32) -> Option<(She
             paragraph(cx, &mut sheet, body, Role::Body, 6);
             (close(cx, sheet, 20.0), fallback, tilt.plain_note)
         }
-        Note::Drawn { id, picture, words, open, options } => {
-            (drawn::sheet(cx, &named(id), (picture, words, *open, options), top), named(id), 0.0)
+        Note::Drawn { id, picture, words, open, options, field } => {
+            let under = (options.as_slice(), field.as_ref());
+            (drawn::sheet(cx, &named(id), (picture, words, *open), under, top), named(id), 0.0)
         }
         Note::Said { .. } => return None,
     })

@@ -84,6 +84,7 @@ impl Scene {
             },
             open: n == 3,
             options: if n == 3 { vec!["Keep it".into(), "Toss it".into()] } else { Vec::new() },
+            field: None,
         };
         let notes = pictures.into_iter().enumerate().map(drawn).collect();
         Scene { date_label: "pencil".into(), title: "what the pencil draws".into(), notes, ..Scene::default() }

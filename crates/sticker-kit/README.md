@@ -209,6 +209,11 @@ options (`layout/typed.rs`, `draw/field.rs`).
   whose note still has one, by the note's id, and drops the field of a note
   that is gone or has none.
 
+A drawn note (`Note::Drawn`) can hold a `field` too. It is a text note's:
+placed under the options, whether the note is open or closed, and drawn,
+typed in and reported by the same code (`tests/pencil.rs`,
+`tests/field_draw.rs`).
+
 `tests/typed.rs` places them; `tests/field_draw.rs` types in them through
 GPUI's dispatch on a headless page. Not done: a field's element stands where
 the layout placed it and does not follow its note while the note moves into
@@ -216,7 +221,7 @@ place.
 
 ## A drawn note: a picture in pencil
 
-`Note::Drawn { id, picture, words, open, options }` is a card that shows a thing as a small drawing where a text
+`Note::Drawn { id, picture, words, open, options, field }` is a card that shows a thing as a small drawing where a text
 note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/pencil.rs`, plain geometry):
 
 - **A stroke** bows a little and ends a little past both its ends, and is laid twice: a wide faint pass under a

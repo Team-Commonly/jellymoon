@@ -54,9 +54,12 @@ fn mid_way(w: &World, size: &str) {
     let [says] = &says[..] else { panic!("{size}: one bubble: {placed:?}") };
     assert_eq!(says.said(), "looking around", "{size}");
     let (steps, said) = told(&placed, size);
-    assert_eq!(said, "What it is doing Looking around your project. 1 step so far.", "{size}");
+    let going = format!("{GOING} “{SAID}”. What it did will show here when it is done.");
+    assert_eq!(said, format!("{going} Looking around your project. 1 step so far."), "{size}");
     assert!(!placed.iter().any(|piece| piece.0.to_string().contains("b.txt")), "{size}: {placed:?}");
-    assert!(placed.iter().any(|piece| piece.kind() == "note" && piece.said().starts_with(GOING)), "{size}");
+    // The track stands in the place of the note that says the wish is being worked on: that note is not beside it.
+    let says_so = placed.iter().filter(|piece| piece.kind() == "note" && piece.said().starts_with(GOING)).count();
+    assert_eq!(says_so, 1, "{size}: {placed:?}");
     let entry = ["entry", "chip", "go", "action"];
     for piece in placed.iter().filter(|piece| entry.contains(&piece.kind()) || piece.kind() == "note") {
         if piece.id() != "steps-m1" {
@@ -86,7 +89,8 @@ fn stages(w: &World) {
         let placed = w.placed_with(&["--size", SIZES[0]]);
         let says: Vec<String> = of(&placed, "says", "m1").iter().map(|piece| piece.said()).collect();
         assert_eq!(says, [pill], "{steps}");
-        assert_eq!(told(&placed, SIZES[0]).1, format!("What it is doing {stage} {count}"), "{steps}");
+        let said = told(&placed, SIZES[0]).1;
+        assert!(said.starts_with(GOING) && said.ends_with(&format!("done. {stage} {count}")), "{steps}: {said}");
         let page: String = placed.iter().map(|piece| piece.0.to_string()).collect();
         assert!(["done. Kept", "menu.txt", "new file.txt"].iter().all(|name| !page.contains(name)), "{steps}: {page}");
     }
@@ -100,6 +104,7 @@ fn scene(line: &str) -> Option<Scene> {
 fn id(note: &Note) -> Option<&str> {
     match note {
         Note::Text { id, .. } | Note::Choice { id, .. } | Note::Told { id, .. } => Some(id.as_str()),
+        Note::Drawn { id, .. } if id.starts_with("work-") => Some(id.as_str()),
         _ => None,
     }
 }

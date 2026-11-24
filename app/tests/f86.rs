@@ -260,6 +260,7 @@ fn a_dropped_piece_ends_the_note_with_the_sentence_that_something_could_not_be_c
 fn ids(scene: &Option<Scene>) -> Vec<String> {
     let id = |note: &Note| match note {
         Note::Text { id, .. } | Note::Told { id, .. } => Some(id.clone()),
+        Note::Drawn { id, .. } if id.starts_with("work-") => Some(id.clone()),
         _ => None,
     };
     scene.as_ref().unwrap().notes.iter().filter_map(id).collect()

@@ -235,8 +235,12 @@ fn a_look_takes_away_a_note_of_the_page_s_own_that_no_longer_holds() {
         scene
             .notes
             .iter()
-            .map(|note| {
-                first(&Scene { notes: vec![note.clone()], ..Scene::default() }).map(|(title, _)| title.to_string())
+            .map(|note| match note {
+                // The sentence that a wish is being worked on is the first word of its track (ADR 0029).
+                Note::Drawn { words, .. } => words.first().cloned(),
+                _ => {
+                    first(&Scene { notes: vec![note.clone()], ..Scene::default() }).map(|(title, _)| title.to_string())
+                }
             })
             .collect::<Vec<_>>()
     };

@@ -1,5 +1,5 @@
-//! The field of a text note in the view: one line a person types in under the note, held and typed in as the
-//! entry is (`entry.rs`), by the same code. A page has one for each note of its scene that has a field, found by
+//! The field of a text note, or of a drawn one, in the view: one line a person types in under it, held and typed
+//! in as the entry is (`entry.rs`), by the same code. A page has one for each note of its scene with a field, by
 //! the id of the note it is under now. What was typed stays while a note of the scene has the field, whatever
 //! else of the scene changes. A field is the same field while its key, or with no key its note's id, and its
 //! offer are the same: an offer that changes is another field, and the words typed for the first are not
@@ -32,7 +32,9 @@ pub(super) fn fit(scene: &Scene, mut was: Vec<EntryView>) -> (Vec<EntryView>, Ve
     };
     let mut held = Vec::new();
     for note in &scene.notes {
-        let Note::Text { id, field: Some(field), .. } = note else { continue };
+        let (Note::Text { id, field: Some(field), .. } | Note::Drawn { id, field: Some(field), .. }) = note else {
+            continue;
+        };
         let entry = Entry {
             id: id.clone(),
             hint: field.hint.clone(),

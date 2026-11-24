@@ -111,6 +111,11 @@ pub fn text<'a>(scene: &'a Scene, id: &str) -> Option<Text<'a>> {
             let field = field.as_ref().map(|field| (field.offer.as_str(), field.hint.as_str()));
             Some((title.as_str(), strs(body), quoted.as_str(), strs(options), field))
         }
+        // Work that waits is drawn: its first word is its title, the rest its lines, and it quotes nothing.
+        Note::Drawn { id: own, words, options, field, .. } if own == id => {
+            let field = field.as_ref().map(|field| (field.offer.as_str(), field.hint.as_str()));
+            Some((words.first()?.as_str(), strs(&words[1..]), "", strs(options), field))
+        }
         _ => None,
     })
 }
@@ -142,7 +147,11 @@ pub fn at_once(printed: &Value) -> Option<Scene> {
 /// The key of the field under the note with that id.
 pub fn key<'a>(scene: &'a Scene, id: &str) -> Option<&'a str> {
     scene.notes.iter().find_map(|note| match note {
-        Note::Text { id: own, field: Some(field), .. } if own == id => Some(field.key.as_str()),
+        Note::Text { id: own, field: Some(field), .. } | Note::Drawn { id: own, field: Some(field), .. }
+            if own == id =>
+        {
+            Some(field.key.as_str())
+        }
         _ => None,
     })
 }

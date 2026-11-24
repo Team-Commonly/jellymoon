@@ -82,6 +82,7 @@ fn ids(scene: &Scene) -> Vec<&str> {
     fn id(note: &Note) -> Option<&str> {
         match note {
             Note::Text { id, .. } | Note::Told { id, .. } => Some(id),
+            Note::Drawn { id, .. } if id.starts_with("work-") => Some(id),
             _ => None,
         }
     }
@@ -101,13 +102,13 @@ fn told(scene: &Scene) -> (Vec<ToldRow>, Vec<String>) {
 /// The texts of the work's note, with its choices under them.
 fn work(scene: &Scene) -> Vec<String> {
     let work = scene.notes.iter().find_map(|note| match note {
-        Note::Text { id, title, body, options, .. } if id == "work-m1" => Some((title, body, options)),
+        Note::Drawn { id, words, options, .. } if id == "work-m1" => Some((&words[0], &words[1..], options)),
         _ => None,
     });
     let (title, body, options) = work.unwrap_or_else(|| panic!("no work's note: {scene:?}"));
     assert_eq!(title, "Your folder is not changed yet.");
     assert_eq!(options, &["Show me", "Keep it", "Toss it"]);
-    body.clone()
+    body.to_vec()
 }
 
 fn row(label: &str, quote: &str) -> ToldRow {

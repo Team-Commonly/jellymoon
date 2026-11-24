@@ -48,8 +48,8 @@ pub use redact::wish_start;
 pub use ruling::{deliver, rule};
 pub use run::{
     ANSWER_READ, Alone, FileChange, FileKind, KeepOptions, Kept, KeptItself, Piece, Ran, RunOptions, RunOutcome,
-    SHAPE_MODEL, Shape, ShapeOutcome, Shaped, Shown, ShownEntry, ShownFile, Started, Step, Steps, Told, Tool, Tossed,
-    Undone, Waiting, Waits, WorkDone, WorkState, WorkTap, answer_run, doing, ended_alone, followable, keep_run,
+    SHAPE_MODEL, Shape, ShapeGo, ShapeOutcome, Shaped, Shown, ShownEntry, ShownFile, Started, Step, Steps, Told, Tool,
+    Tossed, Undone, Waiting, Waits, WorkDone, WorkState, WorkTap, answer_run, doing, ended_alone, followable, keep_run,
     kept_itself, run, run_apart, shape, show_file, show_run, stands, stop_run, toss_run, undo_run, waiting, waits,
     wish_after, wish_of_shape, wish_shaped, work_tapped,
 };

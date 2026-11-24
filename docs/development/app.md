@@ -371,9 +371,20 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   end here.
 - **`shaped`.** Nothing is kept. The entry is emptied, and two notes stand where the reading's stood:
   `shape-said`, the kit's told note titled "Your wish, sharper", with a row for each text that is not empty under
-  the labels "The wish", "Done when", "Not touching", "Only you know" and "Why"; and under it the text note
+  the labels "The wish", "Done when", "Not touching" and, last, "Only you know"; and under it the text note
   `shape`, titled "What you typed", with the typed words as its quote and exactly two options, "Go with this" and
-  "Go with what I typed". Every word of the model's is a quote of a row. Every other word is fixed here.
+  "Go with what I typed". Every word of the model's is a quote of a row. Every other word is fixed here. The
+  model's reason (`why`) is read and checked by core and is not drawn.
+- **The question can be answered.** When the sharper wish has a question, the note `shape` has a field under its
+  two options: the offer "Or go with this and your answer to the question" over it, the hint "Type your answer,
+  then Enter" in it, a wish's 200 characters at most, and no key, so it goes with its note. With no question
+  there is no field. Enter in it with words is `OnShow::answering_shape` (`OnShow::typing` hands it the note
+  `shape`): both notes go at once, as at a tap, and the work asks core's `wish_of_shape` to keep the wish with
+  the shape and the answer (`ShapeGo::Answer`), then the run is asked for as after any Enter. The words carried
+  to core are those of the note held now, and core keeps the wish only while that shape still waits for them.
+  An answer core refuses (too long, nothing left once cleaned, no prompt to build, a shape that waits no more)
+  keeps nothing: the pair stands again under "That wish was not kept." with core's reason, and the field keeps
+  its words. An empty field gives nothing. What the run is given is core's to build (ADR 0025, decision 7).
 - **A tap** on either option is one arm of `stopping::chose` and an ordinary `Chosen::Work`: both notes go at
   once, and the work asks core's `wish_of_shape` to keep the wish, with the shape or as typed, then asks for its
   run as a typed wish's is asked for. Core keeps it only while that shape still waits for those words; what it

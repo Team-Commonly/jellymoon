@@ -4,10 +4,12 @@
 //! always did (`wishing.rs`), and nothing more is said. A sharper wish is shown and nothing is kept: one note of
 //! the kit's holds it ([`SAID`]), every word of the model's a quote under a label of Jellymoon's, over a note with
 //! the person's own words and the two choices ([`SHAPE`]). A tap on either keeps the wish and starts its run
-//! as a typed wish's is started; only what the run is given differs, and that is core's to build.
+//! as a typed wish's is started; only what the run is given differs, and that is core's to build. When the
+//! sharper wish has a question, that note has a field under the choices ([`ANSWER`]), and Enter in it is a third
+//! way on: the sharper wish with the person's answer. The model's reason is core's to read and is not drawn.
 
-use jellymoon_core::{Shape, ShapeOutcome};
-use sticker_kit::{Note, Scene, ToldRow};
+use jellymoon_core::{MADE_SAID_MAX, Shape, ShapeGo, ShapeOutcome};
+use sticker_kit::{Field, Note, Scene, ToldRow};
 
 use crate::taps::OnShow;
 use crate::wishing::{Answer, NAMED_MAX, Seen, UNKEPT, Wishing, newest, of};
@@ -25,8 +27,12 @@ pub const TYPED: &str = "What you typed";
 /// The two choices, in their order.
 pub const GO: &str = "Go with this";
 pub const GO_TYPED: &str = "Go with what I typed";
-/// The labels of the sharper wish's rows, in order; an empty row is left out. The question stands before the reason.
-pub const LABELS: [&str; 5] = ["The wish", "Done when", "Not touching", "Only you know", "Why"];
+/// The words over the field the sharper wish's question is answered in, under the choices, and the field's hint.
+pub const ANSWER: &str = "Or go with this and your answer to the question";
+pub const ANSWER_HINT: &str = "Type your answer, then Enter";
+/// The labels of the sharper wish's rows, in order; an empty row is left out. The question is last: it stands
+/// right over the note with the field it is answered in.
+pub const LABELS: [&str; 4] = ["The wish", "Done when", "Not touching", "Only you know"];
 
 /// Whether an id is one of this file's notes.
 pub(crate) fn names(id: &str) -> bool {
@@ -56,9 +62,10 @@ pub(crate) fn settle(scene: &mut Scene, notes: Vec<Note>) {
     scene.notes.splice(0..0, notes);
 }
 
-/// The two notes of a sharper wish. `said` is the typed words as core keeps them.
+/// The two notes of a sharper wish. `said` is the typed words as core keeps them. A sharper wish that asks has
+/// the field of an answer under its choices, of a wish's own length, which is core's bound on an answer.
 fn pair(shape: &Shape, said: String) -> Vec<Note> {
-    let texts = [&shape.wish, &shape.done_when, &shape.not_touching, &shape.ask, &shape.why];
+    let texts = [&shape.wish, &shape.done_when, &shape.not_touching, &shape.ask];
     let rows = LABELS.iter().zip(texts).filter(|(_, text)| !text.is_empty());
     let rows = rows.map(|(label, text)| ToldRow {
         label: label.to_string(),
@@ -67,7 +74,12 @@ fn pair(shape: &Shape, said: String) -> Vec<Note> {
     });
     let sharper =
         Note::Told { id: SAID.to_string(), title: SHARPER.to_string(), rows: rows.collect(), end: Vec::new() };
-    vec![sharper, text(SHAPE, TYPED, said, &[GO, GO_TYPED])]
+    let mut choice = text(SHAPE, TYPED, said, &[GO, GO_TYPED]);
+    if let (false, Note::Text { field, .. }) = (shape.ask.is_empty(), &mut choice) {
+        let (offer, hint) = (ANSWER.to_string(), ANSWER_HINT.to_string());
+        *field = Some(Field { offer, hint, most: MADE_SAID_MAX, key: String::new() });
+    }
+    vec![sharper, choice]
 }
 
 impl OnShow {
@@ -106,8 +118,9 @@ impl OnShow {
         // say that nothing was wished for.
         self.scene.notes.retain(|note| !nothing(note));
         let (today, page, from) = (self.today.clone(), self.page.clone(), self.scene.clone());
+        let go = if index == 0 { ShapeGo::Shape } else { ShapeGo::Typed };
         let work = move || {
-            let why = match jellymoon_core::wish_of_shape(&today.read(), &said, index == 0) {
+            let why = match jellymoon_core::wish_of_shape(&today.read(), &said, go) {
                 Ok(made) => (today.asking(made.wish.id, made.wish.said))(),
                 Err(refused) => Some((UNKEPT, of(&said, &format!("{refused}.")))),
             };
@@ -117,5 +130,38 @@ impl OnShow {
             Worked { seen: Seen { from, now }, wish: String::new(), notes: notes.into_iter().collect(), remade: None }
         };
         Some((self.scene.clone(), Box::new(work)))
+    }
+
+    /// Enter in the field under the choices, with words: both notes go at once, as at a tap, and the work keeps
+    /// the wish with the sharper wish and the answer `typed`, and asks for its run as `Go with this` does. The
+    /// words carried to core are the note's that is held now, and core keeps the wish only while that shape
+    /// still waits for them. What core refuses keeps nothing: the pair stands again under core's reason, and
+    /// the field keeps its words. None when no such field is on show, and for a field with no words.
+    pub(crate) fn answering_shape(&mut self, typed: &str) -> Option<(Option<Scene>, Wishing)> {
+        let ours = |note: &&Note| id_of(note).is_some_and(|id| [SAID, SHAPE].contains(&id));
+        let stood: Vec<Note> = self.scene.notes.iter().filter(ours).cloned().collect();
+        let said = stood.iter().find_map(|one| match one {
+            Note::Text { id, quoted, field: Some(_), .. } if id == SHAPE => Some(quoted.clone()),
+            _ => None,
+        })?;
+        if typed.trim().is_empty() {
+            return None;
+        }
+        settle(&mut self.scene, Vec::new());
+        self.scene.notes.retain(|note| !nothing(note));
+        let (today, page, from, typed) = (self.today.clone(), self.page.clone(), self.scene.clone(), typed.to_string());
+        let work = move || {
+            let made = jellymoon_core::wish_of_shape(&today.read(), &said, ShapeGo::Answer(&typed));
+            let (why, asking, back) = match made {
+                Ok(made) => (None, Some(today.asking(made.wish.id, made.wish.said)), Vec::new()),
+                Err(refused) => (Some((UNKEPT, of(&said, &format!("{refused}.")))), None, stood),
+            };
+            let mut held = from.clone();
+            settle(&mut held, back.clone());
+            let mut now = today.again(page.as_ref(), &held);
+            newest(&mut now, why.clone());
+            Answer::of(Seen { from, now }, why, asking).settling(back)
+        };
+        Some((Some(self.scene.clone()), Box::new(work)))
     }
 }

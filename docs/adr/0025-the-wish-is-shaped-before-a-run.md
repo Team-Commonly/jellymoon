@@ -38,6 +38,9 @@ the heart of the decision.
    (decision 7) is thrown away too: a sharper wish that no run could be given is never shown.
    **Any failure throws the whole answer away**: the outcome is `as_typed`, and why is one of Jellymoon's own fixed
    sentences. No word of the model's or the harness's is ever in an error.
+   Amended 2026-11-24: `why` is read and checked as before, and it is not shown (decision 8): a text of the
+   answer that fails the check still throws the whole away, the reason too. The prompt that must be buildable
+   for a sharper wish to be shown is the one with no answer.
 5. **`shape` exits 0** and prints `outcome`: `clear` (the words are sharp enough; nothing is kept), `shaped`, or
    `as_typed`. A usage error, and a home that cannot be used, fail as they do for every command.
 6. **A shape waits in one file**, `pages/<day>.shape.json`: one a day, a new one in the place of the old, with the
@@ -48,9 +51,33 @@ the heart of the decision.
    are kept in one write, so a wish is never kept without the shape it was to go with: a wish that is refused (a
    busy day, a day with its eight) keeps nothing, and its shape still waits. `said` is the typed words everywhere;
    a run is given `shaped` when the wish has one. The shape is removed when a wish is kept from it.
+   Amended 2026-11-24: **the question can be answered.** A page keeps a wish from the shape that waits for its
+   words in one of three ways (`wish_of_shape`, `ShapeGo`): as typed, with the shape, or with the shape and the
+   person's answer to its question. With an answer the prompt has two more parts, before the person's own words:
+
+   ```
+   The wish: … | Done when: … | Not touching: … | Asked of the person: <the question> | The person's answer:
+   “<the answer>” | The person's own words: “<the typed words>”
+   ```
+
+   The question is the model's text and stands bare under its label, as the other texts of the model do; the
+   answer is the person's and stands in `“ ”`, as their own words do. The answer is cleaned as a wish's words are
+   (the same door: one line, nothing unseen, credentials replaced, each `"` made `'`) and is 200 characters at
+   most, a wish's own length. An answer is refused with a fixed sentence of core's, nothing written and the shape
+   still waiting, when the shape asks nothing, when nothing is left of the answer once cleaned, when it is
+   longer, and when no prompt can be built with it. A prompt is 1300 characters at most (it was 1000): the
+   longest of everything comes to 1280 (a wish of 280, three texts of 160, the words and the answer of 200 each,
+   and 120 of labels and marks). The door looks at no text of more than 4096 bytes, so the longest of everything
+   builds in characters of up to three bytes each, which is every script in common use; written wholly in
+   characters of four bytes it is 4198 bytes and is refused with that sentence, and a shorter answer builds.
 8. **In the window** Enter shows at once that the wish is being read. `clear` and `as_typed` go on as a typed
    wish always did. `shaped` keeps nothing and shows the sharper wish, every word of the model's a quote under a
    label of Jellymoon's, with `Go with this` and `Go with what I typed` (`docs/development/app.md`).
+   Amended 2026-11-24: the rows are "The wish", "Done when", "Not touching" and, last, "Only you know". The
+   model's reason is not drawn: it is its unchecked claim, it was wrong twice ("Measured"), and no run is given
+   it. When there is a question, the note of the two choices has a field under them, and Enter in it with words
+   keeps the wish with the sharper wish and the answer and starts its run as `Go with this` does. With no
+   question there is no field.
 
 ## Measured
 
@@ -87,7 +114,18 @@ Not measured: Windows, Linux, an older Claude Code, and a link inside the projec
   neither it nor the typed words are on the page (found on a walk of the one-column page).
 - A shape made by the command for the same words on the same day, while a pair stands in the window, is the one a
   tap keeps: the text is checked, and it is not the one on show.
-- A build before this one refuses a day's made wishes when one of them holds `shaped`.
+- A build before this one refuses a day's made wishes when one of them holds `shaped`. A build before the
+  answer (2026-11-24) refuses them when a prompt is longer than 1000 characters.
+- `wish --shaped` has no answer: the question is answered in the window only.
+- The person's own words may hold `|`, `“` and `”`, and so may their answer: cleaning leaves them. A person can
+  so write a part that reads, to their own run, as a label of Jellymoon's. Only a model's text is refused for
+  those marks; the person is the one the run works for.
+- The answer is in the run's prompt and nowhere else: the page shows the typed words, a wish made again is made
+  of the typed words alone, and a follow-up's run is given the follow-up's words.
+- An answer that core refuses leaves the pair on the page with core's reason over it. When the reason is that
+  the shape waits no more, the pair still stands, and the next tap on it says so and takes it away.
+- An answer goes with the question of the shape that waits for those words, which the note above already says
+  may not be the one on show.
 - The model reads what the project holds, so a file's text can steer what the sharper wish says. It can only
   reach the person as a quote that passed the check, and a run only with the person's tap and their own words
   beside it.

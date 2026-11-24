@@ -6,7 +6,8 @@
 //! Jellymoon's own fixed words, never the model's. A checked shape that is not `clear` waits in
 //! `pages/<day>.shape.json`, one a day, with the words and the project it is of. A wish is kept from it only for
 //! those same words ([`wish_shaped`], [`wish_of_shape`]): then the wish carries the run's prompt ([`prompt`]),
-//! which core builds from fixed labels and ends with the person's own words.
+//! which core builds from fixed labels and ends with the person's own words, after their answer to the shape's
+//! question when they gave one ([`ShapeGo`]).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -19,7 +20,7 @@ use crate::busy::or_test;
 use crate::call::{self, Reply};
 use crate::hook::put;
 use crate::reading::unfence;
-use crate::still::still;
+use crate::still::{MARKS, Unkept, marks_only, still};
 use crate::wish::{self, Wished};
 use crate::{DayOptions, Error, find, tap};
 
@@ -47,10 +48,11 @@ const THE_WISH: &str = "The wish: ";
 /// How long the shaping call may take, and how many bytes of what it prints are read.
 const LIMIT: Duration = Duration::from_secs(20);
 const READ: usize = 64 * 1024;
-/// The most characters of a shape's wish, of each of its other texts, and of the run's prompt made of them.
+/// The most characters of a shape's wish, of each of its other texts, and of the run's prompt made of them: the
+/// longest of everything, with the words and an answer of a wish's length each, is 1280.
 const WISH_MAX: usize = 280;
 const TEXT_MAX: usize = 160;
-const SHAPED_MAX: usize = 1000;
+const SHAPED_MAX: usize = 1300;
 /// The most bytes of a kept shape that are read.
 const KEPT_MAX: usize = 16 * 1024;
 
@@ -65,6 +67,12 @@ const UNCHECKED: &str = "the answer did not pass Jellymoon's check, so none of i
 const UNKEPT: &str = "the sharper wish could not be kept, so it was not used";
 /// What refuses a tap on a shape that waits no more.
 const GONE: &str = "the sharper wish on show waits no more, so nothing was kept";
+/// What refuses an answer: the shape asks nothing; nothing is left of the answer once cleaned; it is longer than
+/// a wish's words; no prompt can be built with it. Nothing is kept then, and the shape still waits.
+const NO_ASK: &str = "the sharper wish on show asks nothing, so the answer was not used and nothing was kept";
+const NO_ANSWER: &str = "an answer needs words, and nothing is left of these once cleaned, so nothing was kept";
+const LONG_ANSWER: &str = "an answer is at most 200 characters, and this one is longer, so nothing was kept";
+const UNBUILT: &str = "no run could be given the sharper wish with this answer, so nothing was kept";
 
 /// How a shaping ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,7 +153,7 @@ pub fn shape(home: &Path, options: &RunOptions, typed: &str, project: &str) -> S
         return Shaped { outcome: ShapeOutcome::Clear, why: None, said: None, shape: None };
     }
     // A sharper wish no run could be given is not one to show: `Go with this` would go on with other words.
-    if prompt(&shape, &said).is_none() {
+    if prompt(&shape, &said, None).is_none() {
         return as_typed(UNCHECKED);
     }
     let kept = Kept { day: day.clone(), said, project: project.to_string(), shape };
@@ -202,21 +210,36 @@ fn waiting(home: &Path, day: &str, said: &str) -> Option<(Kept, String)> {
     let kept: Kept = serde_json::from_slice(&bytes).ok()?;
     let passes =
         serde_json::to_string(&kept.shape).ok().and_then(|shape| checked(&shape)).as_ref() == Some(&kept.shape);
-    let shaped = prompt(&kept.shape, said).filter(|_| kept.day == day && kept.said == said && passes)?;
+    let shaped = prompt(&kept.shape, said, None).filter(|_| kept.day == day && kept.said == said && passes)?;
     (!kept.shape.clear).then_some((kept, shaped))
 }
 
 /// The run's prompt of a wish kept from a shape, on one line: Jellymoon's labels, each before the model's text,
-/// and the person's own words, quoted, last. None when the door would change it: then the wish is as typed.
-fn prompt(shape: &Shape, said: &str) -> Option<String> {
+/// and the person's own words, quoted, last. With the person's `answer` to the shape's question, the question
+/// stands before them under a label, bare as every text of the model's, and then the answer, quoted as the
+/// person's words are. None when the door would change it: then no wish is kept with it.
+fn prompt(shape: &Shape, said: &str, answer: Option<&str>) -> Option<String> {
     let mut built = format!("The wish: {}", shape.wish);
     for (label, text) in [("Done when", &shape.done_when), ("Not touching", &shape.not_touching)] {
         if !text.is_empty() {
             built.push_str(&format!(" | {label}: {text}"));
         }
     }
+    if let Some(answer) = answer {
+        built.push_str(&format!(" | Asked of the person: {} | The person's answer: “{answer}”", shape.ask));
+    }
     built.push_str(&format!(" | The person's own words: “{said}”"));
     Some(built).filter(|built| kept(built))
+}
+
+/// An answer as the run's prompt holds it: cleaned as a wish's words are, and of their length at most.
+fn answered(typed: &str) -> Result<String, &'static str> {
+    let answer = wish::cleaned(typed).map_err(|why| if why == Unkept::Long { LONG_ANSWER } else { wish::CHANGING })?;
+    match answer.as_str() {
+        "" => Err(NO_ANSWER),
+        marks if marks_only(marks) => Err(MARKS),
+        _ => Ok(answer),
+    }
 }
 
 /// Whether a text is one a wish keeps as its run's prompt: what the door leaves of itself, within its length.
@@ -240,27 +263,38 @@ pub fn wish_shaped(home: &Path, day: Option<&str>, typed: &str, project: &str) -
     Ok((made, with_shape))
 }
 
-/// A tap under a shape on a page: keeps the wish of the words `typed`, for the project the shape that waits for
-/// those words is of, as [`wish::wish_offered`] keeps one, with the shape (`go`) or as typed, in one write.
-/// Refused, with nothing written, when no shape waits for those words.
-pub fn wish_of_shape(read: &DayOptions, typed: &str, go: bool) -> Result<Wished, Error> {
+/// What a wish is kept with, from the shape that waits for its words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeGo<'a> {
+    /// As typed: the shape is not used.
+    Typed,
+    /// With the sharper wish.
+    Shape,
+    /// With the sharper wish and the person's answer to its question, as they typed it.
+    Answer(&'a str),
+}
+
+/// A tap under a shape on a page, or Enter in the field under it: keeps the wish of the words `typed`, for the
+/// project the shape that waits for those words is of, as [`wish::wish_offered`] keeps one, as `go` says, in one
+/// write. Refused, with nothing written, when no shape waits for those words, and with the shape still waiting
+/// when an answer is one the shape did not ask for, is not one once cleaned, or leaves no prompt to build.
+pub fn wish_of_shape(read: &DayOptions, typed: &str, go: ShapeGo) -> Result<Wished, Error> {
     let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };
-    let (waits, shaped) = waiting(home, day, &wish::words(typed)?).ok_or_else(|| Error::Wish(GONE.to_string()))?;
-    let made = wish::offered_with(read, typed, &waits.project, go.then_some(shaped))?;
+    let refused = |why: &str| Error::Wish(why.to_string());
+    let (waits, shaped) = waiting(home, day, &wish::words(typed)?).ok_or_else(|| refused(GONE))?;
+    let shaped = match go {
+        ShapeGo::Typed => None,
+        ShapeGo::Shape => Some(shaped),
+        ShapeGo::Answer(_) if waits.shape.ask.is_empty() => return Err(refused(NO_ASK)),
+        ShapeGo::Answer(answer) => {
+            let answer = answered(answer).map_err(refused)?;
+            Some(prompt(&waits.shape, &waits.said, Some(&answer)).ok_or_else(|| refused(UNBUILT))?)
+        }
+    };
+    let made = wish::offered_with(read, typed, &waits.project, shaped)?;
     let _ = fs::remove_file(file(home, day));
     Ok(made)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // The model's name is the one part of the line that is a name: it is where the line says it is.
-    #[test]
-    fn the_line_asks_for_the_shape_model_and_every_fixed_reason_is_what_cleaning_leaves() {
-        assert!(crate::reading::is_model_name(SHAPE_MODEL) && LINE.contains(&format!(" --model {SHAPE_MODEL} ")));
-        for why in [NO_WISH, NO_FOLDER, NO_HARNESS, UNASKED, TOO_LONG, UNANSWERED, UNCHECKED, UNKEPT, GONE] {
-            assert_eq!(crate::redact::line(why, 200), why);
-        }
-    }
-}
+mod tests;

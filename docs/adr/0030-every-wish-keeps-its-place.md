@@ -5,7 +5,8 @@ notes when it has ended, under its own typed words, all at once. Proved at the m
 `app/tests/several_wishes.rs`, and with no window by the tests of `app/src/placing.rs`, `showing/tests.rs`,
 `answering.rs`, `live.rs`, `scene.rs` and `column.rs`. Nobody has seen it in a real window. It builds on the
 column of [ADR 0026](0026-the-page-is-one-column.md) and the pictures of [ADR 0029](0029-a-wish-s-work-is-drawn.md).
-Core and the binary are as they were.
+Core and the binary are as they were, but for decision 10, which is core's words and the app's carrying
+(`app/tests/a_change_that_no_longer_fits.rs`).
 
 ## Why
 
@@ -77,6 +78,41 @@ answer and two bare bubbles, and could not tell that the other two had finished.
    which the app
    compares with the note it holds now: other words, and nothing is carried to core and the scene is drawn
    again. This is about which choice a click was on. Whether a choice still holds stays core's (decision 7).
+10. **A change that no longer fits can be made again.** With several wishes at once, two can change the same
+    place of one file. The first lands; a `Keep it` of the second is refused every time, and the page said so
+    in the command line's sentence, which names a run and git. Now core says two refusals of a tap's keep in
+    the window's own sentences (the folder changed in the same place; changes of the person's own are in the
+    way), and the first has one way on, `Make it again`. Every other reason is told as it was, and `run keep`
+    prints what it printed. The reason reaches the page as core's own typed reason beside the sentence
+    (`run/keep/tapped.rs`); no sentence is matched.
+
+    What a tap on `Make it again` does, in this order:
+    1. Core is asked, and answers with the wish's own words and its project only while the wish's work waits
+       and was read from its repo. Nothing is changed. The installed command a run is started with is looked
+       for next: with none, the page says so in the words a typed wish is refused in, and nothing is made or
+       tossed.
+    2. A new made wish of that project is made with those words, by the call an Enter in the entry makes for a
+       typed wish. Every check and limit of a typed wish holds: the day's eight, a project that is offered no
+       more.
+    3. Only then the work that does not fit is tossed, by the call a tap on `Toss it` is carried by, with its
+       own checks. A toss that is refused is said as `Toss it` says it, and the new wish is run all the same.
+    4. The new wish's run is started as a typed wish's is.
+
+    Why this order: the work that does not fit is the only thing the person has of that wish. Tossed first, a
+    day that has its eight wishes would leave them with neither the old change nor a new wish. So nothing is
+    tossed unless the new wish was made; a refusal is said in the words a typed wish is refused in, and the
+    old work waits as before, with its choices. The other way round costs at worst a new wish beside work that
+    could not be tossed, which `Toss it` still throws away. The run comes after the toss because a toss asks
+    where every copy of the repo stands and core refuses it while a run's copy is being made: started first,
+    the run made the toss fail when this was built. So a run that core refuses to start, which cannot be asked
+    before the toss, is found after it: the wish is kept with no run, as a typed one is, and the page says so
+    with a typed wish's sentence for that and core's reason. A missing installed command, the one such ending
+    that can be known before, is found first (step 1).
+
+    It is offered only for the refusal that no later tap can get past: changes in the way go with a save, so
+    their note points at `Keep it` again. The waiting note does not offer it: whether a change fits is asked
+    of git when a keep is tapped, not at every look, and the reason a change was not kept by itself is written
+    nowhere (`run/keep/itself.rs` keeps only whether it landed).
 
 ## Open
 
@@ -89,5 +125,10 @@ answer and two bare bubbles, and could not tell that the other two had finished.
 - A change made outside the window between two of the moments above is seen at the next one, or at a tap.
 - The offer does not follow the newest wish once a wish was tapped: it stays with the tapped wish while a
   follow-up may be made of it.
+- `Make it again` (decision 10) makes the wish with its words alone: they are not read again before the run,
+  a sharper wish the old one was made with is not carried over, and a follow-up is made again as a wish of its
+  own. A wish that was kept and whose run could not be started stays kept, with the old work tossed; that end
+  was not run in a test. The choice stays on the page after the folder changed again, and core does not ask git
+  once more whether the change still does not fit before it says the wish's words.
 - The note a follow-up was typed under stays, with its field. Before, it went, so that the follow-up's work
   could come by itself; now that work comes under its own words whatever is on show.

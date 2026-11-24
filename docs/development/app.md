@@ -738,6 +738,40 @@ that fit and counts the rest in a last line, `+N more`.
   ("The change was not kept.") says first what the person can do next, then core's reason. The command line's
   `why` is not said, but where the keep's folder was switched while it was at work or a `.gitattributes` stayed,
   after the plain sentence.
+- **A change that no longer fits** (`app/src/again.rs`, ADR 0030, decision 10). Two made wishes can change the
+  same place of one file: the first is kept, and the second then fits the folder no more. Two refusals of a
+  `Keep it` are core's plain sentences with no run's id ([show.md](show.md#work-that-waits-jellymoon-run-waiting),
+  "A keep a tap could not do"): the folder changed in the same place, and changes of the person's own are in the
+  way. The first has one choice on `said-<wish>`, `Make it again`, under a sentence that says what it does;
+  the second has none, as `Keep it` works once the person saved their changes. A tap on `Make it again` is
+  carried as every choice is (`OnShow::carrying`, which takes a choice of `said-<wish>` too; the words of the tap
+  are compared first, `Showing::chose`), shows `busy-<wish>` with "That wish is being made again.", and then,
+  off the window's thread (`Today::asked`):
+  1. core is asked by the tap, and says the wish's own words and its project only while its work waits and is
+     read; else core's refusal is the answer and nothing is made; with no installed command to start a run
+     with (`jellymoon_core::installed_command`), a typed wish's "That wish was not kept." with core's reason
+     is the answer, and nothing is made or tossed;
+  2. the wish is made by the call an Enter in the entry makes for a typed wish (`jellymoon_core::wish_offered`
+     with the day as the page reads it). The words are not read again by the person's Claude Code first
+     (`shaping.rs`), and a sharper wish the old one was made with is not carried over: the new wish is the
+     words alone;
+  3. only when core kept the wish is core asked for the toss, by the call a tap on `Toss it` is carried by;
+  4. the new wish's run is started as a typed wish's is (`Today::asking`). `said-<wish>` then says what the
+     toss says, done or refused, and after it "Your wish was made again, and it is being worked on."; the new
+     wish is drawn at work under its own words.
+
+  The run is started after the toss and not before it: a toss asks git where every copy of the repo stands, and
+  core refuses it while a new run's copy is being made (measured: with the run started first, the toss was
+  refused with "could not be read from the repo"). When core refuses the wish (the day has its eight, the
+  project is offered no more), `said-<wish>` has the title and the sentence a typed wish has then ("That wish
+  was not kept.") and then "The change that does not fit was not thrown away.": nothing is tossed, and the work
+  waits as before. When the wish was kept and no run could be started for it, the toss was asked already: the
+  note says what the toss came to and then the sentence a typed wish has then, and the wish stays kept, as a
+  typed one does.
+  `app/tests/a_change_that_no_longer_fits.rs` follows it at the made-up window with real git: the plain note
+  and its one choice, the new wish with the old words and the old work tossed, a full day that tosses nothing,
+  a tap that carries other words, changes in the way, and another reason told as before. Not proved: a run that
+  could not be started after its wish was kept; the tap in a real window.
 - **Files the person's tools obey**: a page keeps one only when its name was drawn, whole, on the note the yes
   was given under. A count is not a name: the agent picks the files, so it picks which would fall behind a count.
   - The first `Keep it` changes nothing and shows `sure-<wish>`. It names every such file of the whole work,

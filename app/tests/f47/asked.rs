@@ -102,10 +102,10 @@ fn a_keep_core_refuses_leaves_one_plain_note_with_core_s_reason_and_the_work_sti
     let run = w.kept()["run"].as_str().unwrap().to_string();
     let [(id, title, body, options)] = &texts(refused)[..] else { panic!("one note: {:?}", texts(refused)) };
     assert_eq!((*id, *title, options.len(), body.len()), ("said-m1", "The change was not kept.", 0, 2));
-    // What the person can do next comes first, and core's reason after it, as the command line has it.
-    assert_eq!(body[0], NEXT_KEEP);
-    let unchanged = format!("the work of run {run} was not kept, and nothing was changed.");
-    assert!(body[1].ends_with(&unchanged) && body[1].len() > unchanged.len(), "{body:?}");
+    // Changes of the person's own in the way are said in the window's sentences, with no run's id (ADR 0030,
+    // decision 10); a reason told as the command line has it is in `a_change_that_no_longer_fits.rs`.
+    assert!(body[0].starts_with("Your folder has changes of your own that are not saved"), "{body:?}");
+    assert!(body[1].starts_with("Nothing in your folder was changed.") && !body[1].contains(&run), "{body:?}");
     assert_eq!(drawn(refused, "m1"), Some((State::Idle, 1)));
 
     assert_eq!((persons(&w, &repo), branches(&w, &repo)), before, "a refused keep changed something");

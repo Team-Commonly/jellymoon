@@ -43,9 +43,10 @@ pub struct Worked {
 /// A tap on a choice carried to core: the window runs it off its own thread.
 pub type Working = Box<dyn FnOnce() -> Worked + Send>;
 
-/// The call to core a tap is carried by: `jellymoon_core::work_tapped`, of the wish's run.
-pub trait Ask: FnOnce(&Today, &str, WorkTap) -> WorkDone + Send + 'static {}
-impl<A: FnOnce(&Today, &str, WorkTap) -> WorkDone + Send + 'static> Ask for A {}
+/// The call to core a tap is carried by: `jellymoon_core::work_tapped`, of the wish's run. `Make it again` is
+/// carried by two: the tap, and then the toss (`again.rs`).
+pub trait Ask: Fn(&Today, &str, WorkTap) -> WorkDone + Send + 'static {}
+impl<A: Fn(&Today, &str, WorkTap) -> WorkDone + Send + 'static> Ask for A {}
 
 pub(crate) fn text(id: String, title: &str, body: Vec<String>, options: Vec<&str>) -> Note {
     let options = options.into_iter().map(str::to_string).collect();
@@ -156,6 +157,9 @@ pub fn notes_of(wish: &str, done: WorkDone) -> Vec<Note> {
         }
         WorkDone::Asks(waits) => vec![waiting(&waits, true, false)],
         WorkDone::Said(title, body) => vec![text(format!("{SAID}{wish}"), title, body, Vec::new())],
+        WorkDone::Offers(title, body, choice) => vec![text(format!("{SAID}{wish}"), title, body, vec![choice])],
+        // It is answered where the tap is carried (`again.rs`), and is nothing to show.
+        WorkDone::Again(..) => Vec::new(),
     }
 }
 
@@ -261,7 +265,8 @@ impl Today {
 }
 
 impl OnShow {
-    /// A tap on option `index` (from 0) of the note `note`, when that is a choice of work that waits on show: the
+    /// A tap on option `index` (from 0) of the note `note`, when that is a choice of work that waits on show, or
+    /// the one choice under core's answer that a change no longer fits (`said-<wish>`, `again.rs`): the
     /// scene to show at once, which says what is being done in the note's place, over the field the note had, and
     /// the tap itself as work for another thread. None for any other note and for an option that is not drawn.
     /// While core is at work for a wish its choices are not on show, so a second tap does nothing.
@@ -283,7 +288,7 @@ impl OnShow {
     /// A carried call that panics is caught where it runs, and answered with a note in core's words in place of
     /// the one that says what is being done: the wish is never left as being worked on for good.
     pub fn carrying(&mut self, note: &str, index: usize, ask: impl Ask) -> Option<(Scene, Working)> {
-        let wish = [WORK, SURE, KEPT].iter().find_map(|start| note.strip_prefix(start))?.to_string();
+        let wish = [WORK, SURE, KEPT, SAID].iter().find_map(|start| note.strip_prefix(start))?.to_string();
         let at = self.scene.notes.iter().position(|one| id_of(one) == Some(note))?;
         let (body, options, field) = crate::drawing::held(&self.scene.notes[at])?;
         let after = self.scene.notes.iter().find_map(|one| file_of(one, &wish)).unwrap_or(0);
@@ -299,7 +304,7 @@ impl OnShow {
         let work = move || {
             let (failed, shows, undo) = (tap.failed(), matches!(tap, WorkTap::Show { .. }), tap == WorkTap::Undo);
             let asked = || {
-                let mut notes = in_turn(notes_of(&wish, ask(&today, &wish, tap)), seen);
+                let mut notes = in_turn(notes_of(&wish, today.asked(&wish, tap, &ask)), seen);
                 // A `Show me` that showed no file still brings the names and the rows: no other tap does.
                 let unshown = shows && notes.iter().all(|note| id_of(note).is_some_and(|id| id.starts_with(SAID)));
                 notes.extend(unshown.then(|| today.work_notes(&wish, true)).flatten().into_iter().flatten());

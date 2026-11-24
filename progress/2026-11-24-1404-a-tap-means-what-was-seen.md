@@ -61,3 +61,17 @@ ADR 0030, decision 9. No row of `feature_list.json` changes. Core and the binary
 - A drawn note that opens moves its own options down, and they take no tap for `SETTLE` after the person's own
   tap on the picture.
 - The rule is a section of ADR 0030; it has no ADR of its own.
+
+## After the review: the place is the window's, as a layout moved it
+
+The review, and a reading of `relayout`, found the guard wrong both ways for a reader at the column's end, which
+is where a reader is. A card at the end left older choices where they were in the column and slid them up the
+window, not held back; a card above moved them in the column and not in the window, held back for nothing.
+
+- `Settled::meet` now takes the column's lift before the layout and after it, and a piece has moved when the
+  layout put it somewhere else in the window. A turn of the wheel happens between layouts and is in the lift
+  before, so it is still never counted; a resize is still only found again.
+- Red first, under the old rule: both new tests of `tests/column_draw.rs` (a card at the end; a card above a
+  column held at its end) and the two new lines of the unit test. Green: the kit's 172 tests.
+- Lines: 75 added, 31 removed with the docs; the kit's budget 12673 to 12716.
+- Not run: a click in a real window; Windows and Linux.

@@ -859,7 +859,9 @@ max_file_lines = 400
 # A tap means what was seen raised the kit by 283: which choice has settled and the words a tap carries
 # (`draw/settle.rs`, 168, its own test 30 of them; `Scene::option`, 16; the view, 1 fewer), and its tests at the
 # window (`tests/column_draw.rs`, 99; `tests/entry_draw.rs`, 1).
-"crates/sticker-kit" = 12673
+# The place a tap's guard keeps is the window's as a layout moved it, raised the kit by 43: the rule and its own
+# test (`draw/settle.rs`, 10; the view, 1) and two tests at the window of a column held at its end (32).
+"crates/sticker-kit" = 12716
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.

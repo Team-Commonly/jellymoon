@@ -235,9 +235,10 @@ impl Page {
         self.stage.retarget(&self.placed, &placed, &self.scene, animate);
         self.sketched.meet(&placed, self.started.elapsed().as_secs_f32());
         self.most = scroll_most(&placed, &self.theme, viewport);
+        let before = self.scroll.at();
         self.scroll.fit(self.most);
-        let (place, moved) =
-            ((self.scroll.at(), settle::SLACK * page_scale(&self.theme, viewport)), self.stale == Stale::Spring);
+        let place = (before, self.scroll.at(), settle::SLACK * page_scale(&self.theme, viewport));
+        let moved = self.stale == Stale::Spring;
         self.settled.meet(&placed, &self.scene, place, self.settle_time(), moved);
         self.placed = placed;
         self.viewport = viewport;

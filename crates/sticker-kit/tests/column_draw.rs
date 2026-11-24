@@ -274,6 +274,38 @@ fn a_turn_of_the_wheel_moves_a_choice_in_the_window_and_it_takes_a_tap_at_once()
 }
 
 #[test]
+fn a_card_at_the_end_slides_an_older_choice_up_the_window_and_it_takes_no_tap_until_it_has_settled() {
+    let mut cx = context();
+    let (page, cx, taps) = open(&mut cx, long(6));
+    let was = shown(&page, cx, PieceKind::Option, "card-5", 1);
+    at_time(&page, cx, 10.0);
+    // The newest wish's result comes at the end, and the reader is there: every older card goes up the window.
+    show(&page, cx, long(7));
+    let now = shown(&page, cx, PieceKind::Option, "card-5", 1);
+    assert!(now.y < was.y - 40.0 && now.y > 0.0, "{was:?} {now:?}");
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [], "a choice that slid up under the pointer took a tap");
+    at_time(&page, cx, 10.0 + SETTLE.as_secs_f32() + 0.05);
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [no("card-5")], "settled, it takes the tap");
+}
+
+#[test]
+fn a_card_that_comes_above_a_column_held_at_its_end_leaves_a_choice_in_its_place_and_it_takes_a_tap_at_once() {
+    let mut cx = context();
+    let (page, cx, taps) = open(&mut cx, long(6));
+    let was = shown(&page, cx, PieceKind::Option, "card-5", 1);
+    at_time(&page, cx, 10.0);
+    let mut above = long(6);
+    above.notes.insert(2, card(9));
+    show(&page, cx, above);
+    let now = shown(&page, cx, PieceKind::Option, "card-5", 1);
+    assert!((now.y - was.y).abs() < 1.0, "{was:?} {now:?}");
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [no("card-5")], "it did not move under the pointer");
+}
+
+#[test]
 fn a_card_that_comes_at_the_column_s_end_where_nothing_took_a_tap_takes_one_at_once() {
     let mut cx = context();
     let (page, cx, taps) = open(&mut cx, small(&[0]));

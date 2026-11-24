@@ -28,20 +28,21 @@ from outside the app reach `on_paths`, with their paths, called while the page i
   option (`Scene::option`), whole, as the scene held it when the pieces on the page were laid out. Whoever acts
   on the tap can compare it with what the note says now. A tap on a picture carries no words.
 - A click on an option, or on a drawn note's picture or its `?`, is no tap while the piece has not settled: for
-  `SETTLE` (400 ms) after its place in the column changed by more than 4 design units, and for `SETTLE` after it
+  `SETTLE` (400 ms) after a new layout moved it in the window by more than 4 design units, and for `SETTLE`
+  after it
   came onto the page at a point of the window where another piece took a tap in the frame before. A piece is the
   same one across frames by its kind, its note's id and its index.
-- The place is the column's, never the window's: a turn of the wheel, a column held at its end and a window that
-  changed size are the person's own moves and hold nothing back. A new piece where nothing took a tap takes one
-  at once.
+- What counts is what a new layout did in the window. A card that comes at the end of a column held at its end
+  slides the older choices up, and they have moved; a card that comes above while the column holds its end leaves
+  them where they were. A turn of the wheel and a window that changed size are the person's own moves and hold
+  nothing back. A new piece where nothing took a tap takes one at once.
 - A click that was no tap is not kept for later and nothing is drawn for it: the person clicks again. Characters,
   bubbles, chips, the entry and typing are never held back.
 - The time is the page's own, the clock its drawing goes by; `page.set_settle_time(Some(seconds))` tells it one,
   for a test.
 
 Not done: a choice whose words change in place (same note, same index, same place) takes a tap at once, and only
-the words it carries tell the two apart. A column at its end that gets a card above a choice holds that choice
-back although it did not move in the window. No real window was clicked.
+the words it carries tell the two apart. No real window was clicked.
 
 ## The entry: one line to type
 

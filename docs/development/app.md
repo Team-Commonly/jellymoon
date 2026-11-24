@@ -455,7 +455,8 @@ view. What each act does is `Showing`, the day on show behind the calls the wind
 between the frame a person saw and their click. Two things close that, and neither is a rule about a choice,
 which stay core's:
 
-- The kit's view takes no tap on a choice that has just moved in the column, or has just come where another
+- The kit's view takes no tap on a choice that a new layout has just moved in the window, or that has just
+  come where another
   piece took a tap, for 400 ms (`sticker-kit`, `draw/settle.rs`; its README, "A tap means what was seen"). So a
   result card that comes above `Keep it` / `Toss it` does not put another choice under a click already made.
 - The kit's tap carries the option's words as they were drawn, and `Showing::chose` acts only when the note of

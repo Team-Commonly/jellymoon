@@ -1,10 +1,12 @@
 //! A click means what was seen. A page changes while a pointer is on its way: a card comes above a choice and
 //! pushes it down the column, or a card comes right where another choice stood. The view remembers, for each piece
-//! of a note that takes a tap (an option, a drawn note's picture with its `?`), where it stands in the COLUMN and
-//! since when, and a click on one that has just moved there, or has just come where something else took a tap,
-//! is no tap for [`SETTLE`]. The place is the column's and never the window's: a turn of the wheel and a column
-//! held at its end are the person's own moves. A click that was no tap is not kept for later and nothing is
-//! drawn for it. Characters, bubbles, chips and the entry are not held back.
+//! of a note that takes a tap (an option, a drawn note's picture with its `?`), where it stands and since when,
+//! and a click on one that has just moved, or has just come where something else took a tap, is no tap for
+//! [`SETTLE`]. What counts is where a new layout put the piece in the WINDOW: a card that comes at the end of a
+//! column held at its end slides the older choices up under the pointer, and they have moved; a card that comes
+//! above while the column holds its end leaves them where they were, and they have not. A turn of the wheel is
+//! the person's own move and is never counted, nor is a window that changed size. A click that was no tap is not
+//! kept for later and nothing is drawn for it. Characters, bubbles, chips and the entry are not held back.
 //!
 //! The words a tap on an option carries are kept here too: the scene's own string as it was when the pieces now
 //! on the page were laid out, so they are the words that were drawn.
@@ -58,10 +60,12 @@ fn key(piece: &Placed) -> Key {
 }
 
 impl Settled {
-    /// Takes a new layout of `scene` at the page's time `now`, drawn `lift` up the window; `slack` is [`SLACK`] in
-    /// logical pixels. With `counts` a piece that is somewhere else in the column has just moved; without it (the
-    /// window changed size, which is the person's own move) it is only found again.
-    pub fn meet(&mut self, placed: &[Placed], scene: &Scene, (lift, slack): (f32, f32), now: f32, counts: bool) {
+    /// Takes a new layout of `scene` at the page's time `now`. The column was drawn `before` up the window until
+    /// now and is drawn `lift` up it from now; `slack` is [`SLACK`] in logical pixels. With `counts` a piece the
+    /// layout put somewhere else in the window has just moved (the wheel moved `before`, not the layout, so it is
+    /// never counted); without it (the window changed size, the person's own move) it is only found again.
+    pub fn meet(&mut self, placed: &[Placed], scene: &Scene, lifts: (f32, f32, f32), now: f32, counts: bool) {
+        let (before, lift, slack) = lifts;
         let mut was = std::mem::take(&mut self.stood);
         for piece in placed.iter().filter(|piece| guarded(piece)) {
             let at = (piece.rect.x, piece.rect.y);
@@ -71,7 +75,7 @@ impl Settled {
             };
             let stood = match was.remove(&key(piece)) {
                 Some(old) => {
-                    let far = (old.at.0 - at.0).abs().max((old.at.1 - at.1).abs()) > slack;
+                    let far = (old.at.0 - at.0).abs().max((old.at.1 - before - at.1 + lift).abs()) > slack;
                     Stood { at, moved: if far && counts { now } else { old.moved }, words, ..old }
                 }
                 None => {
@@ -145,24 +149,30 @@ mod tests {
     }
 
     #[test]
-    fn a_piece_that_moved_in_the_column_or_came_over_a_target_settles_and_a_resize_moves_nothing() {
+    fn a_piece_that_moved_in_the_window_or_came_over_a_target_settles_and_a_resize_moves_nothing() {
         let (scene, mut settled) = (Scene::default(), Settled::default());
         let inside = (150.0, 320.0);
-        settled.meet(&[option("a", 300.0)], &scene, (0.0, 4.0), 1.0, true);
+        settled.meet(&[option("a", 300.0)], &scene, (0.0, 0.0, 4.0), 1.0, true);
         assert!(!settled.swallows(&option("a", 300.0), inside, 1.0), "new where nothing took a tap");
-        settled.meet(&[option("a", 304.0)], &scene, (0.0, 4.0), 2.0, true);
+        settled.meet(&[option("a", 304.0)], &scene, (0.0, 0.0, 4.0), 2.0, true);
         assert!(!settled.swallows(&option("a", 304.0), inside, 2.0), "four units are no move");
-        settled.meet(&[option("a", 390.0)], &scene, (0.0, 4.0), 3.0, false);
+        settled.meet(&[option("a", 390.0)], &scene, (0.0, 0.0, 4.0), 3.0, false);
         assert!(!settled.swallows(&option("a", 390.0), inside, 3.0), "the window changed size");
-        settled.meet(&[option("a", 300.0)], &scene, (0.0, 4.0), 4.0, true);
+        settled.meet(&[option("a", 300.0)], &scene, (0.0, 0.0, 4.0), 4.0, true);
         assert!(settled.swallows(&option("a", 300.0), inside, 4.3), "it has just moved");
         assert!(!settled.swallows(&option("a", 300.0), inside, 4.5), "the settle time is over");
         // A new piece over where another took a tap, and only at the points the other was.
         settled.targets = vec![Rect::new(100.0, 310.0, 50.0, 20.0)];
-        settled.meet(&[option("b", 300.0)], &scene, (0.0, 4.0), 5.0, true);
+        settled.meet(&[option("b", 300.0)], &scene, (0.0, 0.0, 4.0), 5.0, true);
         assert!(settled.swallows(&option("b", 300.0), (120.0, 315.0), 5.1));
         assert!(!settled.swallows(&option("b", 300.0), (220.0, 315.0), 5.1), "nothing stood at this point");
         assert!(!settled.swallows(&option("b", 300.0), (120.0, 315.0), 5.5));
         assert!(!settled.swallows(&option("a", 300.0), inside, 5.0), "a piece that left the page is forgotten");
+        // A column held at its end got a card at the end: it is lifted, and the piece went up the window.
+        settled.meet(&[option("b", 300.0)], &scene, (0.0, 80.0, 4.0), 6.0, true);
+        assert!(settled.swallows(&option("b", 300.0), inside, 6.1), "the column slid it up the window");
+        // A card came above and the column was lifted as far: the piece is where it was in the window.
+        settled.meet(&[option("b", 380.0)], &scene, (80.0, 160.0, 4.0), 7.0, true);
+        assert!(!settled.swallows(&option("b", 380.0), inside, 7.0), "it did not move in the window");
     }
 }

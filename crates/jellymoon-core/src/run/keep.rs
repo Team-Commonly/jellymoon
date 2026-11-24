@@ -11,10 +11,12 @@ use std::path::Path;
 
 mod done;
 mod itself;
+mod tapped;
 
 use done::done;
 pub(super) use itself::keep_itself;
 use serde::{Deserialize, Serialize};
+pub(super) use tapped::keep_named;
 
 use super::obeyed::{modules, named};
 use super::show::{Asked, NAME_MAX, found, not_cores, unread_words};
@@ -40,12 +42,12 @@ pub struct KeepOptions {
 }
 
 /// Which files the person's tools obey a keep may land: all of them or none, as a command says, or for a page
-/// the ones the person was named and said yes to, which must be the work's own, all of them and no other. A keep
-/// by itself has no yes at all: it lands none of them, and no change to a `.gitattributes` (`itself.rs`).
+/// the ones the person was named and said yes to, which must be the work's own, all of them and no other, with
+/// where its reason is left (`tapped.rs`). A keep by itself has no yes at all (`itself.rs`).
 #[derive(Clone, Copy)]
 enum Yes<'a> {
     Said(bool),
-    To(&'a [String]),
+    To(&'a [String], &'a std::cell::Cell<Option<Unkept>>),
     Itself,
 }
 
@@ -90,13 +92,6 @@ impl fmt::Display for Kept {
 /// [`Unkept`], each with nothing changed. With `ask`, a reason of [`Unkept`] is printed and not refused.
 pub fn keep_run(home: &Path, options: &RunOptions, how: KeepOptions) -> Result<Kept, Error> {
     keep(home, options, how.ask, Yes::Said(how.with_settings))
-}
-
-/// A keep from a page (`waits.rs`): [`keep_run`], but of the files the person's tools obey it lands only those
-/// `named`, by their names as they are printed, and only when they are every such file of the work. Work that
-/// would land another, or that has not one of them, is refused whole, in a page's words.
-pub(super) fn keep_named(home: &Path, options: &RunOptions, named: &[String]) -> Result<Kept, Error> {
-    keep(home, options, false, Yes::To(named))
 }
 
 fn keep(home: &Path, options: &RunOptions, ask: bool, yes: Yes) -> Result<Kept, Error> {
@@ -209,11 +204,11 @@ fn landed(of: &Keep, wish: String, mut record: record::Record, yes: Yes) -> Resu
             Ok(Kept { run, wish, kept: landed.commit, onto, why, settings, stayed, fits, how })
         }
         Err(unkept) if of.ask => Ok(unfit(run, wish, unkept, settings)),
-        Err(Unkept::Settings) if matches!(yes, Yes::To(_)) => Err(refused(format!(
+        Err(Unkept::Settings) if matches!(yes, Yes::To(..)) => Err(refused(format!(
             "the files of the work of run {run} that your tools obey, as it would land in your checkout, are not \
              the ones a note named, so it was not kept, and nothing was changed"
         ))),
-        Err(unkept) => Err(refused(words(&run, unkept))),
+        Err(unkept) => Err(refused(words(&run, yes.told(unkept)))),
     }
 }
 
@@ -264,7 +259,7 @@ fn short(onto: &str) -> Option<String> {
 /// `works` own, each name must be one of theirs.
 fn judge(files: &[Touched], yes: Yes, works: bool, settings: &mut Vec<String>) -> Result<(), Unkept> {
     let asked: HashSet<&str> = match yes {
-        Yes::To(names) => names.iter().map(String::as_str).collect(),
+        Yes::To(names, _) => names.iter().map(String::as_str).collect(),
         Yes::Said(_) | Yes::Itself => HashSet::new(),
     };
     let (mut unasked, mut found) = (false, HashSet::new());
@@ -278,7 +273,7 @@ fn judge(files: &[Touched], yes: Yes, works: bool, settings: &mut Vec<String>) -
         if obeys {
             unasked |= match yes {
                 Yes::Said(all) => !all,
-                Yes::To(_) => !asked.contains(name.as_str()),
+                Yes::To(..) => !asked.contains(name.as_str()),
                 Yes::Itself => true,
             };
             if settings.len() < LISTED && !settings.contains(&name) {
@@ -287,7 +282,7 @@ fn judge(files: &[Touched], yes: Yes, works: bool, settings: &mut Vec<String>) -
             found.insert(name);
         }
     }
-    let other = works && matches!(yes, Yes::To(_)) && asked.iter().any(|name| !found.contains(*name));
+    let other = works && matches!(yes, Yes::To(..)) && asked.iter().any(|name| !found.contains(*name));
     if unasked || other { Err(Unkept::Settings) } else { Ok(()) }
 }
 

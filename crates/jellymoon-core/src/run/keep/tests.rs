@@ -56,7 +56,8 @@ fn another_repos_entry_is_never_kept_and_a_file_tools_obey_only_when_asked() {
     assert_eq!(asked(&obeyed, false), (Err(Unkept::Settings), names.clone()));
     assert_eq!(asked(&obeyed, true), (Ok(()), names.clone()));
     // A page's keep lands the ones the person was named and no other: every one of the work must be among them.
-    let to = |named: &[String], works: bool| judge(&obeyed, Yes::To(named), works, &mut Vec::new());
+    let none = std::cell::Cell::new(None);
+    let to = |named: &[String], works: bool| judge(&obeyed, Yes::To(named, &none), works, &mut Vec::new());
     for works in [true, false] {
         assert_eq!(
             (to(&names, works), to(&names[..1], works), to(&names[1..], works), to(&[], works)),
@@ -71,13 +72,13 @@ fn another_repos_entry_is_never_kept_and_a_file_tools_obey_only_when_asked() {
     assert_eq!((to(&other, true), to(&other, false)), (Err(Unkept::Settings), Ok(())));
     assert_eq!((to(&swapped, true), to(&swapped, false)), (Err(Unkept::Settings), Err(Unkept::Settings)));
     let plain = [file("src/a.rs", false)];
-    assert_eq!(judge(&plain, Yes::To(&[]), true, &mut Vec::new()), Ok(()));
-    assert_eq!(judge(&plain, Yes::To(&names[..1]), true, &mut Vec::new()), Err(Unkept::Settings));
+    assert_eq!(judge(&plain, Yes::To(&[], &none), true, &mut Vec::new()), Ok(()));
+    assert_eq!(judge(&plain, Yes::To(&names[..1], &none), true, &mut Vec::new()), Err(Unkept::Settings));
     // The names are a set: as many as a work may have are asked of in one pass.
     let many: Vec<String> = (0..20_000).map(|n| format!("d{n}/CLAUDE.md")).collect();
     let files: Vec<Touched> = many.iter().map(|name| file(name, false)).collect();
-    assert_eq!(judge(&files, Yes::To(&many), true, &mut Vec::new()), Ok(()));
-    assert_eq!(judge(&files, Yes::To(&many[1..]), true, &mut Vec::new()), Err(Unkept::Settings));
+    assert_eq!(judge(&files, Yes::To(&many, &none), true, &mut Vec::new()), Ok(()));
+    assert_eq!(judge(&files, Yes::To(&many[1..], &none), true, &mut Vec::new()), Err(Unkept::Settings));
     // Another repo's entry is refused whatever was asked for, and before a file tools obey is.
     for repos in
         [file("sub", true), file(".gitmodules", false), file("x/.GITMODULES", false), file(".gitmodules ", false)]

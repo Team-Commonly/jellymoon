@@ -464,7 +464,32 @@ and writes nothing:
   - The line of the work's own note still counts (`a.txt, b.txt, and 4 more`), and is at most 320 characters of
     names: nothing is kept on the word of it. `Toss it` is `run toss`, with its own checks.
 
-`work_tapped` has no command of its own: it is proved at the app's boundary (`app/tests/f47.rs`), and what it
+- **A keep a tap could not do.** A refused keep is told on a page under "The change was not kept.", with
+  what the person can do next and then the command line's sentence, which names the run. Two of core's reasons
+  (`copy/keep/why.rs`) are said in the window's own sentences instead, with no run's id and no word of git's
+  (`run/waits/plain.rs`, `unkept`):
+  - `Clash`, the person's branch and the work changed the same place: "Your folder changed in the same place
+    after this change was made, so the two do not fit together." and "Nothing in your folder was changed.";
+  - `InWay`, a change or a file of the person's own is where the work would go: "Your folder has changes of your
+    own that are not saved to the project yet, where this change would go." and "Nothing in your folder was
+    changed. Save or put away your own changes, then tap Keep it again."
+
+  Every other reason is told as before. The reason reaches the page typed: the page's keep (`run/keep/tapped.rs`,
+  `keep_named`) gives back core's `Unkept` beside the sentence `run keep` prints, and no sentence is matched.
+  `run keep` and `run keep --ask` print what they printed.
+- **`Make it again`.** No later `Keep it` keeps a change that no longer fits, so the note of a `Clash`, and of
+  no other reason, has one choice, after one more sentence: "Make it again throws this one away and makes the
+  wish again on your folder as it is now." The waiting note never offers it. A tap on it (`WorkTap::Again`) is
+  answered, while the work waits and was read, with the wish's own words and its project (`WorkDone::Again`),
+  and nothing is changed by core there. The shell makes the wish as it makes a typed one, only then asks for
+  the toss, as a tap on `Toss it` does, and starts the new wish's run last ([app.md](app.md), "A change that no
+  longer fits"; ADR 0030, decision 10). The words said of each end are core's (`run/waits/again.rs`): a wish
+  that was not made is told as a typed wish is, and then "The change that does not fit was not thrown away.";
+  after the toss, done or refused, "Your wish was made again, and it is being worked on.", or what a typed
+  wish that was kept and has no run is told.
+
+`work_tapped` has no command of its own: it is proved at the app's boundary (`app/tests/f47.rs`,
+`app/tests/a_change_that_no_longer_fits.rs`), and what it
 calls is proved at `run show`, `run keep` and `run toss`. `run waiting` is `crates/jellymoon/tests/f47.rs`, and
 the smoke chain's `show` step asks it.
 

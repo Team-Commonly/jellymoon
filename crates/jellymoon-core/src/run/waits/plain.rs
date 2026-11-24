@@ -3,7 +3,8 @@
 //! (`docs/development/show.md`, "Work that waits"). They are the window's alone: the command line's `why` stays as
 //! it is, and no run's id is in them. Each is true of every way its wait, keep or toss can end.
 
-use crate::copy::How;
+use super::{UNKEPT, WorkDone, again};
+use crate::copy::{How, Unkept};
 use crate::run::show::Alone;
 use crate::run::{Kept, Tossed};
 use crate::{Wish, WishState};
@@ -65,6 +66,26 @@ pub(super) fn kept(kept: &Kept, project: &str) -> Vec<String> {
     [first].into_iter().chain(more.then(|| format!("{}.", kept.why))).collect()
 }
 
+/// A keep by a tap that core refused as the folder changed in the same place since, and as changes of the
+/// person's own are in the way: what a page says of each, with no run's id and no word of git's.
+const CLASH: &str = "Your folder changed in the same place after this change was made, so the two do not fit together.";
+const UNCHANGED: &str = "Nothing in your folder was changed.";
+const IN_WAY: &str =
+    "Your folder has changes of your own that are not saved to the project yet, where this change would go.";
+const SAVE: &str = "Nothing in your folder was changed. Save or put away your own changes, then tap Keep it again.";
+
+/// The note of a keep by a tap that was refused for `why`, when that is one of the two reasons a page says in
+/// its own sentences. A change that no longer fits is never kept by a later tap, so its note has the one way
+/// on, and says what that does. None of every other reason: it is told in the command line's sentence, as it was.
+pub(super) fn unkept(why: Option<Unkept>) -> Option<WorkDone> {
+    let said = |texts: &[&str]| texts.iter().map(|text| text.to_string()).collect();
+    match why? {
+        Unkept::Clash => Some(WorkDone::Offers(UNKEPT, said(&[CLASH, UNCHANGED, again::DOES]), again::AGAIN)),
+        Unkept::InWay => Some(WorkDone::Said(UNKEPT, said(&[IN_WAY, SAVE]))),
+        _ => None,
+    }
+}
+
 /// What a page says of a toss that ended well. A toss never touches the person's folder, only what the run left.
 pub(super) fn tossed(tossed: &Tossed, project: &str) -> String {
     if tossed.tossed {
@@ -100,7 +121,31 @@ pub fn stands(wish: &Wish, alone: Option<&Alone>) -> (&'static str, Vec<String>)
 
 #[cfg(test)]
 mod tests {
-    use super::counted;
+    use super::{Unkept, WorkDone, counted, unkept};
+
+    // Word for word, and with nothing in them that a run's id or a sentence of the command line's could be.
+    #[test]
+    fn a_keep_that_no_longer_fits_and_one_with_changes_in_the_way_are_said_in_the_window_s_own_sentences() {
+        let title = "The change was not kept.";
+        let clash = [
+            "Your folder changed in the same place after this change was made, so the two do not fit together.",
+            "Nothing in your folder was changed.",
+            "Make it again throws this one away and makes the wish again on your folder as it is now.",
+        ];
+        let in_way = [
+            "Your folder has changes of your own that are not saved to the project yet, where this change would go.",
+            "Nothing in your folder was changed. Save or put away your own changes, then tap Keep it again.",
+        ];
+        let texts = |said: &[&str]| said.iter().map(|text| text.to_string()).collect::<Vec<_>>();
+        assert_eq!(unkept(Some(Unkept::Clash)), Some(WorkDone::Offers(title, texts(&clash), "Make it again")));
+        // Changes in the way go with a save, so `Keep it` is the way on and no other choice is offered.
+        assert_eq!(unkept(Some(Unkept::InWay)), Some(WorkDone::Said(title, texts(&in_way))));
+        // Every other reason, and a refusal that came to none, is told as the command line tells it.
+        for other in [Unkept::Busy, Unkept::History, Unkept::Midway, Unkept::Settings, Unkept::Stepped] {
+            assert_eq!(unkept(Some(other)), None, "{other:?}");
+        }
+        assert_eq!(unkept(None), None);
+    }
 
     #[test]
     fn a_count_reads_as_a_person_counts_files() {

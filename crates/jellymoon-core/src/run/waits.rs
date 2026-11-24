@@ -19,6 +19,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+mod again;
 mod itself;
 mod plain;
 
@@ -132,6 +133,8 @@ pub enum WorkTap {
     Toss,
     /// Under the note of a change that was kept by itself (`itself.rs`).
     Undo,
+    /// Under the note of a keep that was refused as the change no longer fits (`again.rs`).
+    Again,
 }
 
 /// What a tap on a choice came to.
@@ -143,6 +146,11 @@ pub enum WorkDone {
     Asks(Waits),
     /// It was done, or it was refused: a title, and the note's texts, a person's plain sentence first.
     Said(&'static str, Vec<String>),
+    /// A keep was refused as the change no longer fits: [`WorkDone::Said`], and the one choice under it.
+    Offers(&'static str, Vec<String>, &'static str),
+    /// `Make it again` was tapped and the work waits: the wish's own words and its project, for the shell to
+    /// make the wish again with as typed words make one (`again.rs`). Nothing was changed.
+    Again(String, String),
 }
 
 impl WorkTap {
@@ -155,6 +163,7 @@ impl WorkTap {
             KEEP_TOO => Some(WorkTap::Keep { yes_to: Some(drawn.to_vec()) }),
             TOSS => Some(WorkTap::Toss),
             itself::UNDO => Some(WorkTap::Undo),
+            again::AGAIN => Some(WorkTap::Again),
             _ => None,
         }
     }
@@ -174,6 +183,7 @@ impl WorkTap {
             WorkTap::Keep { .. } => "That work is being kept.",
             WorkTap::Toss => "That work is being tossed.",
             WorkTap::Undo => "That change is being undone.",
+            WorkTap::Again => "That wish is being made again.",
         }
     }
 
@@ -184,6 +194,7 @@ impl WorkTap {
             WorkTap::Keep { .. } => (UNKEPT, "it was not kept"),
             WorkTap::Toss => (UNTOSSED, "it was not thrown away"),
             WorkTap::Undo => (itself::NOT_UNDONE, "it was not undone"),
+            WorkTap::Again => (again::NOT_AGAIN, "it was not made again"),
         };
         (title, format!("Open the wish again to see where the change stands. Here is why {not}:"))
     }
@@ -367,10 +378,11 @@ pub fn work_tapped(home: &Path, options: &RunOptions, tap: WorkTap) -> WorkDone 
             let named = drawn.split_last().map_or(&[][..], |(_, named)| named);
             match keep_named(home, options, named) {
                 Ok(kept) => WorkDone::Said(KEPT, plain::kept(&kept, &waits.project)),
-                Err(unkept) => no(unkept.to_string()),
+                Err((why, unkept)) => plain::unkept(why).unwrap_or_else(|| no(unkept.to_string())),
             }
         }
         WorkTap::Undo => itself::undo(home, options, then.clone()),
+        WorkTap::Again => WorkDone::Again(waits.said, waits.project),
         WorkTap::Toss => match toss_run(home, options) {
             Ok(tossed) => WorkDone::Said(TOSSED, vec![plain::tossed(&tossed, &waits.project)]),
             Err(untossed) => no(untossed.to_string()),

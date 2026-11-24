@@ -1082,7 +1082,11 @@ max_file_lines = 400
 # A tap means what was seen raised it by 59: the words of a tap compared with the note on show
 # (`src/showing.rs`, 9), and its tests (`tests/several_wishes.rs`, 26; `src/showing/tests.rs`, 11;
 # `tests/f43/showing.rs`, 4; the made-up window's tap that carries words, `tests/support/tapper.rs`, 9).
-"app" = 18365
+# A newer build is installed raised the app by 405 (412 added, 7 removed): the reader of the bundle's version, the
+# comparison and the window's watch (`src/newer.rs`, 135), the look that carries the read and the note put on the
+# column (`src/showing.rs`, 26), the note's place (`src/column.rs`, 13, of which 10 are its test), the module's two
+# lines, and its tests (`tests/newer_build.rs`, 229).
+"app" = 18770
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

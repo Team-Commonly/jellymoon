@@ -41,6 +41,12 @@ app the same way, and says one more line: "If it was already open, it stays the 
 and open it again." The script does not look for a running app, quit it or restart it. Quitting it is the person's
 to do, and the next open after that is the new version.
 
+The open window says it too, since a line in a terminal is not read after the install: within a minute or so of the
+new bundle being in place, its page has the note "A newer Jellymoon is installed. Quit Jellymoon and open it again
+to use it." as the last of its column, until the app is quit. The app reads the version in its own bundle's
+`Info.plist` for that and does nothing else: it does not quit, restart or download ([app.md](app.md), "A newer
+build is installed"). A window of a build from before this note says nothing, so the script's line stays.
+
 A folder the script has to make (`~/Applications`, `~/.local`, `~/.local/bin`) is made for you alone to write, mode
 0755, whatever the umask: the app turns delivery on only for a command nobody else could replace
 ([delivery.md](delivery.md)). A folder that was there is never changed. If the bin folder was there and its group or

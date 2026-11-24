@@ -1,7 +1,8 @@
 //! A scene in the order its page is read: one column, from its top. First the day's own notes, the ones of no made
 //! wish. Then each made wish, the oldest first: what the person typed for it, and under that the wish's notes, in
 //! one fixed order of what they are ([`ORDER`]), whatever order they were put on the scene in. Last the notes of a
-//! wish that is not made yet (`shaping.rs`): the newest thing on the page, over the entry. A pure function:
+//! wish that is not made yet (`shaping.rs`): the newest thing on the page, over the entry. And under those, the
+//! very last, the note that a newer build is installed (`newer.rs`), when the scene has it. A pure function:
 //! the scene's notes are moved and none is changed, added to or taken away, but the list of the made wishes
 //! (`scene::MADE`), whose rows are the words each `Said` now carries.
 //!
@@ -33,7 +34,9 @@ pub fn column(scene: &Scene) -> Scene {
     };
     // The made wishes are the scene's last characters, one for each row and in the rows' order (`scene::ruled`).
     let first = scene.characters.len().saturating_sub(rows.len());
-    let mut left: Vec<Option<&Note>> = scene.notes.iter().filter(|note| !made(note)).map(Some).collect();
+    let build = scene.notes.iter().filter(|note| crate::newer::names(note));
+    let rest = scene.notes.iter().filter(|note| !made(note) && !crate::newer::names(note));
+    let mut left: Vec<Option<&Note>> = rest.map(Some).collect();
     let mut under = Vec::new();
     for (who, (_, said)) in scene.characters[first..].iter().zip(rows) {
         under.push(Note::Said { id: format!("{TYPED}{}", who.id), text: said.clone() });
@@ -45,7 +48,8 @@ pub fn column(scene: &Scene) -> Scene {
     }
     let newest = |note: &&Note| crate::working::id_of(note).is_some_and(crate::shaping::names);
     let (last, own): (Vec<&Note>, Vec<&Note>) = left.into_iter().flatten().partition(newest);
-    Scene { notes: own.into_iter().cloned().chain(under).chain(last.into_iter().cloned()).collect(), ..scene.clone() }
+    let notes = own.into_iter().cloned().chain(under).chain(last.into_iter().cloned()).chain(build.cloned());
+    Scene { notes: notes.collect(), ..scene.clone() }
 }
 
 /// Whether `note` is a note of the wish `wish` of the kind `prefix`: its id is the prefix and then the wish's id,
@@ -160,5 +164,14 @@ mod tests {
         assert_eq!(ordered, ["wish-w1", "typed-m1", "typed-m2", "work-m2", "shape-said", "shape"]);
         let reading = Scene { notes: vec![text("shaping"), text("wish-w1")], ..Scene::default() };
         assert_eq!(ids(&column(&reading)), ["wish-w1", "shaping"]);
+    }
+    // A newer build installed under the window (`newer.rs`) is said under everything, where the reader's eyes
+    // are: under a wish that is not made yet too, wherever its note was put on the scene.
+    #[test]
+    fn the_note_of_a_newer_build_is_the_column_s_last_whatever_else_is_on_it() {
+        let plain = |title: &str| Note::Plain { title: title.into(), body: String::new() };
+        let notes = vec![plain(crate::newer::TITLE), plain("own"), text("shape"), text("work-m2"), text("wish-w1")];
+        let want = ["own", "wish-w1", "typed-m1", "typed-m2", "work-m2", "shape", crate::newer::TITLE];
+        assert_eq!(ids(&column(&day(notes))), want);
     }
 }

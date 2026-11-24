@@ -57,6 +57,7 @@ keeps, compares and prints is as it was. From the top:
 | the day's own notes | every note of no made wish, in the scene's order: what was left out, what came true of the reading's wishes, the clashes, the plain notes, an opened wish of the reading |
 | each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `kept-`, `file-`, `sure-`, `busy-`, `wish-`, `said-`. `steps-` and the note of work that waits are drawn notes (pictures, below), and `told-` is not on the page while that wish's drawn `work-` is closed. Every made wish has its notes at once: a track while its run goes, its result when it has ended (ADR 0030, "Every wish keeps its place", below) |
 | a wish that is not made yet | the notes of `shaping.rs` (`shaping`, or `shape-said` and `shape`): the newest thing on the page, so the column's last, over the entry the words were typed in |
+| a newer build installed | one plain note, once a look found one ("A newer build is installed", below): under everything, the wish that is not made yet too, just over the entry |
 
 The list "wished here today" that `scene::ruled` builds is not drawn: its rows are the words the bubbles carry.
 A tap on a bubble or on its character is the tap on that wish's character. The big character stands left of the
@@ -445,7 +446,7 @@ view. What each act does is `Showing`, the day on show behind the calls the wind
 | a key | `switches_theme(key, command key held)`, `other_theme(name)` | |
 | the first page | `offering()` | the entry is set |
 | a step of the reading | `reading(step)` | `read(&next)`: the scene, and the step's entry |
-| once a second | `look()`, which makes the ended wishes' notes again only when something changed (`showing/turns.rs`) | `seen(seen)`: the scene, or none for a look of a scene that is gone |
+| once a second | `look()`, which makes the ended wishes' notes again only when something changed (`showing/turns.rs`), and at most once a minute reads the version of the bundle on disk (`newer.rs`) | `seen(seen)`: the scene, or none for a look of a scene that is gone |
 | Enter | `wishing(words, chip's name)` | `answered(answer)`: what the entry is told, the scene, the asking |
 | the asking's end | | `asked(said)`: the scene, when there is something to say |
 | a tap on a character | `poked(id)`: of a made wish, it has the offer and its drawn note opens or closes | `seen(seen)` |
@@ -517,6 +518,38 @@ agent, with no tap on the wish: the look shows its work. A second walk there tap
 poke:m1`). A leading `--logs <dir>` is the app's own option: the day is read from that folder's logs, so a walk with
 a real harness in a made-up home need not read the person's. It does not prove the window's own wiring: the timer, the picker, keys and focus, the kit's keeping of an
 entry with words in it, or the window's other thread.
+
+## A newer build is installed (`app/src/newer.rs`)
+
+On a Mac `install.sh` replaces `Jellymoon.app` in place, and a window that was open goes on with the build it had
+loaded ([install.md](install.md), "An update"). So the window says it, once, on the page itself.
+
+- **What is read.** The running program does not know its version: the release stamps it only into the bundle's
+  `Info.plist` (`app/macos/bundle.sh`, `CFBundleShortVersionString`). The window reads that file of the bundle it
+  runs from (the program is `<bundle>/Contents/MacOS/<name>`, the file `<bundle>/Contents/Info.plist`): a file of
+  at most 64 KiB, as text, the `<string>` after that key. A version is numbers with dots between them and an
+  optional `-suffix` (`0.2.10`, `0.3.0-rc1`). One is higher by its numbers, compared as numbers (0.2.10 is higher
+  than 0.2.9), and with the same numbers the one without a suffix is the higher.
+- **When.** Once when the window opens (`Showing::of`), and the version found is kept. Then the look the window
+  already makes once a second carries one more read, at most once a minute (`newer::EVERY`), after its own work
+  and off the window's thread with it: no thread and no timer of its own. Once a higher version was found nothing
+  is read again.
+- **What is shown.** One plain note, with no choice and no field: "A newer Jellymoon is installed." and under it
+  "Quit Jellymoon and open it again to use it." It is the last note of the column, just over the entry, on every
+  page the window shows from the look that found it until the app is quit. `Showing::column` puts it on the scene
+  that goes to the kit and `column.rs` stands it last; it is on no scene the app keeps, so a tap, a choice, the
+  hold after one and the offer of a follow-up do not know of it. The look that finds it gives the scene on show
+  to be drawn again when it has nothing else to show.
+- **What it never does.** It starts no program, writes nothing, asks core nothing, and does not quit or open the
+  app. Everything that is not a higher version is silence: a program in no bundle (a `cargo run`, a test,
+  Windows, Linux), no file, a file that is too large, binary or has no such key, a version that is not one or is
+  `0.0.0`, the same version, an older one. With no version at the open there is nothing to be higher than, and
+  the file is never read again.
+
+`app/tests/newer_build.rs` holds the reader, the comparison, the minute (with a clock the test gives:
+`Showing::look_at`) and the note's place, in a bundle that is a folder of the test's own (`Showing::bundled`); a
+unit test of `column.rs` holds that the note is the column's last. Not proved by a test: a real install under a
+real open window, which is a person's walk.
 
 ## A tap that stops a run (`app/src/stopping.rs`)
 

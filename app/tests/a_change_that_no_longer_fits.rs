@@ -171,12 +171,24 @@ fn said_of(line: &str, id: &str) -> (String, Vec<String>, Vec<String>) {
 fn a_change_that_no_longer_fits_is_said_plainly_and_make_it_again_makes_the_wish_again_and_then_tosses_it() {
     let w = two_that_clash();
     let repo = w.at("work").join("alpha");
-    // The new wish's run plays another script, so its work is told from the two before it.
-    w.play("hello");
+    // The new wish's run waits for the test's word, and then changes nothing: the folder has that change.
+    w.play("steps");
     let bin = format!("bin:{}", w.install().parent().unwrap().display());
-    let again = ["choose:said-m2:0:Keep it", "choose:said-m2:0", "run"];
-    let lines = w.taps("logs", &[&[bin.as_str()][..], &KEEP_BOTH[..], &again[..]].concat()).ended();
-    let [_, _, first, _, refused, stale, at_once, answer] = &lines[..] else { panic!("eight lines: {lines:#?}") };
+    let held = w.at("tmp").join("ended");
+    let hold = format!("hold:{}", held.display());
+    let again = ["choose:said-m2:0:Keep it", "choose:said-m2:0", "run", "column", hold.as_str(), "look", "column"];
+    let mut window = w.taps("logs", &[&[bin.as_str()][..], &KEEP_BOTH[..], &again[..]].concat());
+    // The window is on show while the new wish's run goes, and looks again once it has ended.
+    window.printed(9);
+    fs::write(w.at("rec").join("go"), "").unwrap();
+    wait_until("the new wish's run", || kept(&w).get(2).is_some_and(|made| made["run"].is_string()));
+    let new = kept(&w)[2]["run"].as_str().unwrap().to_string();
+    wait_until("the end of the run", || !w.at("jm").join("runs").join(&new).join("run.lock").exists());
+    fs::write(held, "").unwrap();
+    let lines = window.ended();
+    let [_, _, first, _, refused, stale, at_once, answer, going, _, since] = &lines[..] else {
+        panic!("eleven lines: {lines:#?}")
+    };
     assert_eq!(said(first, "said-m1").map(|said| said.0), Some("The change was kept.".to_string()));
     // The plain note: the window's sentences, the one choice, and no run's id nor a word of the command line's.
     let note = said(refused, "said-m2").expect("core's answer to the keep that does not fit");
@@ -196,9 +208,11 @@ fn a_change_that_no_longer_fits_is_said_plainly_and_make_it_again_makes_the_wish
     assert_eq!(made.len(), 3, "{made:?}");
     assert_eq!((&made[2]["said"], &made[2]["project"]), (&made[1]["said"], &made[1]["project"]));
     assert_eq!((made[2]["said"].as_str(), made[2].get("after")), (Some(SAID), None));
-    wait_until("the new wish's run", || kept(&w)[2]["run"].is_string());
-    let new = kept(&w)[2]["run"].as_str().unwrap().to_string();
-    wait_until("the end of the run", || !w.at("jm").join("runs").join(&new).join("run.lock").exists());
+    // While the new wish's run goes the answer says the wish is being worked on. Once that run has ended it
+    // says only that the wish was made again: the scene the window gives the kit's view (`column`).
+    assert_eq!(said(going, "said-m2"), Some(done), "{going}");
+    let made_again = texts(&[TOSSED[0], "Your wish was made again."]);
+    assert_eq!(said(since, "said-m2"), Some(("The change was thrown away.".to_string(), made_again, vec![])));
     // The old work is tossed, core says, and the folder holds the first wish's change and nothing of the second's.
     assert!(!waiting(&w).contains(&"m2".to_string()), "the old work was tossed: {:?}", waiting(&w));
     assert_eq!(w.told(&repo, &["branch", "--list", &format!("*{run}*")]), "", "the old run's branch is gone");

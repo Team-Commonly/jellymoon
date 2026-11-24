@@ -15,6 +15,8 @@ pub(super) const DOES: &str =
 pub(super) const NOT_AGAIN: &str = "The wish was not made again.";
 const NOT_TOSSED: &str = "The change that does not fit was not thrown away.";
 const MADE: &str = "Your wish was made again, and it is being worked on.";
+/// The same once that wish is worked on no more: only what stays true.
+const MADE_SINCE: &str = "Your wish was made again.";
 
 impl WorkDone {
     /// What a page says when the wish was not made again: `title` and `why` are what a typed wish that was not
@@ -38,11 +40,20 @@ impl WorkDone {
             other => other,
         }
     }
+
+    /// [`WorkDone::remade`] of a wish whose run was started, as a page says it once that wish is worked on no
+    /// more: what the toss came to, and that the wish was made again, with no word of work that has ended.
+    /// Asked of the toss's answer before it is remade. Which wish that is, and whether it is at work, is the
+    /// shell's to know: it made the wish. None of an answer that is no sentence.
+    pub fn remade_since(&self) -> Option<WorkDone> {
+        let WorkDone::Said(title, said) = self else { return None };
+        Some(WorkDone::Said(title, said.iter().cloned().chain([MADE_SINCE.to_string()]).collect()))
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{MADE, WorkDone};
+    use super::{MADE, MADE_SINCE, WorkDone};
 
     #[test]
     fn a_wish_made_again_that_has_no_run_is_told_so_before_the_reason() {
@@ -56,6 +67,11 @@ mod tests {
         assert_eq!(
             tossed().remade(None),
             WorkDone::Said("The change was thrown away.", said(&["Your folder is as it was.", MADE]))
+        );
+        // Once the new wish is worked on no more, the same answer says only that it was made.
+        assert_eq!(
+            tossed().remade_since(),
+            Some(WorkDone::Said("The change was thrown away.", said(&["Your folder is as it was.", MADE_SINCE])))
         );
     }
 }

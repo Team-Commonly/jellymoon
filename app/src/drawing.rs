@@ -21,6 +21,7 @@ use std::rc::Rc;
 use jellymoon_core::Waits;
 use sticker_kit::{Field, Kept, Note, Picture, Scene};
 
+use crate::again::{Again, Remade};
 use crate::landing::KEPT;
 pub use crate::live::tracked;
 use crate::told::{TOLD, rows_shown};
@@ -92,7 +93,10 @@ fn passed(scene: &Scene, open: &BTreeSet<String>, tapped: Option<&str>, away: &B
         Note::Told { id, .. } => id.strip_prefix(TOLD).is_some_and(|wish| closed.contains(&wish)),
         _ => false,
     };
-    let mut notes: Vec<Note> = tucked::shown(scene, away).filter(|note| !folded(note)).cloned().collect();
+    // While a wish is being read, or a sharper wish waits, the note that nothing was wished for is not drawn.
+    let taken = crate::shaping::taken(scene);
+    let unsaid = |note: &Note| folded(note) || taken && crate::shaping::nothing(note);
+    let mut notes: Vec<Note> = tucked::shown(scene, away).filter(|note| !unsaid(note)).cloned().collect();
     for note in &mut notes {
         if let Note::Drawn { id, open: is, .. } = note {
             *is = open.contains(id);
@@ -109,9 +113,10 @@ pub fn column(scene: &Scene, open: &BTreeSet<String>) -> Scene {
 }
 
 /// The drawn notes a person opened in one window, by their ids, the made wish they tapped last, and the made
-/// wishes that are tucked away. An id that leaves the page leaves the set.
+/// wishes that are tucked away. An id that leaves the page leaves the set. And core's answers that a wish was
+/// made again, each with the wish it speaks of (`again.rs`).
 #[derive(Clone, Default)]
-pub struct Open(Rc<RefCell<BTreeSet<String>>>, Rc<RefCell<Option<String>>>, Tucked);
+pub struct Open(Rc<RefCell<BTreeSet<String>>>, Rc<RefCell<Option<String>>>, Tucked, Again);
 
 impl Open {
     /// What a window that opens on `scene` starts with: no note open, and every settled made wish tucked away
@@ -130,14 +135,21 @@ impl Open {
 
     /// [`column`] of `scene` with what is open now, the offer of a follow-up under the wish tapped last, and
     /// none of the notes of a wish that is tucked away. A note that is not on `scene`, or is tucked away, is open
-    /// no more; a look, which gives the notes it found again, closes nothing.
+    /// no more; a look, which gives the notes it found again, closes nothing. An answer that a wish was made
+    /// again says that wish is being worked on only while it is (`Again::drawn`).
     pub(crate) fn column(&self, scene: &Scene) -> Scene {
+        let scene = &self.3.drawn(scene);
         let away = self.2.away(scene);
         let hidden = |id: &&str| wish_of(id).is_some_and(|wish| away.contains(wish));
         let mut open = self.0.borrow_mut();
         let on: Vec<&str> = drawn_ids(scene).filter(|id| !hidden(id)).collect();
         open.retain(|id| on.contains(&id.as_str()));
         crate::column::column(&passed(scene, &open, self.1.borrow().as_deref(), &away))
+    }
+
+    /// Core answered that a wish was made again and is being worked on: the answer is kept with that wish.
+    pub(crate) fn remade(&self, remade: Option<Box<Remade>>) {
+        self.3.keep(remade);
     }
 
     /// A tap on a note of the made wish `wish`, on its picture, or on its little one or its typed words: the

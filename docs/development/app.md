@@ -429,7 +429,13 @@ ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project 
   read on the page and none listed) "Choose the folder you want to work in, or type a name for a new project in
   the field at the bottom." (`Today::draw`). A day with no session logs says "You can start here: choose the folder
   you want to work in, or drop it on this window. Or type a name for a new project in the field." Words entered
-  in the entry of a day with no project are a new project's name and never a wish (`starting::named`). A page
+  in the entry of a day with no project are a new project's name and never a wish (`starting::named`). The note
+  is not drawn from the moment an Enter in the entry was taken for a wish: while "Reading your wish…" or a
+  sharper wish with its choice is on the scene (`shaping::taken`, asked where a scene is made ready to be
+  drawn, `drawing::passed`, so no look and no reading's step brings it back), and a tap on that choice takes
+  it off the scene with the two notes. After that it is the page's own again: a wish that was kept draws
+  none, and a reading that kept no wish has it back, under "That wish was not kept."
+  (`app/tests/shape_first.rs`). A page
   with nothing read and no wish, projects on offer or not, has no footer: it has no reading to speak
   of (`app/tests/entry_first.rs`).
 
@@ -766,8 +772,8 @@ that fit and counts the rest in a last line, `+N more`.
   already when its run ended (a finished change is kept by itself, and core wrote why this one was not), the
   note `work-<wish>` itself has the choices `Show me`, `Make it again`, `Toss it` and says the first sentence
   and what `Make it again` does before the wish's words: no tap on a `Keep it` is needed to learn it. The
-  note's picture is the one all waiting work has, and a drawn note places no words: the sentences are read
-  after a tap on the picture or on `?`. A tap on `Make it again` is
+  note's picture is the kit's `unfit` (waiting work with its arrow barred, and "does not fit your folder" under
+  it), and a drawn note places no words: the two sentences are read after a tap on the picture or on `?`. A tap on `Make it again` is
   carried as every choice is (`OnShow::carrying`, which takes a choice of `said-<wish>` too; the words of the tap
   are compared first, `Showing::chose`), shows `busy-<wish>` with "That wish is being made again.", and then,
   off the window's thread (`Today::asked`):
@@ -784,6 +790,16 @@ that fit and counts the rest in a last line, `+N more`.
      toss says, done or refused, and after it "Your wish was made again, and it is being worked on."; the new
      wish is drawn at work under its own words.
 
+  That last sentence is true only while the new wish is at work, and the answer stays under the old wish
+  until the next wish is made (decision 11). So where the answer is made, the new wish's id is kept with it,
+  and with core's words for the same answer afterwards (`again::Remade`; `WorkDone::remade_since`), in the
+  window's own state (`again::Again`, held by `drawing::Open`). Where a scene is made ready to be drawn
+  (`Open::column`), an answer whose new wish is on the scene and no longer at work (its little one is not
+  busy: its run ended, was stopped, or asks) is drawn ending "Your wish was made again." instead. The note
+  is found by being that answer, whole, and the wish by its id: no sentence is matched. The sentence
+  becomes the shorter one and does not go: a new wish has appeared on the page under the same words, and
+  the answer is what says why. The scene the app keeps holds the answer as core gave it.
+
   The run is started after the toss and not before it: a toss asks git where every copy of the repo stands, and
   core refuses it while a new run's copy is being made (measured: with the run started first, the toss was
   refused with "could not be read from the repo"). When core refuses the wish (the day has its eight, the
@@ -793,7 +809,8 @@ that fit and counts the rest in a last line, `+N more`.
   note says what the toss came to and then the sentence a typed wish has then, and the wish stays kept, as a
   typed one does.
   `app/tests/a_change_that_no_longer_fits.rs` follows it at the made-up window with real git: the plain note
-  and its one choice, the new wish with the old words and the old work tossed, a full day that tosses nothing,
+  and its one choice, the new wish with the old words and the old work tossed, the answer while the new
+  wish's run goes and once it has ended, a full day that tosses nothing,
   a tap that carries other words, changes in the way, and another reason told as before. Not proved: a run that
   could not be started after its wish was kept; the tap in a real window.
 - **Files the person's tools obey**: a page keeps one only when its name was drawn, whole, on the note the yes
@@ -1129,7 +1146,7 @@ and Cmd-Q are the system's and are not run by a test.
 | the day's made wishes | a character each, like any wish, and, in the scene, one whole list note, "wished here today", after the clashes: each made wish's own words after the mark of its state. The column draws each as a bubble of its own instead, whole (`column.rs`). The footer adds "N made wishes are in your own words."; on a day not read yet that is all the footer says |
 | a made wish whose run goes, on a page with no clash | a drawn note of its own, `steps-<wish>`, among the first notes (after "not everything is drawn"): a track ("A wish's work, drawn", above). Its first words are "Your wish is being worked on." and "“<the start of its words>”. What it did will show here when it is done." Each working wish has one, and each speaks of one wish: no note says "wishes" or counts the others (ADR 0030). The wish is named as every note of a wish names it, by its first 40 characters as core cleans them. No time is promised. It goes with its wish's run, and a look never carries it over as the app's own. A page with a clash has none: it is planned before the made wishes' list, so it would move or shrink what a person rules on, which a made wish never does (F37); a working wish has its pill there |
 | a made wish whose run goes, with steps (live work, `app/src/live.rs`) | its little one says on a small pill over it the stage its run is at, from the tool of its last step, in fixed words: "looking around" (`Read`, `Glob`, `Grep`), "making the change" (`Edit`, `Write`); "thinking" before the first step. Its track has core's count of its own steps at that stage. Its words, on the page after a tap on the picture, are the two sentences above, then the stage as a sentence, "Looking around your project." or "Making the change.", and "1 step so far." or "N steps so far.". No file's name is drawn, on the pill, in the note or on an opened wish: a person who asked for something wants to know how far along it is, not which file is open. Core keeps the names (`runs/<id>/steps.json`); the page does not draw them. A pill is drawn only where the room over the little one holds one line and it has no star (stars stand there). A step is a tool use the run asked for, as its stream says, not proof that it happened. Only the picture can be tapped, for its words, and once the run has ended none of it is drawn: the wish has the notes of an ended wish |
-| no wish, and nothing set aside | one plain note: "Nothing wished for yet today." |
+| no wish, and nothing set aside | one plain note: "Nothing wished for yet today." It is not drawn while a wish is being read or a sharper wish waits ("The empty page says what to do here", above) |
 | more than the app draws | the first note, "not everything is drawn", with the counts (next section) |
 
 **What the app has no piece for becomes a plain note** (`app/src/read.rs`). A wish whose `state` is a word this app

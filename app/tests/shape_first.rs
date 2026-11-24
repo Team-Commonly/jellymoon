@@ -15,8 +15,8 @@ use jellymoon_app::shaping::{GO, GO_TYPED, LABELS, READING, SAID as SHARPER_ID, 
 use jellymoon_app::wishing::{UNKEPT, UNSTARTED};
 use serde_json::{Value, json};
 use sticker_kit::{Note, Scene, ToldRow};
-use support::day::DAY;
-use support::wished::{SAID, World, world};
+use support::day::{DAY, answer, noon, result, said, shown, write_log};
+use support::wished::{SAID, World, quiet, world};
 
 const WISH: &str = "Make the uploader try a failed upload twice more before it gives up.";
 const DONE: &str = "A failed upload is tried three times in all.";
@@ -187,4 +187,78 @@ fn a_bad_answer_a_call_that_takes_too_long_and_no_harness_go_on_as_a_typed_wish(
     let printed = acted(&w, &[SAID], &["start"], &[]);
     as_typed(&w, &printed);
     assert_eq!(w.starts(), 0, "with no harness the wish is kept and no run starts, as it was");
+}
+
+/// A day that was read and holds no wish, with `alpha` on offer: its page says that nothing was wished for.
+fn empty_day() -> World {
+    let w = quiet();
+    let typed = [said(&noon(0), w.at("work").join("alpha").to_str().unwrap(), "look at the uploader")];
+    write_log(&w.day, "-work-alpha/s1.jsonl", &typed);
+    answer(&w.day, &result(r#"{"wishes":[],"clashes":[]}"#), 0);
+    shown(&w.day, &[]);
+    fs::create_dir(w.at("harness")).unwrap();
+    w
+}
+
+/// The window's lines for `acts`, with the installed command.
+fn window(w: &World, acts: &[&str]) -> Vec<Value> {
+    let bin = format!("bin:{}", w.install().parent().unwrap().display());
+    let acts: Vec<&str> = [bin.as_str()].into_iter().chain(acts.iter().copied()).collect();
+    let lines = w.taps("logs", &acts).ended();
+    lines.iter().map(|line| serde_json::from_str(line).expect(line)).collect()
+}
+
+/// Whether the scene of a line says that nothing was wished for today.
+fn says_nothing(line: &Value) -> bool {
+    let nothing = |note: &Note| matches!(note, Note::Plain { title, .. } if title == "Nothing wished for yet today.");
+    scene(line).notes.iter().any(nothing)
+}
+
+// Each `column` is the page as the window gives it to the kit's view (`Showing::column`).
+#[test]
+fn a_first_wish_that_is_being_read_or_made_is_not_under_a_note_that_nothing_was_wished_for() {
+    let w = empty_day();
+    // Its run waits for the test's word, so the wish is at work for as long as the window looks.
+    w.play("steps");
+    let enter = format!("enter:wish@alpha:{SAID}");
+    let acts = ["column", enter.as_str(), "column", "look", "column", "answer", "column", "start", "look", "column"];
+    let printed = window(&w, &acts);
+    assert!(says_nothing(&printed[0]), "the empty day says so, as it did: {}", printed[0]);
+    // From Enter on, while the wish is read, and after a look made meanwhile.
+    for read in [&printed[2], &printed[4]] {
+        assert_eq!(shaping(&scene(read)), [text(SHAPING, READING, SAID, &[])]);
+        assert!(!says_nothing(read), "{read}");
+    }
+    // The wish is made, and then its run goes.
+    assert_eq!((&printed[5]["kept"], w.kept()["id"].as_str()), (&json!(true), Some("m1")));
+    assert!(!says_nothing(&printed[6]), "{}", printed[6]);
+    let going = printed[9].to_string();
+    assert!(going.contains("Your wish is being worked on.") && !says_nothing(&printed[9]), "{going}");
+    fs::write(w.at("rec").join("go"), "").unwrap();
+    w.ended();
+}
+
+#[test]
+fn a_reading_that_kept_no_wish_leaves_the_page_saying_that_nothing_was_wished_for() {
+    // No folder of `beta` was typed in: core refuses the wish, and the day has none.
+    let w = empty_day();
+    let printed = window(&w, &[&format!("enter:wish@beta:{SAID}"), "column", "answer", "column"]);
+    assert!(!shaping(&scene(&printed[1])).is_empty() && !says_nothing(&printed[1]), "{}", printed[1]);
+    assert_eq!(printed[2]["kept"], false);
+    assert!(shaping(&scene(&printed[3])).is_empty() && says_nothing(&printed[3]), "{}", printed[3]);
+    assert!(printed[3].to_string().contains(UNKEPT) && !wishes(&w).exists());
+}
+
+#[test]
+fn a_sharper_wish_that_waits_and_the_choice_on_it_are_not_under_that_note_either() {
+    let w = empty_day();
+    says(&w, &sharper());
+    let enter = format!("enter:wish@alpha:{SAID}");
+    let printed = window(&w, &[enter.as_str(), "answer", "column", "choose:shape:1", "run", "column"]);
+    assert_eq!(shaping(&scene(&printed[2])), pair(SAID));
+    assert!(!says_nothing(&printed[2]), "{}", printed[2]);
+    // The tap takes both notes away at once, and the wish is kept only after it: the scene shown at once.
+    assert!(shaping(&scene(&printed[3])).is_empty() && !says_nothing(&printed[3]), "{}", printed[3]);
+    assert!(!says_nothing(&printed[5]) && w.kept()["id"] == "m1", "{}", printed[5]);
+    w.ended();
 }

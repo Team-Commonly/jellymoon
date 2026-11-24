@@ -14,6 +14,7 @@ use std::panic::{self, AssertUnwindSafe};
 use jellymoon_core::{Alone, RunOptions, Waits, Wish, WishState, WorkDone, WorkTap};
 use sticker_kit::{Note, Scene};
 
+use crate::again::Remade;
 use crate::answering::{with_go_on, with_more, with_question};
 use crate::landing::KEPT;
 use crate::placing::put;
@@ -38,6 +39,8 @@ pub struct Worked {
     pub(crate) seen: Seen,
     pub(crate) wish: String,
     pub(crate) notes: Vec<Note>,
+    /// When the answer says a wish was made again and is being worked on: that wish, and the answer afterwards.
+    pub(crate) remade: Option<Box<Remade>>,
 }
 
 /// A tap on a choice carried to core: the window runs it off its own thread.
@@ -304,7 +307,10 @@ impl OnShow {
         let work = move || {
             let (failed, shows, undo) = (tap.failed(), matches!(tap, WorkTap::Show { .. }), tap == WorkTap::Undo);
             let asked = || {
-                let mut notes = in_turn(notes_of(&wish, today.asked(&wish, tap, &ask)), seen);
+                let (done, since) = today.asked(&wish, tap, &ask);
+                let said = notes_of(&wish, done);
+                let remade = since.and_then(|(new, since)| Remade::of(new, &said, notes_of(&wish, since)));
+                let mut notes = in_turn(said, seen);
                 // A `Show me` that showed no file still brings the names and the rows: no other tap does.
                 let unshown = shows && notes.iter().all(|note| id_of(note).is_some_and(|id| id.starts_with(SAID)));
                 notes.extend(unshown.then(|| today.work_notes(&wish, true)).flatten().into_iter().flatten());
@@ -313,14 +319,14 @@ impl OnShow {
                 let notes = today.with_offer(&wish, notes);
                 let mut now = today.again(page.as_ref(), &from);
                 put(&mut now, &wish, notes.clone());
-                (now, notes)
+                (now, notes, remade)
             };
-            let (now, notes) = panic::catch_unwind(AssertUnwindSafe(asked)).unwrap_or_else(|_| {
+            let (now, notes, remade) = panic::catch_unwind(AssertUnwindSafe(asked)).unwrap_or_else(|_| {
                 let (notes, mut now) = (notes_of(&wish, failed), from.clone());
                 put(&mut now, &wish, notes.clone());
-                (now, notes)
+                (now, notes, None)
             });
-            Worked { seen: Seen { from, now }, wish, notes }
+            Worked { seen: Seen { from, now }, wish, notes, remade }
         };
         Some((self.scene.clone(), Box::new(work)))
     }

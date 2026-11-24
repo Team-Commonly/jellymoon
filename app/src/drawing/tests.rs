@@ -35,6 +35,7 @@ fn waits() -> Waits {
         why: "the work of run r1 waits".to_string(),
         result: None,
         project: "alpha".to_string(),
+        unkept: None,
     }
 }
 

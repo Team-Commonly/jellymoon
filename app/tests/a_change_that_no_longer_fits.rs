@@ -1,7 +1,9 @@
 //! A change that no longer fits (ADR 0030, decision 10; `docs/development/app.md`, "A change that no longer
 //! fits"). Two made wishes change the same line of one file. The first is kept; a tap on `Keep it` of the second
 //! is answered in the window's own sentences, with one choice, `Make it again`; a tap on that makes the wish
-//! again with its own words and only then tosses the work that does not fit. The wishes are made and run by the
+//! again with its own words and only then tosses the work that does not fit. Where a finished change is kept by
+//! itself, the second's note says so with no tap and has `Make it again` in the place of `Keep it`: core wrote
+//! why with the run's record when the run ended. The wishes are made and run by the
 //! `jellymoon` command with the made-up agent of F39's tests and real git in a temporary repo, and the taps are
 //! carried through `Showing` by the made-up window of F47 (`support/tapper.rs`), a process of its own. Nothing
 //! here starts the real Claude Code or opens a window.
@@ -14,7 +16,7 @@ mod support;
 
 use std::fs;
 
-use runs::{day, ended, wish};
+use runs::{day, ended, going, run, wish};
 use serde_json::Value;
 use sticker_kit::{Note, Scene};
 use support::day::DAY;
@@ -77,6 +79,93 @@ fn two_that_clash() -> World {
 
 /// The acts that keep the first wish's change and then tap `Keep it` on the second's: five lines.
 const KEEP_BOTH: [&str; 6] = [TALL, "look", "choose:work-m1:1", "run", "choose:work-m2:1", "run"];
+
+/// The words and the options of the drawn note `id` of the scene a line holds: its title is the first word.
+fn drawn(line: &str, id: &str) -> Option<(Vec<String>, Vec<String>)> {
+    let scene: Scene = serde_json::from_str::<Option<Scene>>(line).expect(line).expect("a scene was shown");
+    scene.notes.iter().find_map(|note| match note {
+        Note::Drawn { id: named, words, options, .. } if named == id => Some((words.clone(), options.clone())),
+        _ => None,
+    })
+}
+
+/// Two made wishes in a world where a finished change is kept by itself, as it is outside the tests. Their runs
+/// go at once and change the first line of `a.txt`, each its own way: the first ends first and its change is
+/// kept by itself, so the second's, made from the folder as it was, does not fit when its run ends.
+fn one_landed_and_the_next_does_not_fit() -> World {
+    let w = day().lands();
+    assert_eq!((wish(&w), wish(&w)), ("m1".to_string(), "m2".to_string()));
+    going(&w, &["m2"], |go| {
+        w.play("follow");
+        assert_eq!(run(&w, "m1"), "completed");
+        go();
+    });
+    w
+}
+
+#[test]
+fn a_change_that_did_not_fit_when_its_run_ended_says_so_with_no_tap_and_has_make_it_again_under_it() {
+    const LANDED: &str = "edited by the run, and again by the follow-up\n";
+    let w = one_landed_and_the_next_does_not_fit();
+    let repo = w.at("work").join("alpha");
+    // The first change is in the folder with no tap, and only the second waits.
+    assert_eq!((fs::read_to_string(repo.join("a.txt")).unwrap(), waiting(&w)), (LANDED.to_string(), vec!["m2".into()]));
+    let run = kept(&w)[1]["run"].as_str().unwrap().to_string();
+    w.play("hello");
+    let bin = format!("bin:{}", w.install().parent().unwrap().display());
+    let acts = [bin.as_str(), TALL, "look", "column", "choose:work-m2:1:Keep it", "choose:work-m2:1", "run"];
+    let lines = w.taps("logs", &acts).ended();
+    let [_, column, stale, at_once, answer] = &lines[..] else { panic!("five lines: {lines:#?}") };
+    // The note of the work, before any tap on a choice: why it is not in the folder and what the way on does,
+    // in the sentences the refused keep says, and no `Keep it`, which core has just refused.
+    let (words, options) = drawn(column, "work-m2").expect("the note of the work that waits");
+    let said = format!("“{SAID}”");
+    let whole =
+        ["Your folder is not changed yet.", CLASH[0], CLASH[2], said.as_str(), "1 new file, 1 changed, 1 removed."];
+    assert_eq!((words, options), (texts(&whole), texts(&["Show me", AGAIN, "Toss it"])));
+    assert!(!column.contains(&run) && !column.contains("Keep it"), "{column}");
+    // Its picture says it too, with the note closed: the kit draws that state with its own caption.
+    assert!(column.contains(r#""state":"unfit""#), "{column}");
+    // A tap that carries the words `Keep it` has no such choice there, and is carried nowhere (decision 9).
+    assert_eq!(drawn(stale, "work-m2"), drawn(column, "work-m2"), "the scene on show is given back");
+    // The tap on `Make it again` does what it does under the refusal: the wish is made again, then the toss.
+    let doing = said_of(at_once, "busy-m2");
+    assert_eq!((doing.0.as_str(), doing.2.len()), ("That wish is being made again.", 0));
+    assert_eq!(said_of(answer, "said-m2"), ("The change was thrown away.".to_string(), texts(&TOSSED), vec![]));
+    let made = kept(&w);
+    assert_eq!(made.len(), 3, "{made:?}");
+    assert_eq!((&made[2]["said"], &made[2]["project"]), (&made[1]["said"], &made[1]["project"]));
+    assert_eq!((made[2]["said"].as_str(), made[2].get("after")), (Some(SAID), None));
+    wait_until("the new wish's run", || kept(&w)[2]["run"].is_string());
+    let new = kept(&w)[2]["run"].as_str().unwrap().to_string();
+    wait_until("the end of the run", || !w.at("jm").join("runs").join(&new).join("run.lock").exists());
+    // The old work is tossed, and the folder holds the first wish's change and nothing of the second's.
+    assert!(!waiting(&w).contains(&"m2".to_string()), "the old work was tossed: {:?}", waiting(&w));
+    assert_eq!(w.told(&repo, &["branch", "--list", &format!("*{run}*")]), "", "the old run's branch is gone");
+    assert_eq!(fs::read_to_string(repo.join("a.txt")).unwrap(), LANDED);
+    assert!(!repo.join("n.txt").exists() && repo.join("b.txt").exists());
+}
+
+/// The reason is the run's end's, and the folder can change after it: the change the work clashed with is undone
+/// in the window, and a keep would land the work now. Its note is then the waiting note again, with `Keep it`.
+#[test]
+fn a_change_that_fits_again_once_the_other_was_undone_has_keep_it_back_and_a_tap_keeps_it() {
+    let w = one_landed_and_the_next_does_not_fit();
+    let acts =
+        [TALL, "look", "poke:m1", "choose:kept-m1:0", "run", "look", "column", "choose:work-m2:1:Keep it", "run"];
+    let lines = w.taps("logs", &acts).ended();
+    let [.., column, _, answer] = &lines[..] else { panic!("three lines at least: {lines:#?}") };
+    let (words, options) = drawn(column, "work-m2").expect("the note of the work that waits");
+    assert_eq!(options, texts(&["Show me", "Keep it", "Toss it"]), "{words:?}");
+    assert!(!words.contains(&CLASH[0].to_string()) && column.contains(r#""state":"waiting""#), "{column}");
+    assert_eq!(said(answer, "said-m2").map(|said| said.0), Some("The change was kept.".to_string()), "{answer}");
+    // The change that was undone waits again, as an undone change does, and the second is in the folder.
+    assert_eq!(waiting(&w), ["m1"]);
+}
+
+fn said_of(line: &str, id: &str) -> (String, Vec<String>, Vec<String>) {
+    said(line, id).unwrap_or_else(|| panic!("no note {id}: {line}"))
+}
 
 #[test]
 fn a_change_that_no_longer_fits_is_said_plainly_and_make_it_again_makes_the_wish_again_and_then_tosses_it() {

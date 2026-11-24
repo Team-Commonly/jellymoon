@@ -1,5 +1,6 @@
 //! `Make it again`, carried (ADR 0030, decision 10). Core offers the choice under a keep it refused because the
-//! change no longer fits the folder, and to a tap on it core says which words and which project
+//! change no longer fits the folder, and under work that waits because it did not fit when its run ended, where
+//! `Keep it` would be (`working::waiting`); to a tap on either core says which words and which project
 //! (`WorkDone::Again`). Here the wish is made as the entry makes a typed one, by the same calls
 //! (`jellymoon_core::wish_offered`, `Today::asking`), so every check and limit of a typed wish holds. Only once
 //! core kept the new wish is the work that does not fit tossed, by the call a tap on `Toss it` is carried by; a

@@ -31,12 +31,13 @@ use tucked::Tucked;
 
 /// The note of work that waits, drawn: a sheet for each file core counted, in a copy still, with core's choices
 /// in core's order. Its words are core's title and then `lines`, core's lines of the work, each a sentence of its
-/// own. The counts are core's: nothing is counted here.
+/// own. The counts are core's: nothing is counted here. Work core says did not fit the folder is drawn so.
 pub(crate) fn sheets(waits: &Waits, lines: Vec<String>) -> Note {
     let (made, changed, removed) = (waits.made, waits.changed, waits.removed);
+    let state = if waits.unfit() { Kept::Unfit } else { Kept::Waiting };
     Note::Drawn {
         id: format!("{WORK}{}", waits.wish),
-        picture: Picture::Sheets { made, changed, removed, state: Kept::Waiting },
+        picture: Picture::Sheets { made, changed, removed, state },
         words: [waits.title().to_string()].into_iter().chain(lines).collect(),
         open: false,
         options: waits.choices(false).into_iter().map(str::to_string).collect(),

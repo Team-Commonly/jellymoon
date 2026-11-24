@@ -479,7 +479,8 @@ and writes nothing:
   `run keep` and `run keep --ask` print what they printed.
 - **`Make it again`.** No later `Keep it` keeps a change that no longer fits, so the note of a `Clash`, and of
   no other reason, has one choice, after one more sentence: "Make it again throws this one away and makes the
-  wish again on your folder as it is now." The waiting note never offers it. A tap on it (`WorkTap::Again`) is
+  wish again on your folder as it is now." The waiting note offers it for one kind of work ("Work that did not
+  fit when its run ended", below). A tap on it (`WorkTap::Again`) is
   answered, while the work waits and was read, with the wish's own words and its project (`WorkDone::Again`),
   and nothing is changed by core there. The shell makes the wish as it makes a typed one, only then asks for
   the toss, as a tap on `Toss it` does, and starts the new wish's run last ([app.md](app.md), "A change that no
@@ -487,6 +488,20 @@ and writes nothing:
   that was not made is told as a typed wish is, and then "The change that does not fit was not thrown away.";
   after the toss, done or refused, "Your wish was made again, and it is being worked on.", or what a typed
   wish that was kept and has no run is told.
+- **Work that did not fit when its run ended** (`run/waits/unfit.rs`). When a run ends and the keep by itself
+  keeps nothing, core writes its typed reason with the run's record ([keep.md](keep.md), "Kept by itself":
+  `unkept`). `Waits` carries it, and `run waiting` does not print it. For `Clash` and no other reason, the
+  note of work that was read says first, in the place of the line that it waits for a yes, the refusal's two
+  sentences: "Your folder changed in the same place after this change was made, so the two do not fit
+  together." and "Make it again throws this one away and makes the wish again on your folder as it is now."
+  Its choices are `Show me`, `Make it again`, `Toss it`, whatever files the work holds: there is no `Keep it`,
+  which core has just refused, and a tap on `Make it again` is the tap above. Every other reason, a record
+  with none and a record from before this was written leave the lines and the choices as they were. The
+  reason is the run's end's, so before a note says it the keep is asked once more, as `run keep --ask` asks
+  (`unfit::still`): where the folder changed back since (the other change was undone, the branch was put
+  back) and a keep would land the work now, the note is the waiting note again, with `Keep it`.
+  The window draws such work with the kit's `unfit` picture: the arrow to the folder barred, and "does not fit
+  your folder" under it, so the closed note says it too.
 
 `work_tapped` has no command of its own: it is proved at the app's boundary (`app/tests/f47.rs`,
 `app/tests/a_change_that_no_longer_fits.rs`), and what it

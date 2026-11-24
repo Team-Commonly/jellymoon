@@ -201,7 +201,8 @@ pub enum Stage {
     Making,
 }
 
-/// Where finished work is: in a copy still, in the person's folder, or thrown away.
+/// Where finished work is: in a copy still, in the person's folder, or thrown away. `Unfit` is work in a copy
+/// that does not fit the folder as it is, so it cannot go in as it stands.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kept {
@@ -209,6 +210,7 @@ pub enum Kept {
     Waiting,
     In,
     Tossed,
+    Unfit,
 }
 
 /// One file's row of a [`Picture::Bars`]: its name, someone else's word, and the lines added and taken.

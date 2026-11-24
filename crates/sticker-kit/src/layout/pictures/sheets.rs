@@ -2,7 +2,8 @@
 //! added ink, one it changed a line of writing and a hatched band, one it removed is crossed out in the taken
 //! ink), their count in words under them, then an arrow to a folder. While the work waits the arrow and the
 //! folder are dashed; kept, they are solid and a tick is in the folder; thrown away, there is no arrow and no
-//! folder, and every sheet is crossed out.
+//! folder, and every sheet is crossed out. Work that does not fit the folder waits too, with its arrow barred in
+//! the taken ink and a caption that says so.
 
 use super::Draft;
 use crate::geom::Rect;
@@ -44,12 +45,13 @@ pub(super) fn draw(d: &mut Draft, [made, changed, removed]: [usize; 3], state: K
         Kept::Waiting => "waiting",
         Kept::In => "in",
         Kept::Tossed => "tossed",
+        Kept::Unfit => "unfit",
     };
     if state == Kept::Tossed {
         let beside = d.point(right + 14.0, 18.0);
         d.caption("thrown away", beside, 0.0);
     } else if files > 0 {
-        folder(d, right, state == Kept::Waiting, under);
+        folder(d, right, state, under);
     }
     format!("sheets made={made} changed={changed} removed={removed} state={name}")
 }
@@ -91,13 +93,21 @@ fn sheet(d: &mut Draft, n: usize, kind: usize, tossed: bool) {
 }
 
 /// The arrow from the sheets, which end `right` design units in, to the folder, and the folder's caption level
-/// with the count's at `under`: dashed while the work `waits`, solid with a tick in the folder once it is in.
-fn folder(d: &mut Draft, right: f32, waits: bool, under: f32) {
-    let left = d.wide() - 150.0;
+/// with the count's at `under`: dashed while the work waits, solid with a tick in the folder once it is in.
+fn folder(d: &mut Draft, right: f32, state: Kept, under: f32) {
+    let (waits, left) = (state != Kept::In, d.wide() - 150.0);
     let (from, to) = (d.point(right + 12.0, 30.0), d.point(left - 12.0, 30.0));
     d.pencil.arrow(from, to, waits);
     let shaft = Rect::new(from.0, from.1 - d.u(5.0), to.0 - from.0, d.u(10.0));
     d.part(if waits { "arrow dashed" } else { "arrow solid" }, shaft);
+    if state == Kept::Unfit {
+        let (half, mid) = (d.u(8.0), (from.0 + to.0) / 2.0);
+        let over = Rect::new(mid - half, from.1 - half, half * 2.0, half * 2.0);
+        d.pencil.ink(Ink::Taken);
+        d.pencil.cross(over);
+        d.pencil.ink(Ink::Pencil);
+        d.part("barred", over);
+    }
     let body = d.rect(left, 14.0, 56.0, 36.0);
     d.pencil.frame(body, waits);
     // The folder's tab, over its top left corner.
@@ -113,6 +123,10 @@ fn folder(d: &mut Draft, right: f32, waits: bool, under: f32) {
         d.pencil.ink(Ink::Pencil);
         d.part("tick", tick);
     }
-    let caption = if waits { "not in your folder yet" } else { "in your folder" };
+    let caption = match state {
+        Kept::In => "in your folder",
+        Kept::Unfit => "does not fit your folder",
+        Kept::Waiting | Kept::Tossed => "not in your folder yet",
+    };
     d.caption(caption, (d.at.x + d.u(left + 28.0), under), 0.5);
 }

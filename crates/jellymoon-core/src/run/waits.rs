@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 mod again;
 mod itself;
 mod plain;
+mod unfit;
 
 pub use itself::{KeptItself, kept_itself};
 pub use plain::stands;
@@ -31,6 +32,7 @@ use super::show::{self, FileChange, FileKind, Shown, ShownFile, show_file};
 use super::told::Told;
 use super::toss::toss_run;
 use super::{RunOptions, followable, refused};
+use crate::copy::Unkept;
 use crate::{Error, wish};
 
 /// The most names of files that are said of a run's work, and the most files the person's tools obey that the
@@ -94,6 +96,9 @@ pub struct Waits {
     /// The folder the wish is for, by the name it is kept with: a page says it, `run waiting` never prints it.
     #[serde(skip)]
     pub project: String,
+    /// Why it was not kept by itself at its run's end, where the record says (`unfit.rs`): never printed.
+    #[serde(skip)]
+    pub unkept: Option<Unkept>,
 }
 
 /// What `jellymoon run waiting` prints.
@@ -133,7 +138,7 @@ pub enum WorkTap {
     Toss,
     /// Under the note of a change that was kept by itself (`itself.rs`).
     Undo,
-    /// Under the note of a keep that was refused as the change no longer fits (`again.rs`).
+    /// Under the note of a keep that was refused as the change no longer fits (`again.rs`, `unfit.rs`).
     Again,
 }
 
@@ -241,7 +246,7 @@ impl Waits {
     pub fn lines(&self) -> Vec<String> {
         let (said, project) = (format!("“{}”", self.said), &self.project);
         let mut lines = if self.read {
-            vec![plain::waits(!self.over()).to_string(), said, self.counted()]
+            self.first().into_iter().chain([said, self.counted()]).collect()
         } else {
             vec![plain::unread(project), said, format!("{}.", self.why)]
         };
@@ -250,11 +255,12 @@ impl Waits {
         lines
     }
 
-    /// The choices under the note: none of work that was not read, so a tap there changes nothing, and no keep
-    /// of work a page does not keep. `sure` gives the ones under the note that asks once more.
+    /// The choices under the note: none of work that was not read, so a tap there changes nothing; no keep of
+    /// work that did not fit (`unfit.rs`) or that a page does not keep. `sure`: under the note that asks once more.
     pub fn choices(&self, sure: bool) -> Vec<&'static str> {
         match (self.read, self.over()) {
             (false, _) => Vec::new(),
+            (true, _) if self.unfit() => vec![SHOW, again::AGAIN, TOSS],
             (true, true) => vec![SHOW, TOSS],
             (true, false) => vec![SHOW, if sure { KEEP_TOO } else { KEEP }, TOSS],
         }
@@ -270,20 +276,6 @@ impl Waits {
         }
         let kept = "Nothing was changed. Kept, they are in your checkout, where your tools read them.";
         (title, self.obeyed.iter().cloned().chain([kept.to_string()]).collect())
-    }
-}
-
-impl ShownFile {
-    /// The title of the note a page shows the file in.
-    pub fn title(&self) -> String {
-        format!("File {} of the work: {}", self.n, self.name)
-    }
-
-    /// The file's text, a line of it each, and after a text that was cut a line that says so.
-    pub fn lines(&self) -> Vec<String> {
-        let mut lines: Vec<String> = self.text.lines().map(str::to_string).collect();
-        lines.extend(self.cut.then(|| "The file goes on past what was read of it.".to_string()));
-        lines
     }
 }
 
@@ -306,8 +298,23 @@ fn read(home: &Path, options: &RunOptions, itself: bool) -> Option<(Waits, Optio
         || format!("the work of run {run} waits: files made {made}, changed {changed}, removed {removed}{first}");
     let (read, why) = (unread.is_none(), unread.unwrap_or_else(counted));
     let result = shown.as_ref().and_then(|shown| shown.result.clone());
-    let waits =
-        Waits { wish, run, said, read, made, changed, removed, names, more, obeyed, plain, why, result, project };
+    let waits = Waits {
+        wish,
+        run,
+        said,
+        read,
+        made,
+        changed,
+        removed,
+        names,
+        more,
+        obeyed,
+        plain,
+        why,
+        result,
+        project,
+        unkept: unfit::still(home, options, found.record.unkept),
+    };
     Some((waits, shown))
 }
 

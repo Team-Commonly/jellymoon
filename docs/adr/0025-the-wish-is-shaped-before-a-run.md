@@ -33,6 +33,9 @@ the heart of the decision.
    The model's text has its fence taken off and is parsed into six fields, an unknown or a missing field refused;
    the whole is under 8 KiB; every text goes through the door a run's result goes through (one line, credentials
    replaced, nothing unseen, not only marks), the wish within 280 characters and each other text within 160.
+   No text holds `|`, `“` or `”`, the marks the run's prompt is built with: a model's text could else read, to
+   the run, as a label of Jellymoon's or as the person's own words. An answer whose prompt core could not build
+   (decision 7) is thrown away too: a sharper wish that no run could be given is never shown.
    **Any failure throws the whole answer away**: the outcome is `as_typed`, and why is one of Jellymoon's own fixed
    sentences. No word of the model's or the harness's is ever in an error.
 5. **`shape` exits 0** and prints `outcome`: `clear` (the words are sharp enough; nothing is kept), `shaped`, or
@@ -41,7 +44,8 @@ the heart of the decision.
    typed words and the project, written for the person alone. It is read back within a size and checked again.
 7. **A wish is kept from a shape only for the same words and project.** `jellymoon wish --shaped` keeps the wish
    with `shaped`: the run's prompt, built by core on one line from fixed labels, with the person's own words
-   quoted last. With no such shape the wish is kept as typed, and the command says so. `said` is the typed words
+   quoted last. With no such shape the wish is kept as typed, and the command says so; the window says so too
+   when `Go with this` was tapped and the wish could only be kept as typed (the day's file was busy). `said` is the typed words
    everywhere; a run is given `shaped` when the wish has one. The shape is removed when a wish is kept from it.
 8. **In the window** Enter shows at once that the wish is being read. `clear` and `as_typed` go on as a typed
    wish always did. `shaped` keeps nothing and shows the sharper wish, every word of the model's a quote under a
@@ -70,10 +74,15 @@ Not measured: Windows, Linux, an older Claude Code, and a link inside the projec
 
 ## Open
 
-- The app does not end the shaping call when it quits: the child goes on to its 20 seconds at most.
+- The app does not end the shaping call when it quits: the child goes on to its 20 seconds at most, and its
+  `shaping/call-…` folder is left. At the limit only the child itself is ended, not what it started.
+- The entry takes no key from Enter until the reading's answer, 20 seconds at most.
+- A wish refused after a tap (the day has its eight wishes; the project is no longer on offer) leaves a note with
+  the start of the typed words, not the whole of them in the entry.
+- Enter while a sharper wish stands reads the new words in its place; the first words are gone with no note.
+- A shape made by the command for the same words on the same day, while a pair stands in the window, is the one a
+  tap keeps: the text is checked, and it is not the one on show.
 - A build before this one refuses a day's made wishes when one of them holds `shaped`.
-- A tap on a character while a sharper wish stands takes its two notes away; the shape still waits in its file
-  until the next Enter.
 - The model reads what the project holds, so a file's text can steer what the sharper wish says. It can only
   reach the person as a quote that passed the check, and a run only with the person's tap and their own words
   beside it.

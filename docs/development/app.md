@@ -307,7 +307,10 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   run as a typed wish's is asked for. Core keeps it only while that shape still waits for those words; what it
   refuses, and a run that was not started, are said in the notes a typed wish has for them.
 - **Enter while they stand** takes the pair away and reads the new words: a page holds one reading or one pair.
-  A look leaves them (`working::names`).
+  A look leaves them (`working::names`), and so does a tap on a wish's character (`placing::over`): they hold the
+  only copy of words the entry no longer has.
+- **`Go with this` that could only be kept as typed** (the day's file was busy when the shape was to be carried):
+  the run has the typed words, and a plain note titled "It goes on with the words you typed." says so.
 
 `app/tests/shape_first.rs` follows all of it through the made-up window (`support/tapper.rs`, `enter:wish@<project>:…`).
 

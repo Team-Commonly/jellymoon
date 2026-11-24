@@ -72,8 +72,8 @@ mod placing;
 pub mod popup;
 pub mod read;
 pub mod scene;
-#[cfg(feature = "window")]
 pub mod shaping;
+#[cfg(feature = "window")]
 pub mod shell;
 pub mod showing;
 pub mod starting;

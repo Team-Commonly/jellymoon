@@ -10,7 +10,8 @@ use crate::Failure;
 use crate::parse::{Command, found};
 
 /// Said beside a wish that `--shaped` kept as typed. The wish is kept all the same: this is no failure.
-const AS_TYPED: &str = "jellymoon: no sharper wish waits for these words and this project: the wish is kept as typed";
+const AS_TYPED: &str =
+    "jellymoon: the wish is kept as typed: no sharper wish was kept with these words and this project";
 
 /// `shape`: the words and the project, and what finds the project's folder as `wish --run` finds it.
 pub fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {

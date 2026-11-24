@@ -64,6 +64,8 @@ jobs:
         run: cargo clippy --workspace --all-targets $FEATURES -- -D warnings
       - name: The repo's own rules (file size, LOC budgets, portable paths, crate direction)
         run: cargo xtask check
+      - name: The app without its window still builds (a module behind the wrong gate breaks only this)
+        run: cargo check -p jellymoon-app --no-default-features --lib
       - name: Tests
         run: cargo test --workspace $FEATURES
       - name: Smoke, the built programs run together on made-up logs (docs/development/smoke.md); it builds nothing new

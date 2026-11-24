@@ -144,6 +144,10 @@ pub fn shape(home: &Path, options: &RunOptions, typed: &str, project: &str) -> S
     if shape.clear {
         return Shaped { outcome: ShapeOutcome::Clear, why: None, said: None, shape: None };
     }
+    // A sharper wish no run could be given is not one to show: `Go with this` would go on with other words.
+    if prompt(&shape, &said).is_none() {
+        return as_typed(UNCHECKED);
+    }
     let kept = Kept { day: day.clone(), said, project: project.to_string(), shape };
     let written = serde_json::to_string(&kept).map_err(io::Error::from).and_then(|text| {
         call::private_dir(&home.join("pages"))?;
@@ -176,16 +180,18 @@ fn asked(home: &Path, options: &RunOptions, folder: &Path, said: &str) -> Result
 /// The model's answer as it is used, or None: it is thrown away whole. It is under 8 KiB, and one object of the
 /// six fields and no other. A `clear` answer carries no text. Of any other, the wish passes the door a run's
 /// result passes (`told::clean`: one line, no credential, nothing unseen, not only marks) within its length,
-/// and each other text does too, or is empty.
+/// and each other text does too, or is empty. No text holds a mark the run's prompt is built with ([`prompt`]): a
+/// model's text could else read, to the run, as a label of Jellymoon's or as the person's own words.
 fn checked(answer: &str) -> Option<Shape> {
     let raw: Shape = serde_json::from_str(unfence(answer)).ok().filter(|_| answer.len() < told::SAID_MAX)?;
     if raw.clear {
         return Some(Shape { clear: true, ..Shape::default() });
     }
-    let part = |text: &str| if text.trim().is_empty() { Some(String::new()) } else { told::clean(text, TEXT_MAX) };
+    let own = |text: &str, most| told::clean(text, most).filter(|text| !text.contains(['|', '“', '”']));
+    let part = |text: &str| if text.trim().is_empty() { Some(String::new()) } else { own(text, TEXT_MAX) };
     let (done_when, not_touching) = (part(&raw.done_when)?, part(&raw.not_touching)?);
     let (why, ask) = (part(&raw.why)?, part(&raw.ask)?);
-    Some(Shape { clear: false, wish: told::clean(&raw.wish, WISH_MAX)?, done_when, not_touching, why, ask })
+    Some(Shape { clear: false, wish: own(&raw.wish, WISH_MAX)?, done_when, not_touching, why, ask })
 }
 
 /// The shape that waits on `day`, when it is of the words `said`: a plain file of the person's own, within its
@@ -246,12 +252,12 @@ pub fn wish_shaped(home: &Path, day: Option<&str>, typed: &str, project: &str) -
 
 /// A tap under a shape on a page: keeps the wish of the words `typed`, for the project the shape that waits for
 /// those words is of, as [`wish::wish_offered`] keeps one, with the shape (`go`) or as typed. Refused, with
-/// nothing written, when no shape waits for those words.
-pub fn wish_of_shape(read: &DayOptions, typed: &str, go: bool) -> Result<Wished, Error> {
+/// nothing written, when no shape waits for those words. Whether the wish carries the shape's prompt is said too.
+pub fn wish_of_shape(read: &DayOptions, typed: &str, go: bool) -> Result<(Wished, bool), Error> {
     let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };
     let waits = waiting(home, day, &wish::words(typed)?).ok_or_else(|| Error::Wish(GONE.to_string()))?;
     let made = wish::wish_offered(read, typed, &waits.project)?;
-    Ok(given(home, day, made, Some(waits), go).0)
+    Ok(given(home, day, made, Some(waits), go))
 }
 
 #[cfg(test)]

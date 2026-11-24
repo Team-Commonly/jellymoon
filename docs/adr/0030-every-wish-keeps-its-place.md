@@ -176,9 +176,9 @@ answer and two bare bubbles, and could not tell that the other two had finished.
   own. A wish that was kept and whose run could not be started stays kept, with the old work tossed; that end
   was not run in a test. The choice stays on the page after the folder changed again, and core does not ask git
   once more whether the change still does not fit before it says the wish's words.
-- Work that did not fit when its run ended is drawn with the picture all waiting work has, whose caption says
-  only that it is not in the folder yet. A drawn note places none of its words, so the two sentences are read
-  after a tap on the picture or on `?`; with no tap the page shows `Make it again` where `Keep it` would be.
-  A picture that says it would be a kit change: one more state of the sheets' picture with its own caption.
+- Work that did not fit when its run ended has a picture of its own (the kit's `Kept::Unfit`: waiting work with
+  its arrow barred and the caption "does not fit your folder"), since a drawn note places none of its words
+  while it is closed. The two sentences are still read only after a tap on the picture or on `?`. Nobody has
+  seen whether the barred arrow and those four words are enough.
 - The note a follow-up was typed under stays, with its field. Before, it went, so that the follow-up's work
   could come by itself; now that work comes under its own words whatever is on show.

@@ -44,12 +44,17 @@ every other reason leaves the note as it was, which is a pin.
 | An old record is read as `Clash` | core `keep/tests.rs`, the record's test; the app's decision-10 tests |
 
 ## Open
-- A drawn note places none of its words while it is closed. With no tap the page shows the picture all waiting
-  work has, captioned that it is not in the folder yet, and `Make it again` where `Keep it` would be; the two
-  sentences are read after a tap on the picture or on `?`. A picture that says it is a kit change: one more
-  state of the sheets' picture with its own caption (ADR 0030, "Open").
+- A drawn note places none of its words while it is closed; the two sentences are read after a tap on the
+  picture or on `?`. See "After the look" for what the closed note says now.
 - The reason is the run's end's. Nothing asks git again, so the note can say it of a folder that has changed
   back since; `Make it again` works all the same.
 - Work that waits from before this build has no reason in its record and keeps `Keep it`, with the refusal
   after a tap, as before.
 - Not run: a real window, a real harness, Windows, Linux.
+
+## After the look
+The first commit's picture was looked at as a person would: the closed note had `Make it again` and still said
+"not in your folder yet", so nothing on the page said why. A second commit gives the kit's sheets picture one
+more state, `Kept::Unfit`: waiting work with its arrow barred in the taken ink and the caption "does not fit
+your folder". The app draws it where core says the work did not fit (`Waits::unfit`, now public). Seen red
+first: the kit's test of each state's arrow, folder and caption, and the app's test at the made-up window.

@@ -273,7 +273,8 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
   `Sheets { made, changed, removed, state }`, finished work: a sheet a file (six at most, then a stack and
   `+N`), "1 file" or "3 files" under them ("nothing changed" for none), and an arrow to a folder: dashed with
   "not in your folder yet" while it waits, solid with a tick and "in your folder" once it is in, and for work
-  thrown away no arrow, no folder, every sheet crossed out and "thrown away".
+  thrown away no arrow, no folder, every sheet crossed out and "thrown away". Work that does not fit the folder
+  (`unfit`) is drawn as waiting work with the arrow barred in the taken ink and "does not fit your folder".
   `Bars { rows, more }`, changed lines a file: a name, a box in the added ink and one in the taken ink to one
   scale, `+6 −1`, at most six rows and then `+N more`, and a ruler labelled in lines ("0", "20", "40 lines").
 - **Words.** A caption is the kit's own or a number, in the theme's handwriting (`Role::Caption`). A file's name

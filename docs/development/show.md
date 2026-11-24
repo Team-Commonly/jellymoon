@@ -499,6 +499,8 @@ and writes nothing:
   with none and a record from before this was written leave the lines and the choices as they were. The
   reason is the run's end's: no look asks git whether the change fits, so a folder that changed back since
   still has the note say what was true then.
+  The window draws such work with the kit's `unfit` picture: the arrow to the folder barred, and "does not fit
+  your folder" under it, so the closed note says it too.
 
 `work_tapped` has no command of its own: it is proved at the app's boundary (`app/tests/f47.rs`,
 `app/tests/a_change_that_no_longer_fits.rs`), and what it

@@ -873,7 +873,9 @@ max_file_lines = 400
 # Typed ahead raised the kit by 87: the entry that takes every key while an answer is owed, with the words Enter
 # gave kept aside (`src/entry.rs`, 17; the view, 1), a picture of it (`draw/headless.rs`, 6) and its tests
 # (`tests/entry_waits.rs`, 74 more; `tests/entry_draw.rs`, 11 fewer: the test that Escape is not taken went).
-"crates/sticker-kit" = 12803
+# Work that does not fit the folder has its own state of the sheets picture: 18 (the state, its barred arrow and
+# caption in `layout/pictures/sheets.rs`, 14; `scene.rs`, 2; `tests/pencil.rs`, 2).
+"crates/sticker-kit" = 12821
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1110,7 +1112,8 @@ max_file_lines = 400
 # A wish with no note on the scene yet is not tucked away when a wish is kept: 15 (`src/drawing/tucked.rs`).
 # A change that does not fit says so at once raised the app by 78 (81 added, 3 removed): its test at the made-up
 # window (`tests/a_change_that_no_longer_fits.rs`, 70) and the world where a change is kept by itself (6).
-"app" = 19491
+# The app draws that state where core says the work did not fit: 1.
+"app" = 19492
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

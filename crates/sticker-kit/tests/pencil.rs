@@ -198,6 +198,7 @@ fn sheets_draw_six_files_and_count_the_rest_and_each_state_has_its_own_arrow_fol
         (Kept::Waiting, [1, 0, 1, 0, 0], "not in your folder yet"),
         (Kept::In, [0, 1, 0, 1, 1], "in your folder"),
         (Kept::Tossed, [0, 0, 0, 0, 0], "thrown away"),
+        (Kept::Unfit, [1, 0, 1, 0, 0], "does not fit your folder"),
     ];
     for (state, counts, caption) in states {
         let (_, sketch, captions) = picture(sheets(1, 1, 0, state));
@@ -205,6 +206,7 @@ fn sheets_draw_six_files_and_count_the_rest_and_each_state_has_its_own_arrow_fol
         assert_eq!(captions, ["2 files", caption]);
         // Work thrown away is crossed out, sheet by sheet; kept or waiting, only a removed file's sheet is.
         assert_eq!(sketch.count("cross"), if state == Kept::Tossed { 2 } else { 0 }, "{state:?}");
+        assert_eq!(sketch.count("barred"), usize::from(state == Kept::Unfit), "{state:?}");
     }
     let (_, removed, captions) = picture(sheets(0, 0, 1, Kept::In));
     assert_eq!((parts(&removed, &kinds), captions[0].as_str()), (vec![0, 0, 1, 0, 0, 1], "1 file"));

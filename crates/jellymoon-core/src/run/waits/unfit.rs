@@ -12,7 +12,7 @@ use crate::copy::Unkept;
 
 impl Waits {
     /// Whether the run's record says that the work did not fit the folder when the run ended.
-    pub(super) fn unfit(&self) -> bool {
+    pub fn unfit(&self) -> bool {
         self.unkept == Some(Unkept::Clash)
     }
 

@@ -124,6 +124,8 @@ fn a_change_that_did_not_fit_when_its_run_ended_says_so_with_no_tap_and_has_make
         ["Your folder is not changed yet.", CLASH[0], CLASH[2], said.as_str(), "1 new file, 1 changed, 1 removed."];
     assert_eq!((words, options), (texts(&whole), texts(&["Show me", AGAIN, "Toss it"])));
     assert!(!column.contains(&run) && !column.contains("Keep it"), "{column}");
+    // Its picture says it too, with the note closed: the kit draws that state with its own caption.
+    assert!(column.contains(r#""state":"unfit""#), "{column}");
     // A tap that carries the words `Keep it` has no such choice there, and is carried nowhere (decision 9).
     assert_eq!(drawn(stale, "work-m2"), drawn(column, "work-m2"), "the scene on show is given back");
     // The tap on `Make it again` does what it does under the refusal: the wish is made again, then the toss.

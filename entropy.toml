@@ -445,7 +445,9 @@ max_file_lines = 400
 # The question gets an answer raised it by 203 (233 added, 30 removed): the prompt's two parts, the cleaned answer,
 # its four refusals and the three ways a wish is kept from a shape (`run/shape.rs`, 47), and their tests, in a
 # file of their own with the one that was there (`run/shape/tests.rs`, 156 new).
-"crates/jellymoon-core" = 19960
+# After the verifier, a wish is kept only from the shape a page showed raised it by 41: the shape on show that a
+# page hands core and the comparison (`run/shape.rs`, 14), and its test (`run/shape/tests.rs`, 27).
+"crates/jellymoon-core" = 20001
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -1134,7 +1136,8 @@ max_file_lines = 400
 # After the walk, the question moved to the note it is answered in raised the app by 48 (130 added, 82 removed): the typed words held by
 # the page on show and the note of a question (`src/shaping.rs`, `src/taps.rs`, `src/wishing.rs`), and their
 # tests at the made-up window (`tests/shape_first.rs`).
-"app" = 19978
+# The page holding the shape it showed, in place of the typed words alone, raised the app by 2 (`src/shaping.rs`).
+"app" = 19980
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

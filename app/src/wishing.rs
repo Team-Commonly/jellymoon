@@ -12,7 +12,7 @@
 //! [`Asking`], [`Look`]); what the window's thread does with an answer ([`OnShow::answered`], [`OnShow::asked`],
 //! [`OnShow::seen`]) opens no file.
 
-use jellymoon_core::{DayOptions, MADE_SAID_MAX, RunOptions, Started};
+use jellymoon_core::{DayOptions, MADE_SAID_MAX, RunOptions, ShapeSeen, Started};
 use sticker_kit::{Entry, Note, Scene};
 
 use crate::answering::{UNANSWERED, UNSETTLED};
@@ -76,7 +76,7 @@ pub struct Answer {
     opened: Option<(String, Note)>,
     /// After a wish was read (`shaping.rs`): the notes that stand where the reading's note stood, and the
     /// typed words a sharper wish among them was made of.
-    shape: Option<(Vec<Note>, Option<String>)>,
+    shape: Option<(Vec<Note>, Option<ShapeSeen>)>,
 }
 
 impl Answer {
@@ -93,9 +93,9 @@ impl Answer {
     }
 
     /// This answer, to a wish that was read: `notes` stand where the reading's note stood, on the scene the
-    /// answer was made from and on any scene that took its place. `typed` is the words a sharper wish among
-    /// them was made of, for the page on show to hold.
-    pub(crate) fn settling(mut self, notes: Vec<Note>, typed: Option<String>) -> Self {
+    /// answer was made from and on any scene that took its place. `typed` is the sharper wish among them, with
+    /// the words it was made of, for the page on show to hold.
+    pub(crate) fn settling(mut self, notes: Vec<Note>, typed: Option<ShapeSeen>) -> Self {
         crate::shaping::settle(&mut self.seen.now, notes.clone());
         Answer { shape: Some((notes, typed)), ..self }
     }

@@ -61,7 +61,7 @@ use record::Record;
 pub(crate) use record::work_waits;
 use serde::{Deserialize, Serialize};
 pub(crate) use shape::kept as kept_shaped;
-pub use shape::{SHAPE_MODEL, Shape, ShapeGo, ShapeOutcome, Shaped, shape, wish_of_shape, wish_shaped};
+pub use shape::{SHAPE_MODEL, Shape, ShapeGo, ShapeOutcome, ShapeSeen, Shaped, shape, wish_of_shape, wish_shaped};
 pub use show::{
     Alone, FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, ended_alone, show_file, show_run,
 };

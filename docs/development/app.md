@@ -382,17 +382,18 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   it with words is `OnShow::answering_shape` (`OnShow::typing` hands it the note `shape`): both notes go at
   once, as at a tap, and the work asks core's `wish_of_shape` to keep the wish with the shape and the answer
   (`ShapeGo::Answer`), then the run is asked for as after any Enter.
-- **The typed words are held, not read back.** The page on show holds the words the pair was made of
-  (`OnShow::typed`): set when the pair is shown, and again when a refused answer brings it back; cleared when
-  the pair goes, at a tap, at Enter in the field, and at the next Enter in the entry. Both taps and the field
-  take them from there, with or without a question, and never from a note's quote, which with a question is the
-  model's text. Core keeps the wish only while that shape still waits for those words.
+- **The pair on show is held, not read back.** The page on show holds the sharper wish the pair was drawn from,
+  with the words it was made of and its project (`OnShow::typed`, core's `ShapeSeen`): set when the pair is
+  shown, and again when a refused answer brings it back; cleared when the pair goes, at a tap, at Enter in the
+  field, and at the next Enter in the entry. Both taps and the field hand core that, with or without a question,
+  and never a note's quote, which with a question is the model's text. Core keeps the wish only while the shape
+  that waits is the one the page showed, text for text: one made since for the same words keeps nothing here.
   An answer core refuses (too long, nothing left once cleaned, no prompt to build, a shape that waits no more)
   keeps nothing: the pair stands again under "That wish was not kept." with core's reason, and the field keeps
   its words. An empty field gives nothing. What the run is given is core's to build (ADR 0025, decision 7).
 - **A tap** on either option is one arm of `stopping::chose` and an ordinary `Chosen::Work`: both notes go at
   once, and the work asks core's `wish_of_shape` to keep the wish, with the shape or as typed, then asks for its
-  run as a typed wish's is asked for. Core keeps it only while that shape still waits for those words; what it
+  run as a typed wish's is asked for. Core keeps it only while the shape that waits is the one on show; what it
   refuses, and a run that was not started, are said in the notes a typed wish has for them.
 - **Enter while they stand** takes the pair away and reads the new words: a page holds one reading or one pair.
   A look leaves them (`working::names`), and so does a tap on a wish's character (`Today::opened`): they hold the

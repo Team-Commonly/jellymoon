@@ -84,3 +84,22 @@ question, under a sentence for an offer. A second commit, in the app only:
 - Red first: five of the eleven tests of `shape_first`. One mutation, the typed words taken from the note's
   quote, was seen killed.
 - Not proved: a real window, a real harness on this head, Windows, Linux. The picture is the headless example's.
+
+## After the verifier
+
+A verifier failed the second commit on one finding: the window carried only the typed words to core, so a shape
+made since for the same words (the command, the same day) was the one an answer was kept with, and its
+question was one the person never saw. A third commit:
+
+- Core: `wish_of_shape` takes the shape the page has on show, with its words and project (`ShapeSeen`), and
+  refuses, with nothing written, when the shape that waits is not that one, in all three ways. The older hole
+  of a tap is closed by the same line, and so is a wish kept for another project than the page's.
+- The app holds that in `OnShow::typed` in place of the words alone, and hands it to core at a tap and at Enter.
+- Red first: `a_shape_made_since_for_the_same_words_is_not_the_one_on_show_and_keeps_nothing` (core), against
+  the new signature with no comparison. The app's tests of the pair are green only while the window hands core
+  the very shape core wrote.
+- "Built" and "Lines" above are the first commit's: the head has three rows, the offer "Answer", and the caps
+  in `entropy.toml`.
+- Still open: an answer refused because the shape waits no more brings the older pair back once, and the next
+  tap takes it away; the newer shape is on no page.
+

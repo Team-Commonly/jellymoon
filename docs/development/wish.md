@@ -19,7 +19,8 @@ sharper wish that passed core's check waits in `pages/<day>.shape.json`. `wish -
 shape that waits for these same words and project (the kept wish then has `shaped`, the prompt its run is given),
 and as typed when there is none, which it says on stderr
 ([ADR 0025](../adr/0025-the-wish-is-shaped-before-a-run.md)). A sharper wish may ask one question. It is
-answered in the window only, in the field under the two choices; `wish --shaped` has no answer. The prompt of a
+answered in the window only, in the field under the two choices; `wish --shaped` has no answer. The window
+keeps a wish only from the shape it showed: one made since for the same words is refused there. The prompt of a
 wish kept with an answer holds the question and the answer before the person's own words, under two labels of
 core's: `… | Asked of the person: <the question> | The person's answer: “<the answer>” | The person's own words:
 “<the typed words>”`. The answer is cleaned as a wish's words are and is 200 characters at most; a prompt is

@@ -274,14 +274,25 @@ pub enum ShapeGo<'a> {
     Answer(&'a str),
 }
 
-/// A tap under a shape on a page, or Enter in the field under it: keeps the wish of the words `typed`, for the
-/// project the shape that waits for those words is of, as [`wish::wish_offered`] keeps one, as `go` says, in one
-/// write. Refused, with nothing written, when no shape waits for those words, and with the shape still waiting
+/// The sharper wish a page has on show: the words it was made of as core keeps them, the project it was read
+/// for, and its texts. A wish is kept from the shape that waits only while that shape is this one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShapeSeen {
+    pub said: String,
+    pub project: String,
+    pub shape: Shape,
+}
+
+/// A tap under a shape on a page, or Enter in the field under it: keeps the wish of the words the shape `seen`
+/// on that page was made of, for its project, as [`wish::wish_offered`] keeps one, as `go` says, in one write.
+/// Refused, with nothing written, when the shape that waits is not the one seen (other words, another project,
+/// or other texts: one made since for the same words), whatever `go` says, and with the shape still waiting
 /// when an answer is one the shape did not ask for, is not one once cleaned, or leaves no prompt to build.
-pub fn wish_of_shape(read: &DayOptions, typed: &str, go: ShapeGo) -> Result<Wished, Error> {
+pub fn wish_of_shape(read: &DayOptions, seen: &ShapeSeen, go: ShapeGo) -> Result<Wished, Error> {
     let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };
     let refused = |why: &str| Error::Wish(why.to_string());
-    let (waits, shaped) = waiting(home, day, &wish::words(typed)?).ok_or_else(|| refused(GONE))?;
+    let same = |waits: &(Kept, String)| waits.0.project == seen.project && waits.0.shape == seen.shape;
+    let (waits, shaped) = waiting(home, day, &wish::words(&seen.said)?).filter(same).ok_or_else(|| refused(GONE))?;
     let shaped = match go {
         ShapeGo::Typed => None,
         ShapeGo::Shape => Some(shaped),
@@ -291,7 +302,7 @@ pub fn wish_of_shape(read: &DayOptions, typed: &str, go: ShapeGo) -> Result<Wish
             Some(prompt(&waits.shape, &waits.said, Some(&answer)).ok_or_else(|| refused(UNBUILT))?)
         }
     };
-    let made = wish::offered_with(read, typed, &waits.project, shaped)?;
+    let made = wish::offered_with(read, &seen.said, &waits.project, shaped)?;
     let _ = fs::remove_file(file(home, day));
     Ok(made)
 }

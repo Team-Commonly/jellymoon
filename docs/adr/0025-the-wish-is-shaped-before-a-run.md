@@ -70,6 +70,13 @@ the heart of the decision.
    and 120 of labels and marks). The door looks at no text of more than 4096 bytes, so the longest of everything
    builds in characters of up to three bytes each, which is every script in common use; written wholly in
    characters of four bytes it is 4198 bytes and is refused with that sentence, and a shorter answer builds.
+   Amended 2026-11-25, after a verifier: **a page keeps a wish only from the shape it showed.** A page hands
+   core the shape it has on show, with its words and project (`ShapeSeen`), and core keeps a wish from the
+   shape that waits only while the two are the same, text for text, in all three ways. A shape made since for
+   the same words (the command, the same day) is another shape: the tap or the answer is refused with the
+   sentence that the sharper wish on show waits no more, nothing is written, and the newer shape still waits.
+   So an answer never goes with a question the person did not see, and a wish is never kept for another project
+   than the page's. `wish --shaped` is as it was: it shows no shape and keeps the one that waits.
 8. **In the window** Enter shows at once that the wish is being read. `clear` and `as_typed` go on as a typed
    wish always did. `shaped` keeps nothing and shows the sharper wish, every word of the model's a quote under a
    label of Jellymoon's, with `Go with this` and `Go with what I typed` (`docs/development/app.md`).
@@ -116,20 +123,20 @@ Not measured: Windows, Linux, an older Claude Code, and a link inside the projec
 - Enter while a sharper wish stands reads the new words in its place; the first words are gone with no note.
 - A sharper wish that stands when the app is quit is not shown at the next open: its shape waits in its file, and
   neither it nor the typed words are on the page (found on a walk of the one-column page).
-- A shape made by the command for the same words on the same day, while a pair stands in the window, is the one a
-  tap keeps: the text is checked, and it is not the one on show.
+- A shape made by the command for the same words on the same day, while a pair stands in the window, was the one
+  a tap kept. Closed 2026-11-25 (decision 7): a tap or an answer on the older pair is refused and keeps nothing.
+  The older pair then says so and goes; the newer shape waits in its file and is on no page.
 - A build before this one refuses a day's made wishes when one of them holds `shaped`. A build before the
   answer (2026-11-24) refuses them when a prompt is longer than 1000 characters.
 - `wish --shaped` has no answer: the question is answered in the window only.
 - The person's own words may hold `|`, `“` and `”`, and so may their answer: cleaning leaves them. A person can
   so write a part that reads, to their own run, as a label of Jellymoon's. Only a model's text is refused for
   those marks; the person is the one the run works for.
-- The answer is in the run's prompt and nowhere else: the page shows the typed words, a wish made again is made
-  of the typed words alone, and a follow-up's run is given the follow-up's words.
+- The answer is in the run's prompt and nowhere else: the wish's bubble shows the typed words (with a question
+  the pair draws them nowhere), a wish made again is made of the typed words alone, and a follow-up's run is
+  given the follow-up's words.
 - An answer that core refuses leaves the pair on the page with core's reason over it. When the reason is that
   the shape waits no more, the pair still stands, and the next tap on it says so and takes it away.
-- An answer goes with the question of the shape that waits for those words, which the note above already says
-  may not be the one on show.
 - The model reads what the project holds, so a file's text can steer what the sharper wish says. It can only
   reach the person as a quote that passed the check, and a run only with the person's tap and their own words
   beside it.

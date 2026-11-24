@@ -65,6 +65,9 @@ impl Default for Palette {
             chip: Color::rgb(0xEDEBF4),
             chip_chosen: Color::rgb(0xFFD24D),
             chip_chosen_ink: Color::rgb(0x2B2350),
+            pencil: Color::rgb(0x4B4763),
+            added: Color::rgb(0x23875A),
+            taken: Color::rgb(0xC9483F),
             hues: vec![
                 hue(0xB9A9F6, 0x9684E6, 0xDCD3FE),
                 hue(0xFFB3CB, 0xF288AB, 0xFFD9E5),
@@ -189,6 +192,9 @@ fn plain_palette() -> Palette {
         chip: Color::rgb(0xECEDEF),
         chip_chosen: Color::rgb(0x2F6FEB),
         chip_chosen_ink: Color::rgb(0xFFFFFF),
+        pencil: Color::rgb(0x4A5057),
+        added: Color::rgb(0x1A7F37),
+        taken: Color::rgb(0xCF222E),
         hues: vec![
             hue(0xC4CAD3, 0xA2AAB6, 0xE3E6EA),
             hue(0xD3D7DD, 0xB3BAC4, 0xECEEF1),

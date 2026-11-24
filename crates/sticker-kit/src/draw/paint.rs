@@ -31,6 +31,8 @@ pub(crate) enum Shape {
     Sheet { rect: Rect, tilt: f32, fill: Color, shadow: Shadow },
     /// A strip of two-colour striped tape that may be tilted.
     Tape { rect: Rect, tilt: f32, a: Color, b: Color },
+    /// One pass of a pencil: a line through `points`, `width` wide.
+    Stroke { points: Vec<(f32, f32)>, width: f32, color: Color },
 }
 
 fn bounds(rect: Rect, origin: Point<Pixels>) -> Bounds<Pixels> {
@@ -71,6 +73,7 @@ pub(crate) fn paint(shapes: &[Shape], origin: Point<Pixels>, window: &mut Window
             }
             Shape::Sheet { rect, tilt, fill, shadow } => paint_sheet(*rect, *tilt, *fill, *shadow, origin, window),
             Shape::Tape { rect, tilt, a, b } => paint_tape(*rect, *tilt, *a, *b, origin, window),
+            Shape::Stroke { points, width, color } => paint_stroke(points, *width, *color, origin, window),
         }
     }
 }
@@ -99,6 +102,18 @@ pub(crate) fn paint_polygon(points: &[(f32, f32)], color: Color, origin: Point<P
     let points: Vec<Point<Pixels>> = points.iter().map(|p| point(origin.x + px(p.0), origin.y + px(p.1))).collect();
     let mut builder = PathBuilder::fill();
     builder.add_polygon(&points, true);
+    if let Ok(path) = builder.build() {
+        window.paint_path(path, hsla(color));
+    }
+}
+
+/// A line through `points` as GPUI strokes a path: round where it turns, `width` wide.
+fn paint_stroke(points: &[(f32, f32)], width: f32, color: Color, origin: Point<Pixels>, window: &mut Window) {
+    let at = |p: &(f32, f32)| point(origin.x + px(p.0), origin.y + px(p.1));
+    let Some((first, rest)) = points.split_first().filter(|(_, rest)| !rest.is_empty()) else { return };
+    let mut builder = PathBuilder::stroke(px(width));
+    builder.move_to(at(first));
+    rest.iter().for_each(|p| builder.line_to(at(p)));
     if let Ok(path) = builder.build() {
         window.paint_path(path, hsla(color));
     }

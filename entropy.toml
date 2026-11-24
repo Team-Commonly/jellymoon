@@ -830,7 +830,11 @@ max_file_lines = 400
 # The page is one column lowered the kit by 383: the grid (`layout/grid.rs`), the planner that shortened, shrank and
 # dropped notes for room, the told note's second try, the legend and their tests went; the column, its scroll
 # (`scroll.rs`, `layout/column.rs`, `draw/column.rs`) and its test in the view (`tests/column_draw.rs`) came.
-"crates/sticker-kit" = 10805
+# The kit draws in pencil raised the kit by 1517: the pencil and its marks (`pencil.rs`, 327), the three pictures
+# (`layout/pictures/`, 395), the drawn note and the headless print (`layout/drawn.rs`, `layout/print.rs`, 89), a
+# picture drawing itself in the view (`draw/pencil.rs`, 165), the sample page, the palette's three inks and the
+# rest of the view (221), and its tests (`tests/pencil.rs`, 320).
+"crates/sticker-kit" = 12322
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1026,7 +1030,8 @@ max_file_lines = 400
 # its two tests) and the slice's test at the made-up window and the kit's door (`tests/one_column.rs`, 265); the
 # helpers of `tests/work_shows.rs` moved to `tests/work_shows/runs.rs` to keep the file under its limit (10), and
 # the pins of the old canvas, made true of the column, are 26 fewer.
-"app" = 16725
+# The kit's drawn note raised the app by 2: the one arm of the column's test that names a note by its id.
+"app" = 16727
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

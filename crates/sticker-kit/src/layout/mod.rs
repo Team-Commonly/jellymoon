@@ -7,11 +7,14 @@
 //! placed in the window ([`layout_entry`]): a band at its bottom the column ends above.
 
 mod column;
+mod drawn;
 mod edge;
 mod entry;
 mod little;
 mod notes;
 mod page;
+mod pictures;
+mod print;
 mod text_note;
 mod told;
 mod typed;
@@ -19,6 +22,7 @@ mod typed;
 use serde::{Deserialize, Serialize};
 
 use crate::geom::{Rect, Viewport};
+use crate::pencil::Sketch;
 use crate::scene::Scene;
 use crate::text::{Measure, Role, clean, fit};
 use crate::theme::Theme;
@@ -61,6 +65,11 @@ pub enum PieceKind {
     Field,
     /// The words over a text note's field that say what it is for: `id` is the note's.
     Offer,
+    /// The picture of a drawn note ([`crate::Note::Drawn`]): `id` is the note's. Its strokes are its `sketch` and
+    /// its text the captions. A tap on it is the note's `id` at [`crate::PICTURE_PLACE`].
+    Picture,
+    /// The `?` at the top right of a picture whose note has words: `id` is the note's. A tap on it is the picture's.
+    Ask,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -86,12 +95,16 @@ pub struct Placed {
     pub tilt_degrees: f32,
     pub z: i32,
     pub text: Vec<TextRun>,
+    /// What a pencil draws of the piece: a picture's strokes, or the ring of its `?`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sketch: Option<Sketch>,
 }
 
 pub use edge::{
     EdgeKind, EdgePiece, EdgePlaced, EdgeWindow, MAX_BUBBLE_LINES, MAX_BUBBLE_TEXTS, edge_windows, layout_edge,
 };
 pub use entry::{entry_top, layout_entry};
+pub use print::print;
 pub use text_note::MAX_TEXT_LINES;
 pub use typed::MAX_QUOTED_LINES;
 
@@ -199,6 +212,7 @@ impl PieceKind {
             PieceKind::Bubble | PieceKind::Badge | PieceKind::Says => 13,
             PieceKind::Note => 20,
             PieceKind::Option | PieceKind::Mark | PieceKind::Quote | PieceKind::Field | PieceKind::Offer => 21,
+            PieceKind::Picture | PieceKind::Ask => 21,
             PieceKind::Tape => 22,
         }
     }
@@ -206,7 +220,8 @@ impl PieceKind {
 
 /// A level piece with no text, at its kind's paint order.
 pub(crate) fn piece(kind: PieceKind, id: &str, index: usize, rect: Rect) -> Placed {
-    Placed { piece: kind, id: id.to_string(), index, rect, tilt_degrees: 0.0, z: kind.z(), text: Vec::new() }
+    let (id, text) = (id.to_string(), Vec::new());
+    Placed { piece: kind, id, index, rect, tilt_degrees: 0.0, z: kind.z(), text, sketch: None }
 }
 
 /// A run whose box is `width` wide and one line tall, starting at `x`, with

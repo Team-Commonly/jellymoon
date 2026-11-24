@@ -52,6 +52,12 @@ pub fn pulse(motion: &Motion, t: f32, phase: f32) -> f32 {
     swell(motion.pulse, cycle(t, 1.7, phase), 0.55)
 }
 
+/// The to and fro of the tool at work in a picture, `t` seconds on: from -1 to 1, and nothing in a theme where
+/// nothing moves while the page is idle.
+pub fn rock(motion: &Motion, t: f32) -> f32 {
+    if motion.is_idle_still() { 0.0 } else { (2.0 * PI * t / 1.1).sin() }
+}
+
 fn swell(amount: f32, u: f32, from: f32) -> f32 {
     if amount == 0.0 || u < from {
         return 1.0;

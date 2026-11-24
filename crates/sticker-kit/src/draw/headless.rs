@@ -30,7 +30,13 @@ pub struct Typing {
 
 /// Renders one still frame of the scene and saves it as a PNG.
 pub fn snapshot(scene: Scene, theme: Theme, width: f32, height: f32, out: &Path) -> gpui::Result<()> {
-    snapshot_typing(scene, theme, None, width, height, out)
+    shot(scene, theme, None, None, (width, height), out)
+}
+
+/// [`snapshot`] of a page whose pictures are each drawn as they are `at` seconds after their note came: a
+/// half-drawn page, to look at.
+pub fn snapshot_at(scene: Scene, theme: Theme, at: f32, width: f32, height: f32, out: &Path) -> gpui::Result<()> {
+    shot(scene, theme, None, Some(at), (width, height), out)
 }
 
 /// [`snapshot`] of a page with an entry.
@@ -42,12 +48,23 @@ pub fn snapshot_typing(
     height: f32,
     out: &Path,
 ) -> gpui::Result<()> {
+    shot(scene, theme, typing, None, (width, height), out)
+}
+
+fn shot(
+    scene: Scene,
+    theme: Theme,
+    typing: Option<Typing>,
+    at: Option<f32>,
+    (width, height): (f32, f32),
+    out: &Path,
+) -> gpui::Result<()> {
     let mut cx =
         HeadlessAppContext::with_platform(text_system(), Arc::new(()), gpui_platform::current_headless_renderer);
     cx.update(|cx| load_fonts(cx))?;
     let (entry, typed) = typing.map(|typing| (typing.entry, typing.typed)).unzip();
     let window = cx.open_window(size(px(width), px(height)), |_, cx| {
-        let page = Page::new(scene, theme).reduce_motion(true);
+        let page = Page::new(scene, theme).reduce_motion(true).sketched_at(at);
         cx.new(|_| entry.into_iter().fold(page, Page::with_entry))
     })?;
     if let Some((text, option)) = typed.flatten() {

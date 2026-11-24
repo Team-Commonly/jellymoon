@@ -3,8 +3,8 @@
 //! smaller or left out because the page is long.
 
 use super::text_note::{Parts, text};
-use super::told;
 use super::{Ctx, PieceKind, Placed, TextRun, line_height, piece, run};
+use super::{drawn, told};
 use crate::geom::Rect;
 use crate::scene::{Mark, Note};
 use crate::text::{Role, wrap};
@@ -86,6 +86,9 @@ pub(super) fn fill(cx: &Ctx, note: &Note, index: usize, top: f32) -> Option<(She
             heading(cx, &mut sheet, title, Role::NoteTitle);
             paragraph(cx, &mut sheet, body, Role::Body, 6);
             (close(cx, sheet, 20.0), fallback, tilt.plain_note)
+        }
+        Note::Drawn { id, picture, words, open, options } => {
+            (drawn::sheet(cx, &named(id), (picture, words, *open, options), top), named(id), 0.0)
         }
         Note::Said { .. } => return None,
     })

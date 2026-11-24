@@ -16,7 +16,7 @@ use sticker_kit::{Note, Scene};
 
 use crate::answering::{with_go_on, with_more, with_question};
 use crate::landing::KEPT;
-use crate::placing::{over, put};
+use crate::placing::put;
 use crate::read::Page;
 use crate::taps::OnShow;
 use crate::today::Today;
@@ -26,10 +26,10 @@ use crate::wishing::Seen;
 /// The starts of the ids of this file's notes, each followed by the wish's id: work that waits with its choices,
 /// the same asked once more, what is being done, what was done, and a wish with no work waiting.
 pub(crate) const WORK: &str = "work-";
-const SURE: &str = "sure-";
+pub(crate) const SURE: &str = "sure-";
 pub(crate) const BUSY: &str = "busy-";
 pub(crate) const SAID: &str = "said-";
-const WISH: &str = "wish-";
+pub(crate) const WISH: &str = "wish-";
 /// The start of the id of a file's note: `file-3-m1` is file 3 of the work of the made wish `m1`.
 pub(crate) const FILE: &str = "file-";
 
@@ -68,44 +68,6 @@ pub(crate) fn names(id: &str) -> bool {
 /// Whether a note is one of this file's: a look and a reading leave it on show.
 pub(crate) fn ours(note: &Note) -> bool {
     id_of(note).is_some_and(names)
-}
-
-/// Whether a scene holds a note a person may be about to tap or type in, so nothing new is put over it: a
-/// choice with an option (a clash's, the one that turns delivery on, a stop's); a text note with an option or
-/// a field (work that waits, the same asked once more, a question, a follow-up); or a note core's answer comes
-/// in the place of (what is being done with work, a run being stopped, a wish that is being worked on, which is
-/// also the note of a wish whose answer is with its run). It is the scene that is asked, placed or not.
-pub(crate) fn in_hand(scene: &Scene) -> bool {
-    scene.notes.iter().any(|note| match note {
-        Note::Choice { options, .. } => !options.is_empty(),
-        Note::Text { id, options, field, .. } => {
-            !options.is_empty() || field.is_some() || id.starts_with(BUSY) || at_work(note) == *note
-        }
-        Note::Plain { title, .. } => title == crate::stopping::STOPPING,
-        Note::Drawn { options, field, .. } => !options.is_empty() || field.is_some(),
-        _ => false,
-    })
-}
-
-/// Whether a note is the note `id`, a wish's own, with nothing to choose: a wish that is done, with the field of
-/// a follow-up alone under it.
-pub(crate) fn settled(note: &Note, id: &str) -> bool {
-    matches!(note, Note::Text { id: own, options, .. } if own == id && id.starts_with(WISH) && options.is_empty())
-}
-
-/// The wishes whose work that waits, or what their run says it did, is on a scene.
-pub(crate) fn shown(scene: &Scene) -> impl Iterator<Item = &str> {
-    fn of(id: &str) -> Option<&str> {
-        [WORK, TOLD, KEPT].iter().find_map(|start| id.strip_prefix(start))
-    }
-    scene.notes.iter().filter_map(|note| id_of(note).and_then(of))
-}
-
-/// Whether a scene holds what a run says it did with no work that waits under it (told alone): a note with
-/// nothing to choose, which the looks after it leave on the page as they leave a choice's answer.
-pub(crate) fn told_on(scene: &Scene) -> bool {
-    let has = |start: &str| scene.notes.iter().filter_map(id_of).any(|id| id.starts_with(start));
-    has(TOLD) && !has(WORK)
 }
 
 /// The number of a file's note of `wish`.
@@ -159,11 +121,6 @@ pub(crate) fn at_work(asked: &Note) -> Note {
     let wish =
         Wish { id: none(), label: none(), said: none(), project: none(), state, stars: Vec::new(), question: None };
     text(id.clone(), jellymoon_core::stands(&wish, None).0, body.clone(), Vec::new())
-}
-
-/// Whether core is at work for `wish`: one tap of a wish is carried at a time.
-fn busy(scene: &Scene, wish: &str) -> bool {
-    scene.notes.iter().any(|note| id_of(note).and_then(|id| id.strip_prefix(BUSY)) == Some(wish))
 }
 
 /// The note of work that waits and was read, drawn, with core's words and choices (`drawing::sheets`). Before `Show me`
@@ -263,8 +220,9 @@ impl Today {
         Some(told(&waits, shown).into_iter().chain([work]).collect())
     }
 
-    /// [`Today::note_of`], with what the run says it did before the note of its work that waits.
-    fn notes_on_open(&self, page: Option<&Page>, id: &str) -> Option<Vec<Note>> {
+    /// [`Today::note_of`], with what the run says it did before the note of its work that waits: the notes a
+    /// made wish that has ended has on the page (`placing.rs`).
+    pub(crate) fn notes_on_open(&self, page: Option<&Page>, id: &str) -> Option<Vec<Note>> {
         if let Some(notes) = self.work_notes(id, false).or_else(|| self.kept_notes(id)) {
             return Some(notes);
         }
@@ -291,17 +249,6 @@ impl Today {
         text(format!("{WISH}{}", crate::scene::drawn_id(&wish.id)), title, body, Vec::new())
     }
 
-    /// The work of the made wish `id` that waits, or what its run that changed nothing says it did, over the scene
-    /// `from`, as a tap on its character shows it ([`Today::opened`]), but over what was said of work kept or
-    /// tossed, which a tap takes away: for a look that found the wish's run ended (`showing.rs`). The calls to
-    /// core are a tap's. None when neither is; with the scene, whether it is work that waits.
-    pub(crate) fn waiting_over(&self, page: Option<&Page>, from: &Scene, id: &str) -> Option<(Scene, bool)> {
-        let notes = self.notes_on_open(page, id)?;
-        let has = |start: &str| notes.iter().filter_map(id_of).any(|one| one.starts_with(start));
-        let (work, told) = (has(WORK) || has(KEPT), has(TOLD));
-        (work || told).then(|| (over(from, notes, true), work))
-    }
-
     /// `notes` of `wish`, its work that waits among them with the offer of a follow-up when core says one may
     /// be made of the wish: a tap on a choice leaves the offer where it was. The note that says what is being
     /// done carries the same field meanwhile ([`OnShow::carrying`]). One that asks once more has none: what
@@ -310,17 +257,6 @@ impl Today {
         let follows = self.follows(wish);
         let work = |note: &Note| id_of(note).is_some_and(|id| id.starts_with(WORK));
         notes.into_iter().map(|note| if work(&note) { with_more(note, wish, follows) } else { note }).collect()
-    }
-
-    /// A tap on the character `id` that stops no run: the note of its wish over the scene `from`
-    /// ([`Today::note_of`]). One wish is open at a
-    /// time. None for a character that is no wish, for a wish core is at work for, and when the note is on show.
-    pub(crate) fn opened(&self, page: Option<&Page>, from: Scene, id: &str) -> Option<Seen> {
-        if busy(&from, id) {
-            return None;
-        }
-        let now = over(&from, self.notes_on_open(page, id)?, false);
-        (now != from).then_some(Seen { from, now })
     }
 }
 

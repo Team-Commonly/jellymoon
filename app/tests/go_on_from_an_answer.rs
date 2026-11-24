@@ -112,10 +112,11 @@ fn a_done_wish_that_changed_nothing_has_the_field_and_enter_there_follows_its_ru
     );
     let text = serde_json::to_string(&opened).unwrap();
     assert!([MORE, CHOICES[0], CHOICES[1], CHOICES[2]].iter().all(|word| !text.contains(word)), "{text}");
-    // Enter: core kept the follow-up after the wish. The note it was typed under has nothing left to choose and
-    // goes: with a field on show the page is in the person's hand, and no look would bring the follow-up's work.
+    // Enter: core kept the follow-up after the wish. The note it was typed under stays, with its field: every
+    // wish keeps its place (ADR 0030), and the follow-up's work comes under its own words whatever is on show.
     assert_eq!(printed[1]["kept"], json!(true), "{}", printed[1]);
-    assert_eq!(note(&scene(&printed[1]["scene"]), &wish_note), None, "{}", printed[1]);
+    let stays = scene(&printed[1]["scene"]);
+    assert_eq!(note(&stays, &wish_note), Some((DONE, &[][..], Some(&field("", &asked)))), "{}", printed[1]);
     let follow = kept(&w, "m2");
     assert_eq!((&follow["said"], &follow["after"]), (&json!(NEXT), &json!(asked)));
     // Looks alone then bring the follow-up's work, with its choices, once the looks an Enter holds are made.
@@ -124,9 +125,9 @@ fn a_done_wish_that_changed_nothing_has_the_field_and_enter_there_follows_its_ru
 }
 
 // The gate of the walk's fix, note 1: a look that lands with a change between Enter and core's answer shows a
-// scene of its own, so the answer's scene is not the one shown. The done note goes all the same.
+// scene of its own, so the answer's scene is not the one shown. The done note stays all the same (ADR 0030).
 #[test]
-fn the_done_note_goes_also_when_a_look_changed_the_page_before_core_answered() {
+fn the_done_note_stays_also_when_a_look_changed_the_page_before_core_answered() {
     let w = ready();
     let asked = ran(&w, "nothing", 0);
     let (wish_note, go) = (format!("wish-{asked}"), w.at("tmp").join("go"));
@@ -140,7 +141,8 @@ fn the_done_note_goes_also_when_a_look_changed_the_page_before_core_answered() {
     let looked = scene(&printed[2]);
     assert!(looked.characters.len() == 2 && note(&looked, &wish_note).is_some(), "the look drew the new wish");
     assert_eq!(printed[3]["kept"], json!(true), "{}", printed[3]);
-    assert_eq!(note(&scene(&printed[3]["scene"]), &wish_note), None, "{}", printed[3]);
+    let stays = scene(&printed[3]["scene"]);
+    assert_eq!(note(&stays, &wish_note), Some((DONE, &[][..], Some(&field("", &asked)))), "{}", printed[3]);
 }
 
 #[test]

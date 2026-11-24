@@ -1,8 +1,8 @@
 //! What a made wish's run is doing while the wish works (live work; `docs/development/app.md`, "A wish at work").
 //! Core keeps the run's steps as they come (`jellymoon_core::doing`); at each drawing of the page they are put
-//! before the person: a few words over each working made wish's little one, and one drawn note of how far the
-//! newest one has come, a track (ADR 0029), in the place of the note that says it is being worked on. That note's
-//! sentences are the track's words, with the stage and the count: on the page when the person taps the picture
+//! before the person: a few words over each working made wish's little one, and for each of them one drawn note
+//! of how far it has come, a track (ADR 0029, ADR 0030), under the words typed for it. The sentences that say the
+//! wish is being worked on are the track's words, with the stage and the count: on the page when the person taps the picture
 //! (`drawing.rs`). Every text is Jellymoon's fixed words: the stage of the newest step's tool and the count, never
 //! a file's name, which core keeps and the page does not draw (a person wants to know how far along it is, not
 //! which file is open). A step is a tool use the run asked for, not proof that it happened. Once the run has
@@ -32,8 +32,8 @@ pub(crate) fn says(steps: Option<&Steps>) -> String {
 }
 
 /// The note of a working wish: a track of core's count of its steps at the stage of the newest, thinking before
-/// the first. No file is drawn. Its words are `going`, the title and the body of the note whose place it takes,
-/// then the stage as a sentence and how many steps came, each only when there is one.
+/// the first. No file is drawn. Its words are `going`, the sentence that the wish is being worked on and the one
+/// that names it, then the stage as a sentence and how many steps came, each only when there is one.
 pub(crate) fn note(wish: &str, steps: Option<&Steps>, going: (&str, &str)) -> Note {
     let newest = steps.and_then(|steps| steps.last.last()).map(stage);
     let count = steps.map_or(0, |steps| steps.count);
@@ -55,8 +55,7 @@ pub(crate) fn note(wish: &str, steps: Option<&Steps>, going: (&str, &str)) -> No
 }
 
 /// The page `shown`, whose last `made` little ones are the day's made wishes, with what each working one's run is
-/// doing: its words over it, and the newest one's track in the place of the note that says the made wishes are
-/// being worked on, when the page has that note. Core is asked only when a made wish is working.
+/// doing: its words over it, and its track, when the page has one. Core is asked only when a made wish is working.
 pub(crate) fn drawn(home: &Path, day: &str, made: usize, shown: &mut Scene) {
     let from = shown.characters.len().saturating_sub(made);
     if shown.characters[from..].iter().any(|one| one.state == State::Busy) {
@@ -65,23 +64,22 @@ pub(crate) fn drawn(home: &Path, day: &str, made: usize, shown: &mut Scene) {
 }
 
 /// [`drawn`] with core's answer given: `doing` is each working wish's steps, as `jellymoon_core::doing` gives them.
+/// Every working made wish has its words over it, and its own track (`steps-<wish>`, which `scene::ruled` put
+/// on the page) with core's count of its own steps. A wish core has no steps for is thinking, with none.
 pub fn tracked(made: usize, shown: &mut Scene, doing: &[(String, Steps)]) {
     let from = shown.characters.len().saturating_sub(made);
     let steps = |id: &str| doing.iter().find(|(wish, _)| crate::scene::drawn_id(wish) == id).map(|(_, steps)| steps);
-    let mut newest = None;
+    let mut working = Vec::new();
     for one in shown.characters[from..].iter_mut().filter(|one| one.state == State::Busy) {
         one.says = says(steps(&one.id));
-        newest = Some(one.id.clone());
+        working.push(one.id.clone());
     }
-    let going = |note: &Note| match note {
-        Note::Plain { title, body } if crate::scene::GOING.contains(&title.as_str()) => {
-            Some((title.clone(), body.clone()))
+    for track in &mut shown.notes {
+        let Note::Drawn { id, words, .. } = track else { continue };
+        let Some(wish) = working.iter().find(|wish| id.strip_prefix(STEPS) == Some(wish.as_str())) else { continue };
+        if let [title, body, ..] = &words[..] {
+            *track = note(wish, steps(wish), (&title.clone(), &body.clone()));
         }
-        _ => None,
-    };
-    let found = shown.notes.iter().enumerate().find_map(|(at, note)| Some((at, going(note)?)));
-    if let (Some(id), Some((at, (title, body)))) = (newest, found) {
-        shown.notes[at] = note(&id, steps(&id), (&title, &body));
     }
 }
 
@@ -129,45 +127,49 @@ mod tests {
         }
     }
 
-    /// A page with a made wish at work, `m1`, the newest, and the note that says so between two others.
+    /// A page with two made wishes at work, `m1` and `m2`, each with its track, between two other notes.
     fn page() -> Scene {
         let plain = |title: &str| Note::Plain { title: title.to_string(), body: "The wish.".to_string() };
-        let busy = sticker_kit::Character { id: "m1".to_string(), state: State::Busy, ..Default::default() };
-        let notes = vec![plain("before"), plain(crate::scene::GOING[0]), plain("after")];
-        Scene { characters: vec![busy], notes, ..Scene::default() }
+        let busy = |id: &str| sticker_kit::Character { id: id.to_string(), state: State::Busy, ..Default::default() };
+        let going = (crate::scene::GOING, "The wish.");
+        let notes = vec![plain("before"), note("m1", None, going), note("m2", None, going), plain("after")];
+        Scene { characters: vec![busy("m1"), busy("m2")], notes, ..Scene::default() }
     }
 
-    // A wish's work is drawn: with no step, one and twelve, the page holds one track with core's count and the
-    // stage of the newest step, in the place of the note that says the wish is being worked on, whose sentences
-    // are its words, and no file's name is anywhere in it.
+    // A wish's work is drawn: with no step, one and twelve, its track has core's count and the stage of the newest
+    // step, its words are the sentences that say the wish is being worked on, and no file's name is anywhere in it.
+    // The other working wish's track is its own: core's count of the other's steps, never this one's.
     #[test]
-    fn a_working_wish_is_one_track_with_core_s_count_in_the_place_of_the_note_that_says_it_works() {
-        let going = [crate::scene::GOING[0], "The wish."];
+    fn every_working_wish_has_its_own_track_with_core_s_count_of_its_own_steps() {
+        let going = [crate::scene::GOING, "The wish."];
         let read = step(Tool::Read, Some("b.txt"));
         let twelve = Steps { count: 12, last: vec![read.clone(), step(Tool::Write, Some("new file.txt"))] };
         let cases = [
             (None, track(0, Stage::Thinking, &going)),
             (Some(Steps::default()), track(0, Stage::Thinking, &going)),
             (
-                Some(Steps { count: 1, last: vec![read] }),
+                Some(Steps { count: 1, last: vec![read.clone()] }),
                 track(1, Stage::Looking, &[going[0], going[1], "Looking around your project.", "1 step so far."]),
             ),
             (Some(twelve), track(12, Stage::Making, &[going[0], going[1], "Making the change.", "12 steps so far."])),
         ];
+        let other = Steps { count: 3, last: vec![read] };
         for (steps, want) in cases {
             let (mut shown, plain) = (page(), page().notes);
-            let doing: Vec<(String, Steps)> = steps.into_iter().map(|steps| ("m1".to_string(), steps)).collect();
-            tracked(1, &mut shown, &doing);
-            assert_eq!(shown.notes, [plain[0].clone(), want, plain[2].clone()], "{doing:?}");
+            let mut doing: Vec<(String, Steps)> = steps.into_iter().map(|steps| ("m1".to_string(), steps)).collect();
+            doing.push(("m2".to_string(), other.clone()));
+            tracked(2, &mut shown, &doing);
+            let theirs = note("m2", Some(&other), (going[0], going[1]));
+            assert_eq!(shown.notes, [plain[0].clone(), want, theirs, plain[3].clone()], "{doing:?}");
             let page = format!("{shown:?}");
             assert!(!page.contains("b.txt") && !page.contains("new file.txt"), "{page}");
         }
-        // No made wish at work, or no such note on the page: nothing changes.
+        // No made wish at work, or no track on the page (one with a clash): no note changes.
         let mut idle = page();
-        idle.characters[0].state = State::Idle;
-        tracked(1, &mut idle, &[]);
+        idle.characters.iter_mut().for_each(|one| one.state = State::Idle);
+        tracked(2, &mut idle, &[("m1".to_string(), other)]);
         let mut bare = Scene { notes: Vec::new(), ..page() };
-        tracked(1, &mut bare, &[]);
+        tracked(2, &mut bare, &[]);
         assert_eq!((idle.notes, bare.notes.len(), bare.characters[0].says.as_str()), (page().notes, 0, THINKING));
     }
 }

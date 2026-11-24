@@ -185,21 +185,22 @@ fn a_tap_on_any_other_little_one_shows_its_wish_s_own_words_and_how_it_stands_an
     let before = w.everything(&repo);
     let acts = ["poke:m2", "poke:m2", "poke:m1", "poke:m2", "poke:me", "poke:m9", "poke:", "choose:wish-m2:0"];
     let showed = w.taps("logs", &acts).showed();
-    let [bare, again, work, back, rest @ ..] = &showed[..] else { panic!("eight acts") };
+    let [bare, again, work, rest @ ..] = &showed[..] else { panic!("eight acts") };
 
     let made = [("wish-m2", "This wish is being worked on.", vec!["“tidy the notes”"], vec![])];
     let bare = bare.as_ref().unwrap();
     assert_eq!(texts(bare), made);
     assert!(again.is_none(), "the note is on show already");
-    // One wish is open at a time: the next tap's note takes the place of this one.
+    // Every wish keeps its place (ADR 0030): the next tap's notes come and this one stays.
     let ids = |scene: &Option<Scene>| {
         texts(scene.as_ref().unwrap()).iter().map(|note| note.0.to_string()).collect::<Vec<_>>()
     };
-    assert_eq!((ids(work), ids(back)), (vec!["work-m1".to_string()], vec!["wish-m2".to_string()]));
-    assert!(rest.iter().all(Option::is_none), "a tap on no wish, and on a note with no choice, show nothing");
+    assert_eq!(ids(work), ["work-m1", "wish-m2"]);
+    assert!(rest.iter().all(Option::is_none), "a tap on a note on show, on no wish, and on no choice, shows nothing");
     // The page under the note is the page as it was.
-    let under = back.as_ref().unwrap();
-    assert_eq!((&under.characters, &under.notes), (&bare.characters, &bare.notes));
+    let under = work.as_ref().unwrap();
+    assert_eq!(under.characters, bare.characters);
+    assert!(bare.notes.iter().all(|note| under.notes.contains(note)), "a note of the page went with the tap");
     assert_eq!((drawn(bare, "m1"), drawn(bare, "m2")), (Some((State::Idle, 1)), Some((State::Busy, 0))));
 
     assert_eq!(w.everything(&repo), before, "a tap wrote something");

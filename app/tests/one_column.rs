@@ -156,7 +156,7 @@ fn one_wish_reads_down_the_column_from_the_typed_words_to_the_kept_change() {
     assert!(cards(&at_once).contains(&"busy-m1"), "{:?}", cards(&at_once));
     assert!(kept != "null", "core's answer is shown");
     let last = placed(last);
-    assert_eq!(cards(&last), ["typed-m1", "said-m1"]);
+    assert_eq!(cards(&last), ["typed-m1", "said-m1"], "core's answer, in the work's place");
     let said = last.iter().find(|piece| piece.kind() == "note" && piece.id() == "said-m1").unwrap();
     assert!(said.said().starts_with("The change was kept."), "{}", said.said());
     one_column(&last, "kept");
@@ -176,7 +176,8 @@ fn the_older_wish_and_all_that_came_of_it_stand_over_the_newer() {
     let lines = w.taps("logs", &["look", "placed", "poke:m1", "placed", "size:960x640", "placed"]).ended();
     let [_, newest, _, both, small] = &lines[..] else { panic!("five lines: {lines:#?}") };
     let newest = placed(newest);
-    assert_eq!(cards(&newest), ["typed-m1", "typed-m2", "work-m2"], "the newest wish's work, under its own words");
+    let all = ["typed-m1", "work-m1", "typed-m2", "work-m2"];
+    assert_eq!(cards(&newest), all, "a look shows the work of both, each under its own words (ADR 0030)");
     for (what, line) in [("both", both), ("small", small)] {
         let page = placed(line);
         let ids = cards(&page);

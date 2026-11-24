@@ -79,12 +79,12 @@ fn a_follow_up_typed_under_work_that_was_kept_is_made_by_core() {
     let note = format!("wish-{wish}");
     let printed = acts(&w, &[format!("poke:{wish}"), format!("type:{note}:{NEXT}")]);
     let kept = (DONE, vec!["“make the uploader retry twice”"], "", vec![], Some((MORE, MORE_HINT)));
-    assert_eq!((quoted(SAID).as_str(), text(&scene(&printed[0]), &note)), (kept.1[0], Some(kept)));
-    // Core kept the follow-up, and the done note goes: its field would hold every look, and the follow-up's
-    // work would never come by itself (`go_on_from_an_answer.rs`).
+    assert_eq!((quoted(SAID).as_str(), text(&scene(&printed[0]), &note)), (kept.1[0], Some(kept.clone())));
+    // Core kept the follow-up, and the done note stays with its field: every wish keeps its place (ADR 0030),
+    // and the follow-up's work comes under its own words (`go_on_from_an_answer.rs`).
     let (taken, shown) = typed(&printed[1]);
     assert!(taken);
-    assert_eq!(text(&shown, &note), None);
+    assert_eq!(text(&shown, &note), Some(kept));
     assert_eq!((&w.wish("m2")["said"], &w.wish("m2")["after"]), (&json!(NEXT), &json!(wish)));
 }
 

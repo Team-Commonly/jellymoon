@@ -100,13 +100,44 @@ fn field_of(scene: &Scene, note: &str) -> Option<(usize, String, bool)> {
     Some((at, working::typed_under(note)?.to_string(), more))
 }
 
+/// The made wish the field of a follow-up is drawn under, of all whose notes carry one on `scene`: the wish
+/// the person tapped last, while a follow-up may be made of it, and else the newest made wish of which one may.
+/// One offer on a page: a field under every wish would not say which wish the next words are for.
+pub(crate) fn offered(scene: &Scene, tapped: Option<&str>) -> Option<String> {
+    let may: Vec<&str> = scene.notes.iter().filter_map(more_of).collect();
+    let newest = || crate::placing::made(scene).iter().rev().map(|one| one.id.as_str()).find(|id| may.contains(id));
+    tapped.filter(|id| may.contains(id)).or_else(newest).map(str::to_string)
+}
+
+/// The wish whose follow-up's field a note carries.
+fn more_of(note: &Note) -> Option<&str> {
+    match note {
+        Note::Text { field: Some(field), .. } | Note::Drawn { field: Some(field), .. } => {
+            field.key.strip_prefix(MORE_KEY)
+        }
+        _ => None,
+    }
+}
+
+/// `scene` as it is drawn: the field of a follow-up under the notes of one wish ([`offered`]) and of no other.
+/// A field to answer a question in is never taken away. A scene on which no made wish has such a field is as
+/// it was.
+pub(crate) fn one_offer(scene: &mut Scene, tapped: Option<&str>) {
+    let Some(wish) = offered(scene, tapped) else { return };
+    for note in &mut scene.notes {
+        if more_of(note).is_some_and(|of| of != wish)
+            && let Note::Text { field, .. } | Note::Drawn { field, .. } = note
+        {
+            *field = None;
+        }
+    }
+}
+
 impl Today {
-    /// A follow-up to the made wish `wish`, typed under the note `note`, by core's `wish_after`, and the asking
-    /// for its run, as a typed wish's. Once core kept it, that note goes when it is the wish's own with nothing
-    /// to choose: its field would keep the page in the person's hand (`working::in_hand`), and no look would
-    /// then put the follow-up's own work on the page when its run ends. A tap on the wish opens the note again.
-    /// It goes where the answer is shown (`OnShow::answered`), whatever a look put on the page meanwhile.
-    fn following(&self, page: Option<&Page>, from: Scene, typed: &str, (note, wish): (&str, &str)) -> Answer {
+    /// A follow-up to the made wish `wish`, by core's `wish_after`, and the asking for its run, as a typed
+    /// wish's. The note it was typed under stays, with its field: the wish keeps its place (ADR 0030), and the
+    /// follow-up is a made wish of its own, with its own track under its own typed words.
+    fn following(&self, page: Option<&Page>, from: Scene, typed: &str, wish: &str) -> Answer {
         let made = jellymoon_core::wish_after(&self.home, Some(&self.date), typed, wish);
         let (said, asking) = match made {
             Ok(made) => (None, Some(self.asking(made.wish.id, made.wish.said))),
@@ -114,7 +145,7 @@ impl Today {
         };
         let mut now = self.again(page, &from);
         wishing::newest(&mut now, said.clone());
-        Answer::of(Seen { from, now }, said, asking).under(note)
+        Answer::of(Seen { from, now }, said, asking)
     }
 
     /// Whether the run of the made wish `wish` waits on `question` now: core keeps a question with a wish only
@@ -168,8 +199,8 @@ impl OnShow {
         let (at, wish, more) = field_of(&self.scene, note)?;
         let (today, page, typed) = (self.today.clone(), self.page.clone(), typed.to_string());
         if more {
-            let (from, note) = (self.scene.clone(), note.to_string());
-            return Some((None, Box::new(move || today.following(page.as_ref(), from, &typed, (&note, &wish)))));
+            let from = self.scene.clone();
+            return Some((None, Box::new(move || today.following(page.as_ref(), from, &typed, &wish))));
         }
         let at_work = working::at_work(&self.scene.notes[at]);
         let asked = std::mem::replace(&mut self.scene.notes[at], at_work);
@@ -199,5 +230,44 @@ mod tests {
         let more = |one| field_of(&crate::scene::bare("2026-03-10", vec![note(one)]), "wish-m1").unwrap().2;
         let all = [("", ""), (MORE, ""), ("Another offer", ""), ("", "more-m1")].map(more);
         assert_eq!(all, [false, true, true, true]);
+    }
+
+    /// A page of the made wishes `m1`, `m2`, `m3`, each of `may` with the field of a follow-up under its note,
+    /// and `m3` with a field to answer in.
+    fn page(may: &[&str]) -> Scene {
+        let who = |id: &str| sticker_kit::Character { id: id.into(), ..Default::default() };
+        let text = |id: String| working::text(id, "", Vec::new(), Vec::new());
+        let note = |wish: &&str| with_more(text(format!("wish-{wish}")), wish, true);
+        let asks = with_question(text("wish-m3".into()), "m3", Some("which?"));
+        let rows = vec![(sticker_kit::Mark::Star, String::new()); 3];
+        let made = Note::Whole { title: crate::scene::MADE.into(), rows };
+        let notes = may.iter().map(note).chain([asks, made]).collect();
+        Scene { characters: ["w1", "m1", "m2", "m3"].map(who).to_vec(), notes, ..Scene::default() }
+    }
+
+    #[test]
+    fn the_offer_is_under_the_wish_tapped_last_and_with_no_tap_under_the_newest_that_may_be_followed() {
+        let both = page(&["m2", "m1"]);
+        assert_eq!(offered(&both, None).as_deref(), Some("m2"), "the newest made wish, whatever the notes' order");
+        assert_eq!(offered(&both, Some("m1")).as_deref(), Some("m1"), "the wish tapped last");
+        // A tap on a wish no follow-up may be made of, or on no made wish, leaves the offer with the newest.
+        assert_eq!(offered(&both, Some("m3")).as_deref(), Some("m2"));
+        assert_eq!(offered(&both, Some("w1")).as_deref(), Some("m2"));
+        assert_eq!((offered(&page(&["m1"]), None).as_deref(), offered(&page(&[]), Some("m1"))), (Some("m1"), None));
+    }
+
+    #[test]
+    fn one_wish_has_the_field_of_a_follow_up_and_a_question_keeps_its_field_always() {
+        let fields = |tapped: Option<&str>| {
+            let mut scene = page(&["m1", "m2"]);
+            one_offer(&mut scene, tapped);
+            let key = |note: &Note| match note {
+                Note::Text { field: Some(field), .. } => Some(field.key.clone()),
+                _ => None,
+            };
+            scene.notes.iter().filter_map(key).collect::<Vec<_>>()
+        };
+        assert_eq!(fields(None), ["more-m2", "answer-m3-which?"]);
+        assert_eq!(fields(Some("m1")), ["more-m1", "answer-m3-which?"]);
     }
 }

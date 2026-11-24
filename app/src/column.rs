@@ -123,6 +123,26 @@ mod tests {
         assert_eq!(ordered, [own, of("m1"), of("m2")].concat(), "the day's own, then the older wish, then the newer");
     }
 
+    // Every wish keeps its place (ADR 0030): a page holds the notes of all its made wishes at once, two at work and
+    // two done, put on the scene interleaved. Each is under its own typed words, and one wish's id that ends
+    // another's (`m1`, `m11`) takes none of the other's notes.
+    #[test]
+    fn the_notes_of_four_wishes_at_once_stand_each_under_its_own_typed_words() {
+        let who = |id: &str| Character { id: id.into(), ..Character::default() };
+        let rows = ["m1", "m2", "m3", "m11"].map(|wish| (Mark::Star, format!("words of {wish}"))).to_vec();
+        let on =
+            ["said-m3", "steps-m11", "kept-m2", "file-2-m1", "steps-m1", "wish-m3", "told-m2", "work-m1", "told-m1"];
+        let notes = on.iter().map(|id| text(id)).chain([Note::Whole { title: MADE.into(), rows }]).collect();
+        let scene = Scene { characters: ["w1", "m1", "m2", "m3", "m11"].map(who).to_vec(), notes, ..Scene::default() };
+        let want = [
+            ["typed-m1", "steps-m1", "told-m1", "work-m1", "file-2-m1"].as_slice(),
+            &["typed-m2", "told-m2", "kept-m2"],
+            &["typed-m3", "wish-m3", "said-m3"],
+            &["typed-m11", "steps-m11"],
+        ];
+        assert_eq!(ids(&column(&scene)), want.concat());
+    }
+
     #[test]
     fn the_typed_words_are_the_person_s_and_a_scene_with_no_made_wish_is_as_it_was() {
         let ordered = column(&day(Vec::new()));

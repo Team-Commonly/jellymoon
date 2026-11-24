@@ -220,16 +220,15 @@ fn a_question_a_kept_page_file_gives_a_wish_of_the_reading_is_not_drawn_and_has_
     assert!(tree(&w.at("jm")) == before, "an Enter under a wish of the reading reached core");
 }
 
-/// The first two notes a printed scene holds: the title of the first and the id of the second.
-fn first_two(printed: &serde_json::Value) -> (&str, &str) {
-    let notes = &printed["scene"]["notes"];
-    (notes[0]["title"].as_str().unwrap_or(""), notes[1]["id"].as_str().unwrap_or(""))
+/// The title of the first note a printed scene holds.
+fn first(printed: &serde_json::Value) -> &str {
+    printed["scene"]["notes"][0]["title"].as_str().unwrap_or("")
 }
 
-// The review of F54's notes, note 1: during the wait another little one is tapped, which takes the wish's note
-// off the page. A refusal then has no note to put the question back into, and puts it under what core said.
+// The review of F54's notes, note 1: during the wait another little one is tapped. Every wish keeps its place
+// (ADR 0030), so the wish's note stays, and a refusal puts the question back into it, under what core said.
 #[test]
-fn a_refused_answer_whose_wish_is_no_longer_open_is_put_under_the_refusal_with_its_question_and_its_field() {
+fn a_refused_answer_given_while_another_wish_was_opened_has_its_question_and_its_field_back_in_its_note() {
     let w = ready();
     let wish = w.ran("asks", 0, "asks");
     let other = w.wishes();
@@ -239,30 +238,31 @@ fn a_refused_answer_whose_wish_is_no_longer_open_is_put_under_the_refusal_with_i
     acts.push("answer");
     let printed = acted(&w, &acts);
     let between = super::scene(&printed[2]);
-    assert!(text(&between, &note).is_none() && text(&between, &format!("wish-{other}")).is_some(), "{}", printed[2]);
+    assert!(text(&between, &note).is_some() && text(&between, &format!("wish-{other}")).is_some(), "{}", printed[2]);
     let (kept, shown) = typed(&printed[3]);
     assert_eq!((kept, plain(&shown).first().map(|said| said.0)), (false, Some(UNANSWERED)));
     assert_eq!(text(&shown, &note), Some(asks(QUESTION)), "the words typed have no field to stay in");
     assert_eq!(key(&shown, &note), Some(answer_key(&wish, QUESTION).as_str()));
-    // The second review of F54's notes, note 1: the refusal is the page's first note, and the question is the
-    // note directly under it, as where the scene did not change during the wait.
-    assert_eq!(first_two(&printed[3]), (UNANSWERED, note.as_str()), "{}", printed[3]);
-    // An answer that was given has no words to keep: the wish that went off the page is left to the next look,
-    // also when its run asks again and its note has a field to answer in.
+    // The second review of F54's notes, note 1: the refusal is the page's first note. The question is in its
+    // wish's own note, which the column puts under that wish's typed words.
+    assert_eq!(first(&printed[3]), UNANSWERED, "{}", printed[3]);
+    // An answer that was given has no words to keep. The wish's note kept its place, so when its run asks
+    // again the question and its field are in it (before, the note was off the page and waited for a look).
     w.plays("asks", 11);
     let acts = [format!("poke:{wish}"), format!("enter:{note}:{ANSWER}"), format!("poke:{other}")];
     let mut acts: Vec<&str> = acts.iter().map(String::as_str).collect();
     acts.push("answer");
     let printed = acted(&w, &acts);
     let (kept, shown) = typed(&printed[3]);
-    assert!(kept && text(&shown, &note).is_none() && text(&shown, &format!("work-{wish}")).is_none(), "{}", printed[3]);
+    assert!(kept && text(&shown, &format!("work-{wish}")).is_none(), "{}", printed[3]);
+    assert!(key(&shown, &note).is_some_and(|key| key.starts_with("answer-")), "{}", printed[3]);
 }
 
 // The second review of F54's notes, note 4: only a note with a field to answer in is put under the refusal.
-// Here the run ended, so the wish's note is its work, with nothing to answer in: a wish the person closed is
-// not opened again.
+// Here the run ended, so the wish's note is its work, with nothing to answer in: the refusal brings back no
+// question and no field. (The stale note left on the page stays where it is: every wish keeps its place.)
 #[test]
-fn a_refused_answer_whose_run_asks_no_more_does_not_open_again_a_wish_that_went_off_the_page() {
+fn a_refused_answer_whose_run_asks_no_more_brings_no_question_and_no_field_back() {
     let w = ready();
     let wish = w.ran("edits", 0, "completed");
     let other = w.wishes();
@@ -276,9 +276,10 @@ fn a_refused_answer_whose_run_asks_no_more_does_not_open_again_a_wish_that_went_
     acts.push("answer");
     let printed = acted(&w, &acts);
     let (kept, shown) = typed(&printed[2]);
-    // Core's refusal is the first note, and the note the person opened meanwhile is the one under it.
-    assert_eq!((kept, first_two(&printed[2])), (false, (UNANSWERED, format!("wish-{other}").as_str())));
-    assert!(text(&shown, &note).is_none() && text(&shown, &format!("work-{wish}")).is_none(), "{}", printed[2]);
+    // Core's refusal is the first note, and the note the person opened meanwhile is on the page.
+    assert_eq!((kept, first(&printed[2])), (false, UNANSWERED));
+    assert!(text(&shown, &format!("wish-{other}")).is_some(), "{}", printed[2]);
+    assert!(key(&shown, &note).is_none(), "no field to answer in comes back: {}", printed[2]);
 }
 
 // The review of F54's notes, note 2: the look after core's error cannot read the day. That is no proof the

@@ -440,7 +440,9 @@ max_file_lines = 400
 # itself kept nothing, written with the run's record and read back (`run/keep/itself.rs`, `run/record.rs`), and
 # the waiting note that says it, with its tests (`run/waits/unfit.rs`, 92; `run/keep/tests.rs`, 19).
 # Before a note says a clash the keep is asked once more (`run/waits/unfit.rs`, `still`): 14.
-"crates/jellymoon-core" = 19740
+# True words on the page raised it by 17 (20 added, 3 removed): the answer that a wish was made again as it is
+# said once that wish is worked on no more, with its test (`run/waits/again.rs`, 16), and a doc line.
+"crates/jellymoon-core" = 19757
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -1115,7 +1117,11 @@ max_file_lines = 400
 # window (`tests/a_change_that_no_longer_fits.rs`, 70) and the world where a change is kept by itself (6).
 # The app draws that state where core says the work did not fit: 1.
 # Its test at the made-up window, of a change that fits again once the other was undone: 17.
-"app" = 19509
+# True words on the page raised the app by 185 (211 added, 26 removed): the answer of `Make it again` kept with
+# its new wish and drawn for afterwards (`src/again.rs`, 62; `src/working.rs`, 6; `src/drawing.rs`, 9), the note
+# of an empty day not drawn while a wish is read (`src/shaping.rs`, 15; `src/drawing.rs`, 3), and their tests at
+# the made-up window (`tests/shape_first.rs`, 74; `tests/a_change_that_no_longer_fits.rs`, 14).
+"app" = 19694
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

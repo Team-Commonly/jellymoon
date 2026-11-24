@@ -205,7 +205,8 @@ fn a_wish_made_by_an_enter_or_by_core_s_answer_to_a_choice_tucks_the_settled_wis
     // Core's answer to a choice that made no wish tucks nothing away. One that made a wish (`Make it again`)
     // tucks every settled wish away but the answered one, and a sharper wish gone with, which is of no wish, all.
     let worked = |now: &Scene, wish: &str| {
-        Ended::Worked(crate::working::Worked { seen: seen(now), wish: wish.to_string(), notes: Vec::new() })
+        let (wish, notes) = (wish.to_string(), Vec::new());
+        Ended::Worked(crate::working::Worked { seen: seen(now), wish, notes, remade: None })
     };
     shown.ended(worked(&before, "m2"));
     assert_eq!(on(&shown, &before), ["kept-m1", "wish-m2"]);

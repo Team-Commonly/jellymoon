@@ -74,8 +74,9 @@ pub(super) struct Record {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub back: Option<String>,
     /// Why the run's change was not kept by itself when the run ended (`keep/itself.rs`; ADR 0030, decision 10):
-    /// core's typed reason, by its name, and never a sentence. It is the run's end's: nothing asks the repo for
-    /// it again, and a later keep leaves it. None of a change that was kept by itself, in a record from before
+    /// core's typed reason, by its name, and never a sentence. It is the run's end's: a later keep leaves it,
+    /// and nothing writes it again. Where it says a clash, a note that is read asks the keep once more before
+    /// it says so (`waits/unfit.rs`, `still`), as the folder may have changed since. None of a change that was kept by itself, in a record from before
     /// it was written, and of a name this build does not know. It chooses what a page says of work that waits
     /// and offers under it (`waits/unfit.rs`), and nothing a keep does.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::keep::known")]

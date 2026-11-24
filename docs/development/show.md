@@ -379,8 +379,10 @@ word of the agent's or a word of git's, and neither a refusal nor an answer hold
 ## Work that waits: `jellymoon run waiting`
 
 A page asks which made wishes have work for the person to look at, and what to say of each (F47,
-`crates/jellymoon-core/src/run/waits.rs`). `jellymoon run waiting [--date] [--repo] [--logs] [--skip]` prints it,
-and writes nothing:
+`crates/jellymoon-core/src/run/waits.rs`). `jellymoon run waiting [--date] [--repo] [--logs] [--skip]` prints it.
+It writes nothing of a wish's, and nothing at all but for a wish whose record says a clash: there the reading
+asks the keep once more, as `run keep --ask` does ("Work that did not fit when its run ended", below), which
+takes the keeps' lock, can wait for a keep at work in the same home, and leaves an unnamed tree in the store.
 
 ```json
 {"day":"2026-03-10","waits":[{"wish":"m1","run":"r0123456789abcdef","said":"make the uploader retry twice","read":true,"made":1,"changed":1,"removed":1,"names":["CLAUDE.md","a.txt","b.txt"],"more":0,"obeyed":["CLAUDE.md"],"plain":true,"why":"the work of run r0123456789abcdef waits: files made 1, changed 1, removed 1"},{"wish":"m3","run":"rfedcba9876543210","said":"tidy the notes","read":false,"made":0,"changed":0,"removed":0,"names":[],"more":0,"obeyed":[],"plain":true,"why":"no folder of the name the wish gives was typed in on 2026-03-10; name the folder with --repo"}],"follows":["m1","m2"]}
@@ -487,7 +489,9 @@ and writes nothing:
   longer fits"; ADR 0030, decision 10). The words said of each end are core's (`run/waits/again.rs`): a wish
   that was not made is told as a typed wish is, and then "The change that does not fit was not thrown away.";
   after the toss, done or refused, "Your wish was made again, and it is being worked on.", or what a typed
-  wish that was kept and has no run is told.
+  wish that was kept and has no run is told. Core also says the first of these as it stands once the new wish
+  is worked on no more (`WorkDone::remade_since`): the same answer ending "Your wish was made again." Which
+  wish that is, and when it has ended, is the shell's to know.
 - **Work that did not fit when its run ended** (`run/waits/unfit.rs`). When a run ends and the keep by itself
   keeps nothing, core writes its typed reason with the run's record ([keep.md](keep.md), "Kept by itself":
   `unkept`). `Waits` carries it, and `run waiting` does not print it. For `Clash` and no other reason, the

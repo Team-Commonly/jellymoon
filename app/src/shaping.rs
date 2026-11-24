@@ -33,6 +33,18 @@ pub(crate) fn names(id: &str) -> bool {
     [SHAPING, SAID, SHAPE].contains(&id)
 }
 
+/// Whether an Enter in the entry was taken for a wish that the scene holds unsettled: the wish is being read,
+/// or its sharper wish waits for a choice. A page does not say then that nothing was wished for
+/// (`drawing::passed`), whatever drew the scene again meanwhile.
+pub(crate) fn taken(scene: &Scene) -> bool {
+    scene.notes.iter().any(|note| id_of(note).is_some_and(names))
+}
+
+/// Whether a note is the one that says the day has no wish.
+pub(crate) fn nothing(note: &Note) -> bool {
+    matches!(note, Note::Plain { title, .. } if title == crate::scene::NOTHING)
+}
+
 fn text(id: &str, title: &str, quoted: String, options: &[&str]) -> Note {
     let options = options.iter().map(|option| option.to_string()).collect();
     Note::Text { id: id.to_string(), title: title.to_string(), body: Vec::new(), options, quoted, field: None }
@@ -90,6 +102,9 @@ impl OnShow {
             _ => None,
         })?;
         settle(&mut self.scene, Vec::new());
+        // The wish is kept only by the work below: until its answer draws the page again, the scene does not
+        // say that nothing was wished for.
+        self.scene.notes.retain(|note| !nothing(note));
         let (today, page, from) = (self.today.clone(), self.page.clone(), self.scene.clone());
         let work = move || {
             let why = match jellymoon_core::wish_of_shape(&today.read(), &said, index == 0) {
@@ -99,7 +114,7 @@ impl OnShow {
             let mut now = today.again(page.as_ref(), &from);
             newest(&mut now, why.clone());
             let notes = why.map(|(title, body)| Note::Plain { title: title.to_string(), body });
-            Worked { seen: Seen { from, now }, wish: String::new(), notes: notes.into_iter().collect() }
+            Worked { seen: Seen { from, now }, wish: String::new(), notes: notes.into_iter().collect(), remade: None }
         };
         Some((self.scene.clone(), Box::new(work)))
     }

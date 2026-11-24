@@ -123,6 +123,14 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     changed or written), and work a keep would land now has the waiting note again, with `Keep it`. A note
     is read at the moments of decision 6, not at every look. The picture of such work is the kit's `unfit`:
     waiting work with its arrow barred and "does not fit your folder".
+
+    Amended again 2026-11-24: the answer under the old wish ended "Your wish was made again, and it is being
+    worked on.", and decision 11 keeps that answer on the page until the next wish is made, so it said so
+    long after the new wish's run had ended. The new wish's id is now kept with the answer where it is made,
+    with core's words for the same answer afterwards, and once that wish is at work no more the answer is
+    drawn ending "Your wish was made again." (`app/src/again.rs`). The sentence is made shorter and not taken
+    away: a second wish with the same words is on the page, and the answer is what says why. No sentence is
+    matched, nothing is asked of core for it, and neither decision 6 nor decision 11 changes.
 11. **Finished wishes tuck away.** Decision 2 put the notes of every ended wish on the page at once. After
     three wishes the column was several screens of cards, most of them about wishes that need nothing from
     the person, and the wish being made was under all of them. So a made wish that is settled has none of
@@ -177,7 +185,8 @@ answer and two bare bubbles, and could not tell that the other two had finished.
   a sharper wish the old one was made with is not carried over, and a follow-up is made again as a wish of its
   own. A wish that was kept and whose run could not be started stays kept, with the old work tossed; that end
   was not run in a test. The choice stays on the page after the folder changed again, and core does not ask git
-  once more whether the change still does not fit before it says the wish's words.
+  once more whether the change still does not fit before it says the wish's words. Which answer speaks of
+  which new wish is the window's own state: a window opened later has no such answer on its page at all.
 - Work that did not fit when its run ended has a picture of its own (the kit's `Kept::Unfit`: waiting work with
   its arrow barred and the caption "does not fit your folder"), since a drawn note places none of its words
   while it is closed. The two sentences are still read only after a tap on the picture or on `?`. Nobody has

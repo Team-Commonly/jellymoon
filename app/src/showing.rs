@@ -252,7 +252,8 @@ impl Showing {
     pub fn ended(&self, ended: Ended) -> Option<Scene> {
         self.with(|on| match ended {
             Ended::Stopped(stopped) => on.stopped(stopped),
-            Ended::Worked(worked) => {
+            Ended::Worked(mut worked) => {
+                self.3.remade(worked.remade.take());
                 let wish = worked.wish.clone();
                 let fresh = made(&worked.seen.now).len() > made(&worked.seen.from).len();
                 let scene = self.3.showed(on.worked(worked));

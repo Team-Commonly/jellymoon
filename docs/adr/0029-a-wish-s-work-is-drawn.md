@@ -52,12 +52,19 @@ be shown as the pictures, with the words there for whoever wants them.
 8. **The print is open.** `layout`, the made-up window's `placed` and the walk's check of what is placed have no
    tap to ask for words with, so they print every drawn note open, with the told note. What a closed page places
    is proved at `drawing::column` and the kit's own layout.
+9. **A change kept by itself is its sheets in the folder.** Joined with ADR 0028: the note `kept-<wish>` is a
+   drawn note, `Sheets` in the state `In`, with core's counts, core's one choice (`Undo it`, or none under later
+   commits) and core's title and lines as its words; closed, what its run says it did is folded as it is for
+   work that waits. This needs no sentence compared: core's answer of where the change stands is typed
+   (`KeptItself`, `Stands`). Where core says the folder stands somewhere else by now, or the change was not
+   read, the note stays sentences and the told note stays beside it: a picture of sheets in the folder would
+   claim more than core does.
 
 ## Open
 
-- **A done keep or toss is still said in words.** Core's answer to a tap is not typed: it is `WorkDone::Said` for
+- **A keep or a toss done by a tap is still said in words.** Core's answer to a tap is not typed: it is `WorkDone::Said` for
   a done keep, a done toss and a refusal alike, and the app must not tell them apart by their sentences. The
-  picture's `In` and `Tossed` states wait for a typed answer from core.
+  picture's `Tossed` state, and `In` for a keep by a tap, wait for a typed answer from core.
 - **No step's file is drawn.** Core keeps the names; the track's `file` stays empty until a rule says which name
   a page may show.
 - **`Bars` has no data.** Core counts no lines.

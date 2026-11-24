@@ -59,3 +59,11 @@ The app's cap went from 17078 to 17616 (538 lines of Rust, 228 of them `src/draw
 - `layout` prints the page with every picture open, which is not what a window first shows.
 - A page with a clash has no track, as it had no note that the wish is being worked on.
 - macOS only; Windows and Linux were not run.
+
+## Joined with F92 (kept by itself)
+- The note `kept-<wish>` of a change kept by itself is drawn too: `Sheets` in the state `In`, core's counts and
+  `Undo it`; closed, the told note is folded. Only while core says the folder has the change and it was read;
+  otherwise it is the text note it was (`landing::kept_note`, test in `src/drawing/tests.rs`, seen red first).
+- Core: `Stands` is re-exported (two lines, no rule changed) so the app can ask where a kept change stands.
+- F92's page test reads a drawn note as F47's does.
+- Caps: the app 17868 (the two sums, 4 for the test's reader, 57 for the drawn kept note), core 19412.

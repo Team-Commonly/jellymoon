@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use jellymoon_core::{Waits, WorkDone, WorkTap};
+use jellymoon_core::{KeptItself, Stands, Waits, WorkDone, WorkTap};
 use sticker_kit::{
     BundledMeasure, Character, Mark, PICTURE_PLACE, PieceKind, Placed, Theme, ToldRow, Viewport, layout, print,
 };
@@ -171,6 +171,36 @@ fn a_told_note_beside_a_text_note_of_its_wish_or_alone_is_placed() {
     // Another wish's closed work folds only its own told note.
     let (told, _) = seen(&open.column(&page(vec![told("m2", ""), work()])), "told-m2");
     assert!(told);
+}
+
+// A change kept by itself is its sheets in the folder, while core says the folder has it: core's counts, core's
+// words and core's one choice, and what its run says behind the same tap. Under later commits it is drawn with no
+// choice. Where the folder stands elsewhere, or the change was not read, it stays sentences, with the told note.
+#[test]
+fn a_change_kept_by_itself_is_drawn_in_the_folder_only_while_core_says_the_folder_has_it() {
+    let here = KeptItself { waits: waits(), stands: Stands::Here };
+    let note = crate::landing::kept_note(&here);
+    let Note::Drawn { id, picture, words, options, .. } = &note else { panic!("a drawn note: {note:?}") };
+    assert_eq!((id.as_str(), options), ("kept-m1", &vec!["Undo it".to_string()]));
+    assert_eq!(*picture, Picture::Sheets { made: 3, changed: 1, removed: 1, state: Kept::In });
+    assert_eq!(words, &[vec![here.title().to_string()], here.lines()].concat());
+    let scene = page(vec![told("m1", ""), note.clone()]);
+    let open = Open::default();
+    let (told_closed, print) = seen(&open.column(&scene), "told-m1");
+    assert!(!told_closed && print.contains("Undo it") && !print.contains(here.title()), "{print}");
+    assert!(open.tapped(&scene, "kept-m1"));
+    let (told_open, print) = seen(&open.column(&scene), "told-m1");
+    assert!(told_open && print.contains(DID), "{print}");
+
+    let past = crate::landing::kept_note(&KeptItself { stands: Stands::Past, ..here.clone() });
+    assert!(matches!(&past, Note::Drawn { options, .. } if options.is_empty()), "{past:?}");
+    let unread = Waits { read: false, ..waits() };
+    for stays in [KeptItself { stands: Stands::Elsewhere, ..here.clone() }, KeptItself { waits: unread, ..here }] {
+        let note = crate::landing::kept_note(&stays);
+        assert!(matches!(&note, Note::Text { id, .. } if id == "kept-m1"), "{note:?}");
+        let (told_beside, _) = seen(&Open::default().column(&page(vec![told("m1", ""), note])), "told-m1");
+        assert!(told_beside);
+    }
 }
 
 // An id that leaves the page leaves the set; and what `Show me` brings opens the note it was asked of.

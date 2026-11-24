@@ -31,7 +31,7 @@ mod uninstall;
 mod wish;
 
 pub use command::{installed_command, turn_on_delivery};
-pub use copy::{Outcome, RunCopy, clean_copy, make_copy};
+pub use copy::{Outcome, RunCopy, Stands, clean_copy, make_copy};
 pub use error::Error;
 pub use find::{HarnessFound, How, harness_found, own_folder, user_home};
 pub use hear::{

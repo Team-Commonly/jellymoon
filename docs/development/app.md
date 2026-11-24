@@ -748,6 +748,12 @@ anywhere else it is titled "This change was put in your folder earlier." and has
 ([keep.md](keep.md#where-a-kept-change-stands)). A change that was not kept by itself has the work's note as before, whose first line says that it waits
 for a yes. Every word and every rule is core's (`run/waits/itself.rs`, `run/undo.rs`).
 
+While core says the folder has the change (at its commit, or under later ones) and its files were read, the
+note is drawn (ADR 0029): the change's sheets in the folder, core's counts, and `Undo it` under the picture
+when core names it. Its title and lines, and what its run says it did, come with a tap on the picture or its
+`?`, as for work that waits. Titled "This change was put in your folder earlier.", or not read, it is a text
+note with the told note beside it (`landing::kept_note`).
+
 Tests: `app/tests/kept_by_itself.rs`, in worlds that say a finished change is kept by itself
 (`support/worked.rs`, `landed`); every other test's world says that every change waits.
 

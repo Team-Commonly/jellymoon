@@ -37,8 +37,8 @@ fn texts(scene: &Option<Scene>) -> Vec<Text<'_>> {
             Note::Text { id, title, body, options, .. } => {
                 Some((id.as_str(), title.as_str(), strs(body), strs(options)))
             }
-            // Work that waits is drawn: its first word is its title, and the rest its lines.
-            Note::Drawn { id, words, options, .. } if id.starts_with("work-") => {
+            // Work that waits and a change the folder has are drawn: the first word is the title, the rest lines.
+            Note::Drawn { id, words, options, .. } => {
                 Some((id.as_str(), words.first()?.as_str(), strs(&words[1..]), strs(options)))
             }
             _ => None,

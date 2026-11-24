@@ -18,6 +18,7 @@ use std::rc::Rc;
 use jellymoon_core::Waits;
 use sticker_kit::{Field, Kept, Note, Picture, Scene};
 
+use crate::landing::KEPT;
 pub use crate::live::tracked;
 use crate::told::{TOLD, rows_shown};
 use crate::working::{FILE, WORK};
@@ -49,6 +50,11 @@ pub(crate) fn held(note: &Note) -> Option<(&[String], &[String], Option<&Field>)
     }
 }
 
+/// The wish whose finished work the drawn note `id` is: work that waits, or a change kept by itself.
+fn wish_of(id: &str) -> Option<&str> {
+    id.strip_prefix(WORK).or_else(|| id.strip_prefix(KEPT))
+}
+
 fn drawn_ids(scene: &Scene) -> impl Iterator<Item = &str> {
     scene.notes.iter().filter_map(|note| match note {
         Note::Drawn { id, .. } => Some(id.as_str()),
@@ -62,11 +68,11 @@ pub fn every(scene: &Scene) -> BTreeSet<String> {
 }
 
 /// The scene as it is drawn while the drawn notes whose ids are in `open` are open: each drawn note open or
-/// closed by that, and no `told-<wish>` while the drawn `work-<wish>` is on the scene and closed. Where a wish's
-/// work is not a drawn note (a question, a keep asked once more) its told note stays.
+/// closed by that, and no `told-<wish>` while the drawn `work-<wish>`, or the drawn `kept-<wish>` of a change kept
+/// by itself, is on the scene and closed. Where a wish's work is not a drawn note (a question, a keep asked once
+/// more, a kept change the folder no longer shows) its told note stays.
 pub fn pass(scene: &Scene, open: &BTreeSet<String>) -> Scene {
-    let closed: Vec<&str> =
-        drawn_ids(scene).filter(|id| !open.contains(*id)).filter_map(|id| id.strip_prefix(WORK)).collect();
+    let closed: Vec<&str> = drawn_ids(scene).filter(|id| !open.contains(*id)).filter_map(wish_of).collect();
     let folded = |note: &Note| match note {
         Note::Told { id, .. } => id.strip_prefix(TOLD).is_some_and(|wish| closed.contains(&wish)),
         _ => false,

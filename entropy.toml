@@ -431,7 +431,8 @@ max_file_lines = 400
 # F92's gate raised it by 130: an undo proves its record against the repo, spares what git ignores below a
 # folder that becomes a file again, and a page is told where a kept change stands now (`copy/keep/undo.rs`,
 # `copy/keep/fits.rs`, `run/waits/itself.rs`).
-"crates/jellymoon-core" = 19410
+# Joined with F92, the drawn work raised it by 2: where a kept change stands (`Stands`) is a name the app may use.
+"crates/jellymoon-core" = 19412
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -1068,7 +1069,9 @@ max_file_lines = 400
 # tests (`tests/kept_by_itself.rs`).
 # F92's gate raised it by 25: its test of the notes that have no `Undo it` (`tests/kept_by_itself.rs`).
 # Joined with F92, the drawn work raised it by 4: the arm of F92's page test that reads a drawn note of work.
-"app" = 17811
+# A change kept by itself is drawn raised it by 57: its note as sheets in the folder (`src/landing.rs`, 17), the
+# told note folded while it is closed (`src/drawing.rs`, 6), and its test (`src/drawing/tests.rs`, 34).
+"app" = 17868
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

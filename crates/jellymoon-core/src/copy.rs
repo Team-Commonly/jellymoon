@@ -32,8 +32,9 @@ pub(crate) use clean::{as_made, drop_copy, end_copy, moved};
 pub(crate) use fresh::{fresh_repo, git_on_path};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
+pub use keep::Stands;
 pub(crate) use keep::{
-    Back, Branch, How, Keep, LOOSE, Left, Note, Stands, Stays, Touched, Unkept, Untossed, alone, keep, nameable, runs,
+    Back, Branch, How, Keep, LOOSE, Left, Note, Stays, Touched, Unkept, Untossed, alone, keep, nameable, runs,
     stands_now, swept, toss, undo,
 };
 use record::{Record, write};

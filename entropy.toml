@@ -1102,7 +1102,8 @@ max_file_lines = 400
 # Finished wishes tuck away raised the app by 372: which wishes are settled and tucked away, with its tests
 # (`src/drawing/tucked.rs`, 175), its test at the made-up window (`tests/finished_wishes_tuck_away.rs`, 106), the
 # pass and the window's state that apply it (`src/drawing.rs`, 30; `src/showing.rs`, 18) and their test (43).
-"app" = 19398
+# A wish with no note on the scene yet is not tucked away when a wish is kept: 15 (`src/drawing/tucked.rs`).
+"app" = 19413
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

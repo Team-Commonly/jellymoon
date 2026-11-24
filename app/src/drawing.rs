@@ -117,14 +117,14 @@ impl Open {
     /// but the newest, so a day's page opens on the last wish's result and on what still waits for the person.
     pub(crate) fn opening(scene: &Scene) -> Self {
         let open = Open::default();
-        open.made(scene, crate::placing::made(scene).last().map(|one| one.id.as_str()));
+        open.2.tuck(scene, crate::placing::made(scene).last().map(|one| one.id.as_str()), false);
         open
     }
 
     /// A new made wish was kept, and `scene` is on show: every settled made wish tucks away (`Tucked::tuck`),
     /// but `but`, the wish core's answer is under, when the new wish was made from one.
     pub(crate) fn made(&self, scene: &Scene, but: Option<&str>) {
-        self.2.tuck(scene, but);
+        self.2.tuck(scene, but, true);
     }
 
     /// [`column`] of `scene` with what is open now, the offer of a follow-up under the wish tapped last, and

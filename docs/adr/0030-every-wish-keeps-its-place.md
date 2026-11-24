@@ -130,8 +130,10 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     - *When.* When a new made wish is kept: an Enter in the entry or in a follow-up's field
       (`Showing::answered`, an answer that asks for a run), and core's answer to a choice that made a wish
       (`Showing::ended`: a sharper wish gone with, `Make it again`, where the wish the answer is under
-      stays, so that answer is read). Every wish that is settled then is tucked away. And when the window
-      opens on a day that has made wishes: every settled wish but the newest.
+      stays, so that answer is read). Every wish that is settled then is tucked away, but one that ended
+      since the last look and has no note on the scene yet: its result was never drawn, so it stays until
+      the wish after. And when the window opens on a day that has made wishes: every settled wish but the
+      newest.
     - *Why at the making of the next wish, and not when a wish settles.* A wish settles by itself: its run
       ends, its change lands. Tucked away then, the result of what the person asked for would go from the
       page as it came. It stays until they ask for the next thing, which is when they have stopped

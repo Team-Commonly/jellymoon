@@ -42,9 +42,12 @@ impl Tucked {
     /// Every made wish of `scene` that is settled is tucked away, but the wish `but`. It is asked when a new made
     /// wish is kept, and when the window opens, with the newest made wish as `but`. A wish that settles between
     /// those moments stays on the page: a person sees the result of what they asked for until they ask again.
-    pub(crate) fn tuck(&self, scene: &Scene, but: Option<&str>) {
+    /// With `drawn`, as when a wish is kept, so does a wish that ended since the last look and has no note on
+    /// `scene` yet: its result was never drawn. A window that opens has drawn nothing, and asks without it.
+    pub(crate) fn tuck(&self, scene: &Scene, but: Option<&str>, drawn: bool) {
         let ids = made(scene).iter().map(|one| &one.id);
-        let away = ids.filter(|id| Some(id.as_str()) != but && settled(scene, id));
+        let seen = |id: &&String| !drawn || scene.notes.iter().any(|note| any_of(note, id));
+        let away = ids.filter(|id| Some(id.as_str()) != but && settled(scene, id)).filter(seen);
         self.0.borrow_mut().extend(away.cloned());
     }
 
@@ -140,9 +143,9 @@ mod tests {
     fn settled_wishes_tuck_away_when_asked_and_one_that_is_settled_no_more_comes_back_and_stays() {
         let (scene, tucked) = (day(Vec::new()), Tucked::default());
         assert_eq!(tucked.away(&scene), set(&[]), "a wish that is settled stays until a wish is made");
-        tucked.tuck(&scene, Some("m2"));
+        tucked.tuck(&scene, Some("m2"), true);
         assert_eq!(tucked.away(&scene), set(&["m1"]), "every settled wish but the one named, and no unsettled one");
-        tucked.tuck(&scene, None);
+        tucked.tuck(&scene, None, true);
         assert_eq!(tucked.away(&scene), set(&["m1", "m2"]));
         // The first wish's work waits again: it is shown by itself, and stays shown when it has settled.
         let waits = day(vec![note("work-m1", &["Keep it"])]);
@@ -150,6 +153,16 @@ mod tests {
         // A scene that does not hold a wish says nothing of it.
         assert_eq!(tucked.away(&Scene::default()), set(&["m2"]));
         assert!(tucked.back("m2") && !tucked.back("m2") && tucked.away(&scene).is_empty());
+    }
+
+    #[test]
+    fn a_wish_that_ended_with_no_note_on_the_scene_yet_is_not_tucked_away() {
+        let (mut scene, tucked) = (day(Vec::new()), Tucked::default());
+        scene.notes.retain(|note| !crate::working::of(note, "m1"));
+        tucked.tuck(&scene, None, true);
+        assert_eq!(tucked.away(&scene), set(&["m2"]), "the first wish's result was never on the page");
+        tucked.tuck(&scene, None, false);
+        assert_eq!(tucked.away(&scene), set(&["m1", "m2"]), "a window that opens has drawn nothing yet");
     }
 
     #[test]

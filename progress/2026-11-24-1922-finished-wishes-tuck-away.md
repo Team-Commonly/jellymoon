@@ -71,3 +71,10 @@ tests. Deleted: nothing.
 - A tucked wish's notes are still made again from core at the moments of ADR 0030, decision 6.
 - The tap that brings a wish back does not open its drawn note; a second tap does. Nobody has seen whether
   that reads well.
+
+## After the review
+A review by reading passed the commit and found one moment a person can come to, closed in a second commit: a
+wish whose run ended in the second before the next Enter is idle in the scene of that Enter's answer with no
+result note yet, and was tucked away unseen. `Tucked::tuck` now takes `drawn`: when a wish is kept, a settled
+wish with no note on the scene stays; a window that opens has drawn nothing and tucks as before. Test, seen red
+first: `a_wish_that_ended_with_no_note_on_the_scene_yet_is_not_tucked_away`. The app's cap 19398 to 19413.

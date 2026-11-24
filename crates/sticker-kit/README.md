@@ -79,7 +79,7 @@ It places nothing for a theme whose column is under 160 design pixels wide.
 
 Three things about an entry are told apart by more than a shade, and each is
 a key of the theme's `[palette]`: the hint is a grey (`entry_hint`, also the
-words of an entry that waits), the chosen chip is filled (`chip_chosen`, its
+words an entry keeps aside for its answer), the chosen chip is filled (`chip_chosen`, its
 name in `chip_chosen_ink`), and the field that has the keys has a ring, a
 line darker than that fill (`entry_ring`; `entry_edge` without the keys), calm and never a red that reads as an error: the sticker theme's lilac, the plain theme's ink.
 
@@ -164,13 +164,24 @@ Page::new(scene, theme)
   handler acts. Text that is only spaces enters nothing. The handler runs while
   the page is in use, as `on_tap` does: one that changes the page does it in
   `cx.defer`.
-- **The entry then waits** for the handler's answer,
-  `page.answer_entry(kept, window, cx)`, which every handler gives. Until then
-  the words stay in the field, drawn in the hint's grey with no caret,
-  and the entry takes no key, Escape included, no click on a chip, no second
-  Enter and no composition (`accepts_text_input` is false). It keeps the keys. A key pressed while it waits is
-  dropped, not kept for later. Kept: the entry is empty and keeps its option.
-  Not kept: the words are still there. A page with no handler answers itself.
+- **The entry is then owed an answer**, `page.answer_entry(kept, window, cx)`, which every handler gives. The
+  words Enter gave are kept aside (`EntryState::owed`), and the typed text is empty from then on.
+  - *Every key is taken meanwhile*, as at any other time: text, a paste, a composition (`accepts_text_input`
+    stays true, and every range the input method is told is of the typed text, never of the words kept aside),
+    the editing keys, the caret, Tab, a click on a chip, Escape. Only Enter gives nothing while the answer is
+    owed, and what was typed since stays. No key is dropped.
+  - *Drawn:* while nothing was typed since, the field shows the words kept aside in the hint's grey, with the
+    caret where an entry that shows its hint has it. With the first key the typed text is drawn in ink in their
+    place. `go` is not lit while the answer is owed.
+  - *Kept:* the words kept aside are forgotten. What was typed since stays as it is, with its caret.
+  - *Not kept:* the words come back as they were typed, the caret at their end. When something was typed since,
+    they come back in front of it, one space between, as much of them as the cap leaves room for beside what
+    was typed since, which is never cut; the caret is at the end, and a composition keeps its own. An option
+    chosen since stays.
+  - A page with no handler answers itself.
+  - Until 2026-11-24 the entry took no key between Enter and its answer, and a key pressed then was dropped
+    with no sign: the start of the next words a person typed was lost. That was a decision, and it was changed
+    on purpose.
 - **An input method** (Chinese, Japanese, Korean, a dead key) talks to the page
   through GPUI's `EntityInputHandler`. What it is still composing is underlined,
   and Enter, the editing keys and a click leave it alone until it ends.
@@ -185,12 +196,12 @@ Page::new(scene, theme)
   nothing for them, and the hint stays while they are all the entry holds.
 - **An entry that holds words is not removed.** `set_entry(None)` takes an
   empty entry off the page at once, and one that holds only spaces, which
-  are no words: Enter gives nothing for them. One that holds words, or waits
-  for its answer, stays as it is, with its options, and goes when it holds
+  are no words: Enter gives nothing for them. One that holds words, or is owed
+  its answer, stays as it is, with its options, and goes when it holds
   none: after an answer that kept the words, or when the person has deleted
   them, whatever spaces are left. Words a
   person typed never go with the entry, and an answer always finds the words
-  it is for: an entry cannot go and come back empty while it waits. An entry
+  it is for: an entry cannot go and come back empty while an answer is owed. An entry
   set meanwhile takes its place and keeps the words.
 
 The rules are `entry::EntryState`, plain data with no GPUI in it
@@ -223,9 +234,9 @@ options (`layout/typed.rs`, `draw/field.rs`).
   them, an input method composes in it, `most` caps it (0 is the kit's own
   cap, `MAX_ENTRY_CHARS`). Each field and the entry hold their own words.
 - **Enter** calls the `on_entry` handler with the note's id as `made.id`,
-  the words, and no option. The field then waits as the entry does, for
-  `page.answer_field(id, kept, window, cx)`: kept, it is empty; not kept, its
-  words stay. `page.answer_field_closed(id, kept, cx)` is the same for a page whose window was closed since
+  the words, and no option. The field is then owed its answer as the entry is,
+  `page.answer_field(id, kept, window, cx)`, and takes every key meanwhile: kept, what was typed since stays;
+  not kept, the words come back in front of it. `page.answer_field_closed(id, kept, cx)` is the same for a page whose window was closed since
   Enter, as `answer_entry_closed` is the entry's. `page.field(id)` is what is typed in it now.
 - **A field lives with its note.** `set_scene` keeps what is typed in a field
   whose note still has one, by the note's id, and drops the field of a note

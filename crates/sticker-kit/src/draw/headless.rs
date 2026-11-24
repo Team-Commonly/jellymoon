@@ -22,10 +22,12 @@ pub fn text_system() -> Arc<dyn PlatformTextSystem> {
 }
 
 /// An entry as a picture shows it: empty with its hint, or, with `typed`, holding those words and the keys (so
-/// the caret is drawn) with the option of that place chosen.
+/// the caret is drawn) with the option of that place chosen. With `since` too, Enter was pressed on those words,
+/// no answer has come, and `since` is what was typed meanwhile: with none typed (`""`) the words are shown pale.
 pub struct Typing {
     pub entry: Entry,
     pub typed: Option<(String, usize)>,
+    pub since: Option<String>,
 }
 
 /// Renders one still frame of the scene and saves it as a PNG.
@@ -62,18 +64,22 @@ fn shot(
     let mut cx =
         HeadlessAppContext::with_platform(text_system(), Arc::new(()), gpui_platform::current_headless_renderer);
     cx.update(|cx| load_fonts(cx))?;
-    let (entry, typed) = typing.map(|typing| (typing.entry, typing.typed)).unzip();
+    let (entry, typed) = typing.map(|typing| (typing.entry, (typing.typed, typing.since))).unzip();
     let window = cx.open_window(size(px(width), px(height)), |_, cx| {
         let page = Page::new(scene, theme).reduce_motion(true).sketched_at(at);
         cx.new(|_| entry.into_iter().fold(page, Page::with_entry))
     })?;
-    if let Some((text, option)) = typed.flatten() {
+    if let Some((Some((text, option)), since)) = typed {
         cx.update_window(window.into(), |_, window, cx| {
             window.root::<Page>().flatten().map(|page| {
                 page.update(cx, |page, cx| {
                     page.entry.state.choose(option);
                     page.focus_entry(window, cx);
                     page.entry.state.replace(None, &text);
+                    if let Some(since) = &since {
+                        let _ = page.entry.state.enter();
+                        page.entry.state.replace(None, since);
+                    }
                     cx.notify();
                 })
             })

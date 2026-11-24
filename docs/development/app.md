@@ -309,16 +309,21 @@ what core keeps.
   is drawn as soon as core has answered, in the working state, from what core keeps of it: no reading is made.
   Words core refuses write nothing: the page's first note is "That wish was not kept.", with why. Taking the
   answer on the window's thread (`OnShow::answered`) opens no file.
-- **While core is asked the entry waits.** From Enter until core's answer the words stay in the field, drawn
-  pale, with no caret. The entry takes no key then: no letter, no editing key, no Tab, no Escape, no click on a
-  chip, no second Enter, and no input method can begin a composition. The keys stay the entry's. A key pressed
-  while it waits is not accepted and
-  is not kept for later. The wait is the time of one read of the day's logs, and at most that and the 3 seconds
-  core waits for a day that is locked. Kept: the field is empty. Refused: the words are still there, as typed,
-  and the entry takes keys again, however many refusals follow one another.
+- **While core is asked the entry takes the next words.** From Enter until core's answer the entry keeps the
+  words aside, and the field is empty for what is typed next. Every key is taken as at any other time: a letter,
+  a paste, an input method's composition, the editing keys, Tab, a click on a chip, Escape. None is dropped. Only
+  Enter gives nothing until core has answered, and what was typed since stays. While nothing was typed since,
+  the words are shown in the field, pale, with the caret at the field's start; the first key puts the typed text
+  there in ink. The time until the answer is that of one read of the day's logs, and at most that and the 3
+  seconds core waits for a day that is locked. Kept: what was typed since is in the field, whole, with its caret
+  (an empty field when nothing was). Refused: the words come back as typed, in front of what was typed since
+  with one space between, as much of them as the entry's cap leaves room for beside it, however many refusals
+  follow one another. Until 2026-11-24 the entry took no key while core was asked: a person who typed the next
+  wish straight after Enter lost its first characters, and the wish was made with what was left
+  (`app/tests/f43/window.rs` holds that none is lost now).
 - **An entry with words in it is never taken away.** The window gives the page the entry of each reading step,
   and none when no project is offered any more (every folder switched off in `skip.txt` while the reading runs,
-  logs that cannot be read). The kit keeps an entry that holds words, or waits, on the page as it was, with the
+  logs that cannot be read). The kit keeps an entry that holds words, or is owed an answer, on the page as it was, with the
   chips it had, until it holds no words and is answered (`Page::set_entry`). So a refusal always has the words to
   leave, and words that were typed and not entered stay. Spaces alone are no words: an entry that holds only them
   goes as an empty one does. Enter on a chip that is still drawn is asked of core like any
@@ -492,7 +497,7 @@ Not covered: a wish for a project past the sixth, or for one neither typed in to
 `jellymoon wish`. A made wish's question is drawn on its wish's note ("A question answered, and more like
 this", below): that a day nothing was typed on prints it as any day does is proved at `jellymoon page`
 (`crates/jellymoon/tests/f63.rs`). What only a person at a window can see is not tested: the input method's
-candidate window, the caret, the pale words of an entry that waits, and which piece has the keys.
+candidate window, the caret, the pale words of an entry that is owed its answer, and which piece has the keys.
 
 ### The walk: the loop step by step, with pictures (`app/examples/walk.rs`)
 
@@ -1187,7 +1192,8 @@ It writes `<name>-sticker.png` and `<name>-plain.png`. The page has the entry a 
 each of the file's first six projects (a picture reads no logs) and its hint in the field. With `<words>` the field holds
 them, with the caret after them, and the chip of place `<option>` (from 0; 0 when left out) is the chosen one. With `<theme file>` a third picture is
 written, named after that theme, and the file's warnings are said on stderr, each as one line of text, cleaned as the app's are
-(`jellymoon_app::one_line`).
+(`jellymoon_app::one_line`). `--since <more words>` before the page file draws the entry as it is after Enter on
+`<words>` and before the answer, with `<more words>` typed meanwhile (`""` for none: `<words>` are then pale).
 
 `--work <waiting file>` before the page file puts the notes of the work that waits, as `jellymoon run waiting`
 prints it, over the page's notes, and `--told <shown file>` gives the first work the `result` of what

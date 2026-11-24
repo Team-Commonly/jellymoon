@@ -228,7 +228,8 @@ impl Walk {
 
     fn picture(&self, name: &str) -> Result<(), String> {
         let out = self.folder.join(format!("{}.png", file_part(name)));
-        let typing = self.entry.clone().map(|entry| Typing { entry, typed: Some((self.typed.clone(), self.chosen)) });
+        let typed = Some((self.typed.clone(), self.chosen));
+        let typing = self.entry.clone().map(|entry| Typing { entry, typed: typed.clone(), since: None });
         snapshot_typing(self.shown.column(&self.scene()), Theme::sticker(), typing, self.size.w, self.size.h, &out)
             .map_err(|error| format!("could not draw {name:?}: {error}"))
     }

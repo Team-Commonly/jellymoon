@@ -29,8 +29,8 @@ pub(in super::super) fn keep_itself(home: &Path, options: &RunOptions) -> bool {
 }
 
 /// Writes with the run's record why its keep by itself kept nothing: core's typed reason and no sentence, under
-/// the keep's own lock. It is what was true when the run ended, and no look asks the repo for it again. Nothing
-/// of any other keep; a record that cannot be written leaves the work waiting with no reason, as before.
+/// the keep's own lock. It is what was true when the run ended; a note asks again before it says a clash
+/// (`waits/unfit.rs`, `still`). Nothing of any other keep; a record that cannot be written leaves the work waiting with no reason, as before.
 pub(super) fn unkept(of: &Keep, record: &mut record::Record, why: Unkept) {
     if of.itself {
         record.unkept = Some(why);

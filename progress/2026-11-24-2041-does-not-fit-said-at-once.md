@@ -46,8 +46,7 @@ every other reason leaves the note as it was, which is a pin.
 ## Open
 - A drawn note places none of its words while it is closed; the two sentences are read after a tap on the
   picture or on `?`. See "After the look" for what the closed note says now.
-- The reason is the run's end's. Nothing asks git again, so the note can say it of a folder that has changed
-  back since; `Make it again` works all the same.
+- The reason is the run's end's; see "After the gate" for what a note does about a folder that changed since.
 - Work that waits from before this build has no reason in its record and keeps `Keep it`, with the refusal
   after a tap, as before.
 - Not run: a real window, a real harness, Windows, Linux.
@@ -58,3 +57,15 @@ The first commit's picture was looked at as a person would: the closed note had 
 more state, `Kept::Unfit`: waiting work with its arrow barred in the taken ink and the caption "does not fit
 your folder". The app draws it where core says the work did not fit (`Waits::unfit`, now public). Seen red
 first: the kit's test of each state's arrow, folder and caption, and the app's test at the made-up window.
+
+## After the gate
+A gate by reading failed the second commit on one sequence a person can come to in the window: the first change
+is undone with `Undo it`, a keep of the second would land now, and its note still said that it does not fit and
+offered no `Keep it`. A third commit asks the keep once more whenever a note would say a clash
+(`waits/unfit.rs`, `still`; as `run keep --ask` asks, with nothing changed or written): work a keep would land
+now has the waiting note again. Test at the made-up window, seen red first:
+`a_change_that_fits_again_once_the_other_was_undone_has_keep_it_back_and_a_tap_keeps_it`.
+Left as they are, from the gate's notes: a keep that landed and whose record could not be written can leave a
+reason beside `kept`, which nothing reads; a hand-made record with a value nested past the reader's depth is
+refused whole; unfit work with no file is drawn as waiting work with no file; a follow-up is still offered
+under unfit work; a question of this kind waits up to ten seconds for a keep at work in the same home.

@@ -497,8 +497,9 @@ and writes nothing:
   Its choices are `Show me`, `Make it again`, `Toss it`, whatever files the work holds: there is no `Keep it`,
   which core has just refused, and a tap on `Make it again` is the tap above. Every other reason, a record
   with none and a record from before this was written leave the lines and the choices as they were. The
-  reason is the run's end's: no look asks git whether the change fits, so a folder that changed back since
-  still has the note say what was true then.
+  reason is the run's end's, so before a note says it the keep is asked once more, as `run keep --ask` asks
+  (`unfit::still`): where the folder changed back since (the other change was undone, the branch was put
+  back) and a keep would land the work now, the note is the waiting note again, with `Keep it`.
   The window draws such work with the kit's `unfit` picture: the arrow to the folder barred, and "does not fit
   your folder" under it, so the closed note says it too.
 

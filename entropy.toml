@@ -439,7 +439,8 @@ max_file_lines = 400
 # A change that does not fit says so at once raised it by 167 (201 added, 34 removed): the reason a keep by
 # itself kept nothing, written with the run's record and read back (`run/keep/itself.rs`, `run/record.rs`), and
 # the waiting note that says it, with its tests (`run/waits/unfit.rs`, 92; `run/keep/tests.rs`, 19).
-"crates/jellymoon-core" = 19726
+# Before a note says a clash the keep is asked once more (`run/waits/unfit.rs`, `still`): 14.
+"crates/jellymoon-core" = 19740
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -1113,7 +1114,8 @@ max_file_lines = 400
 # A change that does not fit says so at once raised the app by 78 (81 added, 3 removed): its test at the made-up
 # window (`tests/a_change_that_no_longer_fits.rs`, 70) and the world where a change is kept by itself (6).
 # The app draws that state where core says the work did not fit: 1.
-"app" = 19492
+# Its test at the made-up window, of a change that fits again once the other was undone: 17.
+"app" = 19509
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

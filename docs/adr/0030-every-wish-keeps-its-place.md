@@ -117,10 +117,12 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     whose record says the change did not fit (`Clash`) says so first on its waiting note, in the two sentences
     the refusal says, and has `Show me`, `Make it again`, `Toss it`: no `Keep it`, which core has just
     refused (`run/waits/unfit.rs`). Every other reason, and a record with none, leaves the note as it was.
-    The reason is the run's end's. Whether a change fits is still asked of git only when a keep is tried, not
-    at every look, and no later keep writes or clears it: where the folder has changed back since, the note
-    says what was true then, and `Make it again` still works. The picture of such work is the one all waiting
-    work has; the kit has no picture of a change that does not fit ("Open").
+    The reason is the run's end's, and no later keep writes or clears it. The folder can change after it:
+    the change the work clashed with is undone, or the person puts their branch back. So where a record says
+    a clash, the keep is asked once more whenever the note is read (as `run keep --ask` asks: nothing is
+    changed or written), and work a keep would land now has the waiting note again, with `Keep it`. A note
+    is read at the moments of decision 6, not at every look. The picture of such work is the kit's `unfit`:
+    waiting work with its arrow barred and "does not fit your folder".
 11. **Finished wishes tuck away.** Decision 2 put the notes of every ended wish on the page at once. After
     three wishes the column was several screens of cards, most of them about wishes that need nothing from
     the person, and the wish being made was under all of them. So a made wish that is settled has none of

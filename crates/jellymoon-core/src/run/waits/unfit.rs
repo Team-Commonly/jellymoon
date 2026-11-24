@@ -3,12 +3,26 @@
 //! changed in the same place, wrote that reason with the run's record (`run/keep/itself.rs`). The note of such
 //! work says it first, in the sentences the refusal of a tap on `Keep it` says, and has `Make it again` where
 //! `Keep it` would be: core has just refused that keep, and no later tap would land it. The reason is the run's
-//! end's. No repo is asked for it again at a look, so where the folder has changed back since, the note says
-//! what was true then, and `Make it again` still makes the wish again. Every other reason a record holds, and
-//! none, leaves the note as it was.
+//! end's, and the folder can change after it: the change the work clashed with is undone, or the person puts
+//! their branch back. So where a record says it, the keep is asked once more when the note is read ([`still`]),
+//! and work that a keep would land now has the waiting note, with `Keep it`. Every other reason a record
+//! holds, and none, leaves the note as it was.
 
+use std::path::Path;
+
+use super::super::RunOptions;
+use super::super::keep::{KeepOptions, keep_run};
 use super::{Waits, again, plain};
 use crate::copy::Unkept;
+
+/// The reason a run's record holds, as far as it holds now. A clash is asked again, as `run keep --ask` asks:
+/// nothing is changed and nothing is written, and the record keeps its word. Where a keep would land the work
+/// now, there is no reason; any other answer, a keep at work in this home too, leaves the record's.
+pub(super) fn still(home: &Path, options: &RunOptions, written: Option<Unkept>) -> Option<Unkept> {
+    let asked = || keep_run(home, options, KeepOptions { ask: true, with_settings: false });
+    let fits = written == Some(Unkept::Clash) && asked().is_ok_and(|kept| kept.fits == Some(true));
+    if fits { None } else { written }
+}
 
 impl Waits {
     /// Whether the run's record says that the work did not fit the folder when the run ended.

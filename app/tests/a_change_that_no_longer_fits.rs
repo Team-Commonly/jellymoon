@@ -146,6 +146,23 @@ fn a_change_that_did_not_fit_when_its_run_ended_says_so_with_no_tap_and_has_make
     assert!(!repo.join("n.txt").exists() && repo.join("b.txt").exists());
 }
 
+/// The reason is the run's end's, and the folder can change after it: the change the work clashed with is undone
+/// in the window, and a keep would land the work now. Its note is then the waiting note again, with `Keep it`.
+#[test]
+fn a_change_that_fits_again_once_the_other_was_undone_has_keep_it_back_and_a_tap_keeps_it() {
+    let w = one_landed_and_the_next_does_not_fit();
+    let acts =
+        [TALL, "look", "poke:m1", "choose:kept-m1:0", "run", "look", "column", "choose:work-m2:1:Keep it", "run"];
+    let lines = w.taps("logs", &acts).ended();
+    let [.., column, _, answer] = &lines[..] else { panic!("three lines at least: {lines:#?}") };
+    let (words, options) = drawn(column, "work-m2").expect("the note of the work that waits");
+    assert_eq!(options, texts(&["Show me", "Keep it", "Toss it"]), "{words:?}");
+    assert!(!words.contains(&CLASH[0].to_string()) && column.contains(r#""state":"waiting""#), "{column}");
+    assert_eq!(said(answer, "said-m2").map(|said| said.0), Some("The change was kept.".to_string()), "{answer}");
+    // The change that was undone waits again, as an undone change does, and the second is in the folder.
+    assert_eq!(waiting(&w), ["m1"]);
+}
+
 fn said_of(line: &str, id: &str) -> (String, Vec<String>, Vec<String>) {
     said(line, id).unwrap_or_else(|| panic!("no note {id}: {line}"))
 }

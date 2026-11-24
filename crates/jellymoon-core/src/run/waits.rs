@@ -313,7 +313,7 @@ fn read(home: &Path, options: &RunOptions, itself: bool) -> Option<(Waits, Optio
         why,
         result,
         project,
-        unkept: found.record.unkept,
+        unkept: unfit::still(home, options, found.record.unkept),
     };
     Some((waits, shown))
 }

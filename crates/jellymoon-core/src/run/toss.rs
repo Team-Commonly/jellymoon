@@ -248,7 +248,8 @@ fn act(home: &Path, options: &RunOptions, on: Ended, first: bool) -> Result<Did,
         Some(((repo, start, at), Ok(folder))) => {
             let named = Named { repo, start, end: at };
             let was = was.as_ref().map(|was| (was.0.as_str(), was.1.as_str()));
-            let of = Keep { home, folder: &folder, run: &run, named: &named, was, ask: false, held: None };
+            let (ask, itself) = (false, false);
+            let of = Keep { home, folder: &folder, run: &run, named: &named, was, ask, held: None, itself };
             match copy::toss(&of, strict, &mut write) {
                 Ok(branch) => branch,
                 Err(untossed) if strict => return Err(refused(untossed_words(&run, untossed))),

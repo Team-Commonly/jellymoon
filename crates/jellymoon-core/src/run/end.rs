@@ -13,8 +13,8 @@ use std::time::{Duration, Instant};
 use super::child::{End, Ended};
 use super::record::Record;
 use super::{
-    Ran, RunOutcome, STAR, asking, asks, cancelled, cut, cut_late, dead, failed, finished, follow, left, never, record,
-    refused, told, words,
+    Ran, RunOptions, RunOutcome, STAR, asking, asks, cancelled, cut, cut_late, dead, failed, finished, follow, keep,
+    left, never, record, refused, told, words,
 };
 use crate::busy::{self, or_test};
 use crate::copy::{self, Outcome, RunCopy};
@@ -250,12 +250,12 @@ fn word(ended: &Ended, limit: Duration) -> Result<Option<String>, String> {
 /// a moved branch and no end is written, so an end is only ever `start` or the one commit made on top of it.
 pub(super) fn settle(
     home: &Path,
-    (day, wish): (&str, &str),
+    (day, options): (&str, &RunOptions),
     (copy, start): (&RunCopy, &str),
     ended: &Ended,
     limit: Duration,
 ) -> Result<Ran, Error> {
-    let (read, run) = (&ended.read, &copy.run);
+    let (read, run, wish) = (&ended.read, &copy.run, options.wish.as_str());
     let word = word(ended, limit);
     let committed = match &word {
         Ok(None) => copy::end_copy(home, run, Outcome::Completed, None, Some(start))
@@ -282,6 +282,8 @@ pub(super) fn settle(
     busy::pause("JELLYMOON_TEST_NOTE_WAIT_MS");
     // A record that could not be written does not keep the wish from being told.
     let noted = note(home, run, outcome, (read.denied, read.skipped), &why, end, question.clone());
+    // A finished change goes into the person's folder by itself, where a keep would take no further yes (F92).
+    let kept_itself = noted.is_ok() && why == finished(run, true) && keep::keep_itself(home, options);
     let told = tell(home, day, wish, run, (outcome, &why, question.as_deref()), wait()).map_err(|e| match e {
         Error::Store(e) => Error::Store(e),
         e if wish::was_locked(&e) => refused(format!(
@@ -296,7 +298,8 @@ pub(super) fn settle(
     });
     told.and(noted)?;
     let star = (outcome == RunOutcome::Completed).then(|| STAR.to_string());
-    Ok(Ran { run: Some(run.clone()), wish: wish.to_string(), outcome, star, denied: read.denied, why, question })
+    let (run, wish, denied) = (Some(run.clone()), wish.to_string(), read.denied);
+    Ok(Ran { run, wish, outcome, star, denied, why, question, kept_itself })
 }
 
 /// Whether the wish names this run and no longer says working: a look that took the run for one nothing holds

@@ -241,11 +241,18 @@ fn ended(home: &Path, options: &RunOptions, asked: &Asked) -> Result<(Found, Run
 
 /// The wish's run when its work waits for the person: it finished with its one commit, and its record names
 /// that commit and says neither kept nor tossed. None of any other wish. Nothing of a repo is asked.
-pub(super) fn waiting(home: &Path, options: &RunOptions) -> Option<Found> {
+/// With `itself`, the wish's run when its change was kept by itself and can still be undone, and no other.
+pub(super) fn waiting(home: &Path, options: &RunOptions, itself: bool) -> Option<Found> {
     let found = found(home, options, &SHOWN).ok()?;
-    let waits =
-        found.record.work.is_none_or(|work| work == WorkState::Waits) && found.why == finished(&found.run, true);
-    (waits && found.named().ok()?.is_some()).then_some(found)
+    let work = found.record.work.unwrap_or(WorkState::Waits);
+    let asked = if itself { undoable(&found.record) } else { work == WorkState::Waits };
+    (asked && found.why == finished(&found.run, true) && found.named().ok()?.is_some()).then_some(found)
+}
+
+/// Whether a record is of a change that was kept by itself and can still be undone (F92): its files are read
+/// as those of work that waits are, since its run's branch is still there.
+fn undoable(record: &Record) -> bool {
+    record.work == Some(WorkState::Kept) && record.before.is_some()
 }
 
 /// Reads the work of the wish's run. git is asked only for a run that finished with a commit, whose work waits.
@@ -255,7 +262,7 @@ fn work(home: &Path, options: &RunOptions, only: Option<usize>) -> Result<Work, 
     let named = found.named()?;
     let run = found.run.clone();
     let state = found.record.work.unwrap_or(WorkState::Waits);
-    if state != WorkState::Waits || found.why != finished(&run, true) {
+    if !(state == WorkState::Waits || undoable(&found.record)) || found.why != finished(&run, true) {
         // A run that changed nothing has no file: what it said is read for the list alone, and no change passes.
         let said = if only.is_none() && unchanged(&found) { told::kept(home, &run) } else { None };
         return Ok(Work { run, state, files: Vec::new(), past: Vec::new(), said });

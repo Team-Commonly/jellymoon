@@ -33,7 +33,8 @@ pub(crate) use fresh::{fresh_repo, git_on_path};
 use git::{Git, Repo};
 pub(crate) use hold::{left, start_lock, timed_out};
 pub(crate) use keep::{
-    Branch, How, Keep, LOOSE, Left, Note, Touched, Unkept, Untossed, alone, keep, nameable, runs, swept, toss,
+    Back, Branch, How, Keep, LOOSE, Left, Note, Stands, Stays, Touched, Unkept, Untossed, alone, keep, nameable, runs,
+    stands_now, swept, toss, undo,
 };
 use record::{Record, write};
 use serde::Serialize;

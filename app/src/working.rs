@@ -15,6 +15,7 @@ use jellymoon_core::{Alone, RunOptions, Waits, Wish, WishState, WorkDone, WorkTa
 use sticker_kit::{Note, Scene};
 
 use crate::answering::{with_go_on, with_more, with_question};
+use crate::landing::KEPT;
 use crate::placing::{over, put};
 use crate::read::Page;
 use crate::taps::OnShow;
@@ -46,7 +47,7 @@ pub type Working = Box<dyn FnOnce() -> Worked + Send>;
 pub trait Ask: FnOnce(&Today, &str, WorkTap) -> WorkDone + Send + 'static {}
 impl<A: FnOnce(&Today, &str, WorkTap) -> WorkDone + Send + 'static> Ask for A {}
 
-fn text(id: String, title: &str, body: Vec<String>, options: Vec<&str>) -> Note {
+pub(crate) fn text(id: String, title: &str, body: Vec<String>, options: Vec<&str>) -> Note {
     let options = options.into_iter().map(str::to_string).collect();
     Note::Text { id, title: title.to_string(), body, options, quoted: String::new(), field: None }
 }
@@ -60,7 +61,8 @@ pub(crate) fn id_of(note: &Note) -> Option<&str> {
 
 /// Whether an id is one of this file's notes: a tap on such a note is never a tap for `taps.rs`.
 pub(crate) fn names(id: &str) -> bool {
-    [WORK, SURE, BUSY, SAID, WISH, FILE, TOLD].iter().any(|start| id.starts_with(start)) || crate::shaping::names(id)
+    let ours = [WORK, SURE, BUSY, SAID, WISH, FILE, TOLD, KEPT];
+    ours.iter().any(|start| id.starts_with(start)) || crate::shaping::names(id)
 }
 
 /// Whether a note is one of this file's: a look and a reading leave it on show.
@@ -93,7 +95,10 @@ pub(crate) fn settled(note: &Note, id: &str) -> bool {
 
 /// The wishes whose work that waits, or what their run says it did, is on a scene.
 pub(crate) fn shown(scene: &Scene) -> impl Iterator<Item = &str> {
-    scene.notes.iter().filter_map(|note| id_of(note).and_then(|id| id.strip_prefix(WORK).or(id.strip_prefix(TOLD))))
+    fn of(id: &str) -> Option<&str> {
+        [WORK, TOLD, KEPT].iter().find_map(|start| id.strip_prefix(start))
+    }
+    scene.notes.iter().filter_map(|note| id_of(note).and_then(of))
 }
 
 /// Whether a scene holds what a run says it did with no work that waits under it (told alone): a note with
@@ -112,12 +117,12 @@ fn file_of(note: &Note, wish: &str) -> Option<usize> {
 /// Whether a note is of `wish`: any of this file's but the one of a wish with no work waiting.
 pub(crate) fn of(note: &Note, wish: &str) -> bool {
     let named = |start: &&str| id_of(note).and_then(|id| id.strip_prefix(*start)) == Some(wish);
-    [WORK, SURE, BUSY, SAID, TOLD].iter().any(named) || file_of(note, wish).is_some()
+    [WORK, SURE, BUSY, SAID, TOLD, KEPT].iter().any(named) || file_of(note, wish).is_some()
 }
 
 /// The wish a note of work that waits, or of how a wish stands, is of.
 pub(crate) fn wish_of(id: &str) -> Option<&str> {
-    id.strip_prefix(WORK).or_else(|| id.strip_prefix(WISH))
+    [WORK, WISH, KEPT].iter().find_map(|start| id.strip_prefix(start))
 }
 
 /// The wish a note with a field can be of: its work, what is being done with that work, or how it stands.
@@ -224,15 +229,16 @@ impl Today {
         let stands = |wish: &Wish| {
             let follows = self.follows(&wish.id);
             let typed_to = (wish.question.is_some() || follows) && !waits.iter().any(|waits| waits.wish == wish.id);
-            typed_to.then(|| with_more(standing(wish, None), &wish.id, follows))
+            let stands = typed_to.then(|| vec![with_more(standing(wish, None), &wish.id, follows)]);
+            self.kept_notes(&wish.id).or(stands).unwrap_or_default()
         };
-        notes.extend(made.iter().filter_map(stands));
+        notes.extend(made.iter().flat_map(stands));
         shown.notes.splice(0..0, notes);
         shown
     }
 
     /// Whether core says a follow-up of its work may be made of the made wish `wish` (`jellymoon_core::followable`).
-    fn follows(&self, wish: &str) -> bool {
+    pub(crate) fn follows(&self, wish: &str) -> bool {
         jellymoon_core::followable(&self.home, &self.date, true).iter().any(|one| one == wish)
     }
 
@@ -251,7 +257,7 @@ impl Today {
 
     /// The notes of the work of the made wish `id` that waits: what its run says it did, then the work with its
     /// choices and the offer of a follow-up, as they first come or as `Show me` shows them. None when none waits.
-    fn work_notes(&self, id: &str, shown: bool) -> Option<Vec<Note>> {
+    pub(crate) fn work_notes(&self, id: &str, shown: bool) -> Option<Vec<Note>> {
         let waits = jellymoon_core::waits(&self.home, &self.run_of(id))?;
         let work = with_more(waiting(&waits, false, shown), id, self.follows(id));
         Some(told(&waits, shown).into_iter().chain([work]).collect())
@@ -259,7 +265,7 @@ impl Today {
 
     /// [`Today::note_of`], with what the run says it did before the note of its work that waits.
     fn notes_on_open(&self, page: Option<&Page>, id: &str) -> Option<Vec<Note>> {
-        if let Some(notes) = self.work_notes(id, false) {
+        if let Some(notes) = self.work_notes(id, false).or_else(|| self.kept_notes(id)) {
             return Some(notes);
         }
         // The day's made wishes stand after the page's own, as they are drawn (`taps.rs`).
@@ -292,7 +298,7 @@ impl Today {
     pub(crate) fn waiting_over(&self, page: Option<&Page>, from: &Scene, id: &str) -> Option<(Scene, bool)> {
         let notes = self.notes_on_open(page, id)?;
         let has = |start: &str| notes.iter().filter_map(id_of).any(|one| one.starts_with(start));
-        let (work, told) = (has(WORK), has(TOLD));
+        let (work, told) = (has(WORK) || has(KEPT), has(TOLD));
         (work || told).then(|| (over(from, notes, true), work))
     }
 
@@ -341,7 +347,7 @@ impl OnShow {
     /// A carried call that panics is caught where it runs, and answered with a note in core's words in place of
     /// the one that says what is being done: the wish is never left as being worked on for good.
     pub fn carrying(&mut self, note: &str, index: usize, ask: impl Ask) -> Option<(Scene, Working)> {
-        let wish = note.strip_prefix(WORK).or_else(|| note.strip_prefix(SURE))?.to_string();
+        let wish = [WORK, SURE, KEPT].iter().find_map(|start| note.strip_prefix(start))?.to_string();
         let at = self.scene.notes.iter().position(|one| id_of(one) == Some(note))?;
         let (body, options, field) = crate::drawing::held(&self.scene.notes[at])?;
         let after = self.scene.notes.iter().find_map(|one| file_of(one, &wish)).unwrap_or(0);
@@ -355,12 +361,14 @@ impl OnShow {
         self.scene.notes[at] = doing;
         let (today, page, from) = (self.today.clone(), self.page.clone(), self.scene.clone());
         let work = move || {
-            let (failed, shows) = (tap.failed(), matches!(tap, WorkTap::Show { .. }));
+            let (failed, shows, undo) = (tap.failed(), matches!(tap, WorkTap::Show { .. }), tap == WorkTap::Undo);
             let asked = || {
                 let mut notes = in_turn(notes_of(&wish, ask(&today, &wish, tap)), seen);
                 // A `Show me` that showed no file still brings the names and the rows: no other tap does.
                 let unshown = shows && notes.iter().all(|note| id_of(note).is_some_and(|id| id.starts_with(SAID)));
                 notes.extend(unshown.then(|| today.work_notes(&wish, true)).flatten().into_iter().flatten());
+                // Under the answer to an undo, the work waits again, or the change stays (`landing.rs`).
+                notes.extend(undo.then(|| today.after_undo(&wish)).into_iter().flatten());
                 let notes = today.with_offer(&wish, notes);
                 let mut now = today.again(page.as_ref(), &from);
                 put(&mut now, &wish, notes.clone());

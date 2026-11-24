@@ -20,7 +20,7 @@ use support::wished::{SAID, World, quiet};
 const CHECKED: &str = "Some of its changed lines were checked against the copy, and they match.";
 const NOTHING_RUN: &str = "Nothing was run to try this. A run reads and edits files, and no more.";
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
-const READY: &str = "It is in a copy: Keep it puts it in; Toss it throws it away.";
+const READY: &str = "It waits for your yes: Keep it puts it in; Toss it throws it away.";
 const COUNTED: &str = "1 new file, 1 changed, 1 removed.";
 const DID: &str = "It made the greeting shorter.";
 const DECIDED: &str = "It kept the old name.";

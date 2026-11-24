@@ -55,6 +55,8 @@ pub enum Command {
     /// `run keep`, and whether it only asks and whether files the person's tools obey are kept too.
     Keep(RunOptions, KeepOptions),
     Toss(RunOptions),
+    /// `run undo`, and whether only asked (`--ask`).
+    Undo(RunOptions, bool),
     /// `run waiting`: the options name no wish.
     Waiting(RunOptions),
     RemoveHook,
@@ -259,18 +261,21 @@ pub fn found(logs: Option<PathBuf>, skip: &str) -> Result<RunOptions, Failure> {
     Ok(RunOptions { logs, harness: named("JELLYMOON_CLAUDE"), skip, ..RunOptions::default() })
 }
 
-/// `run`, `run stop`, `run answer`, `run show`, `run keep`, `run toss` and `run waiting`. The logs are read only
-/// when no repo is named, to find the one folder of the wish's project. A stop and an answer read the home
-/// alone, and take no repo and no logs. A file's number is digits and nothing else.
+/// `run`, `run stop`, `run answer`, `run show`, `run keep`, `run undo`, `run toss` and `run waiting`. The logs
+/// are read only when no repo is named, to find the one folder of the wish's project. A stop and an answer read
+/// the home alone, and take no repo and no logs. A file's number is digits and nothing else.
 fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut options, mut logs, mut skip) = (RunOptions::default(), None, String::new());
     let (mut wish, mut stop, mut show, mut file, mut first) = (None, false, false, None, true);
     let (mut keep, mut toss, mut waiting, mut answer): (Option<KeepOptions>, bool, bool, bool) = Default::default();
+    let mut undo = None;
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
             Value(word) if first && word == "stop" => stop = true,
+            Value(word) if first && word == "undo" => undo = Some(false),
+            Long("ask") if undo.is_some() => undo = Some(true),
             Value(word) if first && word == "answer" => (stop, answer) = (true, true),
             Value(word) if first && word == "show" => show = true,
             Value(word) if first && word == "keep" => keep = Some(KeepOptions::default()),
@@ -302,6 +307,7 @@ fn parse_run(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         (_, true, _) => Command::Show(options, file),
         (_, _, Some(keep)) => Command::Keep(options, keep),
         _ if toss => Command::Toss(options),
+        _ if undo.is_some() => Command::Undo(options, undo == Some(true)),
         _ => Command::Run(options),
     })
 }

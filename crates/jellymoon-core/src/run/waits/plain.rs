@@ -4,16 +4,19 @@
 //! it is, and no run's id is in them. Each is true of every way its wait, keep or toss can end.
 
 use crate::copy::How;
+use crate::run::show::Alone;
 use crate::run::{Kept, Tossed};
+use crate::{Wish, WishState};
 
 /// The first line of the note of work that waits and was read, under its title that the folder is not changed
-/// yet: the change is in a copy, and what each choice the note offers does. `keeps`: the note offers `Keep it`.
-/// It is one line of a note, whatever the project: a note of the run's result over it has the room it leaves.
+/// yet: this change was not kept by itself (F92) and waits for a yes, and what each choice the note offers does.
+/// `keeps`: the note offers `Keep it`. It is one line of a note, whatever the project: a note of the run's result
+/// over it has the room it leaves.
 pub(super) fn waits(keeps: bool) -> &'static str {
     if keeps {
-        "It is in a copy: Keep it puts it in; Toss it throws it away."
+        "It waits for your yes: Keep it puts it in; Toss it throws it away."
     } else {
-        "It is in a copy: Toss it throws it away."
+        "It waits for your yes: Toss it throws it away."
     }
 }
 
@@ -69,6 +72,30 @@ pub(super) fn tossed(tossed: &Tossed, project: &str) -> String {
     } else {
         "This change was thrown away before, so nothing was changed now.".to_string()
     }
+}
+
+/// What a page says after the wish's words of a run that did not finish (told alone): what came of it and what the
+/// person can do, and no reason of core's, which names a run and a word of the harness's. True of every failed
+/// run: some stopped early, and some had finished when their work could not be committed or their end recorded.
+const UNFINISHED: [&str; 2] = [
+    "It did not finish, and nothing in your folder was changed.",
+    "You can type the wish again, or type it with what should be different.",
+];
+
+/// What a page says of a wish that has no work waiting: how it stands, and the wish's own words; and of a wish
+/// that needs the person because its run did not finish, [`UNFINISHED`]. `alone` is how its run ended.
+pub fn stands(wish: &Wish, alone: Option<&Alone>) -> (&'static str, Vec<String>) {
+    let stands = match wish.state {
+        WishState::Working => "This wish is being worked on.",
+        WishState::Done => "This wish is done.",
+        WishState::NeedsYou => "This wish needs you.",
+        WishState::LetGo => "This wish was let go.",
+    };
+    let mut said = vec![format!("“{}”", wish.said)];
+    if wish.state == WishState::NeedsYou && alone == Some(&Alone::Unfinished) {
+        said.extend(UNFINISHED.map(str::to_string));
+    }
+    (stands, said)
 }
 
 #[cfg(test)]

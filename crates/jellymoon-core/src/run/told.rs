@@ -177,7 +177,7 @@ pub(super) fn checked(said: &Said, files: &[WorkFile]) -> Option<Told> {
 /// splits too, and a `"` a `'`. It is dropped, never cut, when it holds a character that draws as nothing (asked
 /// of the text with every space read as a plain one, and again of what the door made), when nothing or only
 /// marks are left of it, when it is over `most` characters, and when it reads like a note's count (`obeyed.rs`).
-fn clean(raw: &str, most: usize) -> Option<String> {
+pub(super) fn clean(raw: &str, most: usize) -> Option<String> {
     let spaced = raw.split_whitespace().collect::<Vec<_>>().join(" ");
     if holds_unseen(&spaced) {
         return None;

@@ -120,6 +120,9 @@ impl OnShow {
         match self.stopping(note, index) {
             Some((scene, stop)) => Chosen::Stop(scene, stop),
             None if note.starts_with(STOPS) => Chosen::Nothing,
+            None if note == crate::shaping::SHAPE => {
+                self.shaped(note, index).map_or(Chosen::Nothing, |(scene, work)| Chosen::Work(scene, work))
+            }
             None => match self.working(note, index) {
                 Some((scene, work)) => Chosen::Work(scene, work),
                 None if working::names(note) => Chosen::Nothing,

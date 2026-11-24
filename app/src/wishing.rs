@@ -76,13 +76,15 @@ pub struct Answer {
     opened: Option<(String, Note)>,
     /// After a follow-up core kept (`answering.rs`): the note it was typed under, which goes when it is settled.
     under: Option<String>,
+    /// After a wish was read (`shaping.rs`): the notes that stand where the reading's note stood.
+    shape: Option<Vec<Note>>,
 }
 
 impl Answer {
     /// Core's answer to words for a wish: they were kept when a run is asked for.
     pub(crate) fn of(seen: Seen, said: Option<Said>, asking: Option<Asking>) -> Self {
         let kept = asking.is_some();
-        Answer { seen, said, asking, kept, opened: None, under: None }
+        Answer { seen, said, asking, kept, opened: None, under: None, shape: None }
     }
 
     /// This answer, to a follow-up typed under the note `note`.
@@ -93,7 +95,14 @@ impl Answer {
     /// Core's answer to an answer. `kept` is whether the answer was given to the run: the field it was typed
     /// in is emptied then, whatever core has to say of what came after.
     pub(crate) fn taken(seen: Seen, said: Option<Said>, opened: Option<(String, Note)>, kept: bool) -> Self {
-        Answer { seen, said, asking: None, kept, opened, under: None }
+        Answer { seen, said, asking: None, kept, opened, under: None, shape: None }
+    }
+
+    /// This answer, to a wish that was read: `notes` stand where the reading's note stood, on the scene the
+    /// answer was made from and on any scene that took its place.
+    pub(crate) fn settling(mut self, notes: Vec<Note>) -> Self {
+        crate::shaping::settle(&mut self.seen.now, notes.clone());
+        Answer { shape: Some(notes), ..self }
     }
 
     /// Whether core took what was typed.
@@ -172,6 +181,9 @@ impl OnShow {
             self.scene = answer.seen.now;
         } else {
             newest(&mut self.scene, answer.said);
+            if let Some(notes) = answer.shape {
+                crate::shaping::settle(&mut self.scene, notes);
+            }
             let unplaced = answer.opened.and_then(|(wish, note)| working::reopen(&mut self.scene, &wish, note));
             if let Some(note) = unplaced.filter(|note| !answer.kept && crate::answering::asks(note)) {
                 let under = under(&self.scene);

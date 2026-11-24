@@ -34,9 +34,9 @@ pub(crate) const FILE: &str = "file-";
 
 /// What core answered to a tap on a choice: the scene it was asked from, the scene to show, and the notes to say.
 pub struct Worked {
-    seen: Seen,
-    wish: String,
-    notes: Vec<Note>,
+    pub(crate) seen: Seen,
+    pub(crate) wish: String,
+    pub(crate) notes: Vec<Note>,
 }
 
 /// A tap on a choice carried to core: the window runs it off its own thread.
@@ -60,7 +60,7 @@ pub(crate) fn id_of(note: &Note) -> Option<&str> {
 
 /// Whether an id is one of this file's notes: a tap on such a note is never a tap for `taps.rs`.
 pub(crate) fn names(id: &str) -> bool {
-    [WORK, SURE, BUSY, SAID, WISH, FILE, TOLD].iter().any(|start| id.starts_with(start))
+    [WORK, SURE, BUSY, SAID, WISH, FILE, TOLD].iter().any(|start| id.starts_with(start)) || crate::shaping::names(id)
 }
 
 /// Whether a note is one of this file's: a look and a reading leave it on show.

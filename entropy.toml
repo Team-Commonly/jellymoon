@@ -420,7 +420,13 @@ max_file_lines = 400
 # and refused only on work it follows that is not kept, and `followable` tells work from none (`run/follow.rs`).
 # Its gate raised core by 20: a run that changed nothing on kept work is followed only where the checkout holds
 # that work, found through the runs it follows (`run/follow.rs`, `stood_on`).
-"crates/jellymoon-core" = 18520
+# F91, the wish shaped before a run, raised core by 278: `run/shape.rs`, 269 (the shaping call, its fixed line and
+# system words, the check of the answer, the shape that waits and the run's prompt), and 9 in `wish.rs` and `run.rs`
+# (a wish's `shaped`, and the run given it).
+# F91's gate raised it by 4 (`run/shape.rs`): no text of a shape holds a mark the run's prompt is built with, and a
+# shape whose prompt cannot be built is not shown.
+# F91's second gate raised it by 6: a wish and its prompt are kept in one write (`wish.rs`, `run/shape.rs`).
+"crates/jellymoon-core" = 18808
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -660,7 +666,11 @@ max_file_lines = 400
 # `tests/f53/refused.rs` (7 net) and its module line (2).
 # Its gate raised the binary by 22: that case, a question asked on kept work with the branch put back behind it
 # (`tests/f53/gate.rs`).
-"crates/jellymoon" = 30084
+# F91 raised the binary by 367: `shape` and `wish --shaped` are 65 (`src/shape.rs`, 45), its tests at the binary 249
+# (`tests/f91.rs`), and the made-up harnesses asked to shape 53 (`tests/support/fake_agent/shape.rs`, 44).
+# F91's gate raised it by 16, all tests (`tests/f91.rs`): the two marks refused, and words the prompt cannot hold.
+# F91's second gate raised it by 7, all tests: a refused wish keeps nothing and its shape still waits.
+"crates/jellymoon" = 30474
 # The smoke chain raised xtask by 464: the runner, its nine steps and their tests (docs/development/smoke.md); F29's
 # four delivery steps raised it by 76, and the step for a harness found off `PATH` by 30. The step for a home with no
 # session logs raised it by 12, and F35's three steps (`tap`, `tap-told`, `today-settled`) by 49.
@@ -1019,7 +1029,12 @@ max_file_lines = 400
 # (`tests/work_shows.rs`, 16).
 # A tossed change is no star raised it by 22: a made wish that was let go draws no star and is not listed as come
 # true (`src/scene.rs`, 10), with its tests (`src/scene/tests.rs`, 9, and `tests/f47/asked.rs`, 3).
-"app" = 16347
+# F91 raised the app by 320: `src/shaping.rs`, 106 (the three notes and the tap), 20 where a wish is entered and
+# answered, its tests, 188 (`tests/shape_first.rs`), and Enter in the entry for the made-up window, 6.
+# The owner's walk of F91 added 2, both in its test: the question row stands before the reason row, pinned.
+# F91's gate raised it by 22: a sharper wish stays when another wish is opened (`src/placing.rs`, 2, and its test,
+# 20).
+"app" = 16691
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

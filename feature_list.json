@@ -1026,6 +1026,25 @@
         "F89",
         "F86"
       ]
+    },
+    {
+      "id": "F91",
+      "category": "journal",
+      "description": "Between Enter and a run, the person's own Claude Code, headless and read-only, says the wish more sharply; a checked sharper wish is shown with two choices, and nothing is kept until one is tapped",
+      "steps": [
+        "`jellymoon shape --say <words> --project <name>` checks the words and finds the project's folder as `wish --run` does, then starts the harness once with the fixed line of ADR 0025 (`-p --restricted`, no MCP server, `Read Glob Grep` only, the model `haiku`, no session kept, fixed system words) in a new folder of Jellymoon's own, the project's folder named by `--add-dir`; its input is two lines, the folder and the typed words",
+        "the answer is one JSON object of six fields and no other, under 8 KiB, every text through the door a run's result passes, the wish at most 280 characters and each other text 160; an answer that fails any part is thrown away whole and the outcome is `as_typed`, with Jellymoon's fixed words for why and never a word of the model's; `shape` exits 0 with `clear`, `shaped` or `as_typed`",
+        "a checked shape that is not clear waits in `pages/<day>.shape.json`, one a day, with the typed words and the project; it is read back within a size and checked again",
+        "`jellymoon wish --shaped` keeps the wish with the run's prompt core builds from the shape that waits for these same words and this project: fixed labels, and the person's own words quoted last; with no such shape the wish is kept as typed and the command says so; `said` is always the typed words, and a run is given the shaped prompt when there is one",
+        "in the window, Enter shows the note `shaping` at once; `clear` and `as_typed` go on as a typed wish; `shaped` keeps nothing and shows `shape-said`, the model's words as quotes under Jellymoon's labels, over `shape` with `Go with this` and `Go with what I typed`; a tap on either keeps the wish and starts its run; Enter while they stand shapes the new words in their place",
+        "proved with made-up harnesses only (`cargo test -p jellymoon-app --test shape_first --features sticker-kit/headless,sticker-kit/runtime_shaders` is the app's part): the real Claude Code is never started, and no window is opened"
+      ],
+      "test": "cargo test -p jellymoon --test f91",
+      "passes": true,
+      "blockedBy": [
+        "F41",
+        "F42"
+      ]
     }
   ],
   "dead": {

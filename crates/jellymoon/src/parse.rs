@@ -32,13 +32,17 @@ pub enum Command {
         clash: usize,
         option: usize,
     },
-    /// `apart`: with `--run`, the options of the run to start, but for the wish and the day.
+    /// `apart`: with `--run`, the options of the run to start, but for the wish and the day. `shaped`: kept with
+    /// the shape that waits for these words (`shape.rs`).
     Wish {
         date: Option<String>,
         say: String,
         of: WishOf,
         apart: Option<RunOptions>,
+        shaped: bool,
     },
+    /// `shape`: the options name no wish.
+    Shape(RunOptions, String, String),
     Hear(HearOptions),
     /// `hear --settings`.
     Voice,
@@ -93,6 +97,7 @@ pub fn parse(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         Some(Value(command)) if command == "rule" => return parse_rule(parser),
         Some(Value(command)) if command == "settle" => return parse_settle(parser),
         Some(Value(command)) if command == "wish" => return parse_wish(parser),
+        Some(Value(command)) if command == "shape" => return crate::shape::parse(parser),
         Some(Value(command)) if command == "hear" => return parse_hear(parser),
         Some(Value(command)) if command == "run" => return parse_run(parser),
         Some(Value(command)) if command == "hook" => return parse_hook(parser),
@@ -174,7 +179,7 @@ const NEITHER: &str = "wish takes --say and --project or --after";
 fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let usage = |e: lexopt::Error| Failure::Usage(e.to_string());
     let (mut date, mut say, mut project, mut after) = (None, None, None, None);
-    let (mut run, mut logs, mut skip) = (false, None, None);
+    let (mut run, mut logs, mut skip, mut shaped) = (false, None, None, false);
     while let Some(arg) = parser.next().map_err(usage)? {
         match arg {
             Long("help") | Short('h') => return Ok(Command::Help),
@@ -183,6 +188,7 @@ fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
             Long("project") => project = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("after") => after = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             Long("run") => run = true,
+            Long("shaped") => shaped = true,
             Long("logs") => logs = Some(PathBuf::from(parser.value().map_err(usage)?)),
             Long("skip") => skip = Some(parser.value().and_then(|v| v.string()).map_err(usage)?),
             other => return Err(usage(other.unexpected())),
@@ -194,6 +200,7 @@ fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
     let apart = if run { Some(found(logs, &skip.unwrap_or_default())?) } else { None };
     let of = match (project, after) {
         (Some(project), None) => WishOf::Project(project),
+        (None, Some(_)) if shaped => return Err(Failure::Usage("wish takes --shaped with --project".to_string())),
         (None, Some(after)) => WishOf::After(after),
         (Some(_), Some(_)) => {
             let both =
@@ -203,7 +210,7 @@ fn parse_wish(mut parser: lexopt::Parser) -> Result<Command, Failure> {
         (None, None) => return Err(Failure::Usage(NEITHER.to_string())),
     };
     match say {
-        Some(say) => Ok(Command::Wish { date, say, of, apart }),
+        Some(say) => Ok(Command::Wish { date, say, of, apart, shaped }),
         None => Err(Failure::Usage(NEITHER.to_string())),
     }
 }
@@ -246,7 +253,7 @@ fn parse_hear(mut parser: lexopt::Parser) -> Result<Command, Failure> {
 
 /// The options of a run whose repo is found by its name in the session logs: the logs named, or Claude Code's
 /// own, the folder names switched off, and the harness `JELLYMOON_CLAUDE` names.
-fn found(logs: Option<PathBuf>, skip: &str) -> Result<RunOptions, Failure> {
+pub fn found(logs: Option<PathBuf>, skip: &str) -> Result<RunOptions, Failure> {
     let logs = logs.or_else(|| harness_folder().ok().map(|folder| folder.join("projects")));
     let skip = jellymoon_core::skip_names(skip).map_err(Failure::Usage)?;
     Ok(RunOptions { logs, harness: named("JELLYMOON_CLAUDE"), skip, ..RunOptions::default() })

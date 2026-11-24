@@ -44,17 +44,18 @@ pub use no_logs::page_with_no_logs;
 pub use project::{Known, PROJECTS_MAX, Projects, add_project, forget_project, new_project, projects};
 pub use reader::{DayOptions, day, skip_names};
 pub use reading::{PageOptions, page};
+pub use redact::wish_start;
 pub use ruling::{deliver, rule};
 pub use run::{
-    ANSWER_READ, Alone, FileChange, FileKind, KeepOptions, Kept, Piece, Ran, RunOptions, RunOutcome, Shown, ShownEntry,
-    ShownFile, Started, Step, Steps, Told, Tool, Tossed, Waiting, Waits, WorkDone, WorkState, WorkTap, answer_run,
-    doing, ended_alone, followable, keep_run, run, run_apart, show_file, show_run, stands, stop_run, toss_run, waiting,
-    waits, work_tapped,
+    ANSWER_READ, Alone, FileChange, FileKind, KeepOptions, Kept, Piece, Ran, RunOptions, RunOutcome, SHAPE_MODEL,
+    Shape, ShapeOutcome, Shaped, Shown, ShownEntry, ShownFile, Started, Step, Steps, Told, Tool, Tossed, Waiting,
+    Waits, WorkDone, WorkState, WorkTap, answer_run, doing, ended_alone, followable, keep_run, run, run_apart, shape,
+    show_file, show_run, stands, stop_run, toss_run, waiting, waits, wish_after, wish_of_shape, wish_shaped,
+    work_tapped,
 };
 pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, ReaderTurn, Ruling, Wish, WishState};
 pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};
 pub use uninstall::{UninstallOptions, Uninstalled, uninstall};
 pub use wish::{
-    MADE_MAX, MADE_SAID_MAX, MadeWish, Wished, going, made, offered, wish, wish_after, wish_offered, wish_start,
-    with_made, with_made_said,
+    MADE_MAX, MADE_SAID_MAX, MadeWish, Wished, going, made, offered, wish, wish_offered, with_made, with_made_said,
 };

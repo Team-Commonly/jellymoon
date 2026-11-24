@@ -26,6 +26,15 @@ use crate::copy::{self, Base, Unkept};
 use crate::wish::{self, MadeWish};
 use crate::{Error, find};
 
+/// Keeps a follow-up (F53): a wish the person made of the work of the wish `after`, a made wish of `day`. It
+/// is a made wish as [`wish::wish`] keeps one, for the followed wish's project, and names the wish it follows. A
+/// refusal has written nothing: every one of [`wish::wish`]'s, and a wish that cannot be followed.
+pub fn wish_after(home: &Path, day: Option<&str>, typed: &str, after: &str) -> Result<wish::Wished, Error> {
+    let (day, said) = (wish::day_of(day)?, wish::words(typed)?);
+    let project = project(home, &day, after)?;
+    wish::keep(home, &day, (said, project), (Some(after.to_string()), None))
+}
+
 const FOLLOWED: Asked =
     Asked { to: "follow", done: "followed", going: "is going: its work can be followed once it has finished" };
 

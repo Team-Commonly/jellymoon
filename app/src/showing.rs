@@ -295,7 +295,7 @@ impl Showing {
 
     /// Enter in the entry, as work for another thread.
     pub fn wishing(&self, typed: &str, project: Option<&str>) -> Option<Wishing> {
-        self.with(|on| on.wishing(typed, project))
+        self.with(|on| on.shaping(typed, project))
     }
 
     /// Enter in the field of the note `note`, as work for another thread: an answer to a run that asks, or a

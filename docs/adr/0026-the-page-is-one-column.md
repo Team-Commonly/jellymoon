@@ -31,7 +31,8 @@ bottom, and the place to say the next thing under it.
    on that wish's character, as before.
 4. **The app orders the column; the kit only lays out what it is given** (`app/src/column.rs`, pure). The day's
    own notes first; then each made wish, oldest first: its `Said`, `typed-<wish>`, then its notes in one fixed
-   order of their ids' prefixes (`column::ORDER`). `scene::ruled`, the core calls and every tap are unchanged:
+   order of their ids' prefixes (`column::ORDER`); last the notes of a wish that is not made yet (ADR 0025).
+   `scene::ruled`, the core calls and every tap are unchanged:
    the column is a reordering of the same `Scene`, applied where the scene reaches the layout
    (`lines::lines`, `window`).
 5. **The entry is the window's, not the column's.** A band at the window's bottom holds the field and its

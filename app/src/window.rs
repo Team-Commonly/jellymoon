@@ -134,7 +134,11 @@ fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut A
     let field = (made.id != crate::wishing::ENTRY).then(|| made.id.clone());
     let (at_once, wishing) = match &field {
         Some(note) => shown.typing(note, &made.text).unzip(),
-        None => (None, shown.wishing(&made.text, made.option.as_deref())),
+        // The page says at once that the wish is being read (`shaping.rs`).
+        None => {
+            let wishing = shown.wishing(&made.text, made.option.as_deref());
+            (Some(shown.scene()), wishing)
+        }
     };
     // An answer's note changes at once (`answering.rs`). The view is in the middle of handling the key: it
     // takes the scene once that is done.

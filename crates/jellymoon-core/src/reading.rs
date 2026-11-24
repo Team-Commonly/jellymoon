@@ -72,13 +72,13 @@ fn projects(day: &ReaderDay) -> Vec<String> {
 }
 
 /// The only part of the harness's command line a caller chooses: a name, which cannot start a flag or hold a space.
-fn is_model_name(model: &str) -> bool {
+pub(crate) fn is_model_name(model: &str) -> bool {
     let plain = |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-');
     model.len() <= 64 && model.starts_with(|c: char| c.is_ascii_alphanumeric()) && model.chars().all(plain)
 }
 
 /// Takes the model's text out of a Markdown code fence, when it put one around it.
-fn unfence(text: &str) -> &str {
+pub(crate) fn unfence(text: &str) -> &str {
     let text = text.trim();
     match text.split_once('\n') {
         Some((first, rest)) if first.starts_with("```") => rest.trim().strip_suffix("```").unwrap_or(rest.trim()),

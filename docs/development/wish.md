@@ -10,7 +10,15 @@ own that goes on after this command has exited.
 jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>]
 jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --run [--logs <dir>] [--skip <names>]
 jellymoon wish --say <your words> --after <id> [--date <YYYY-MM-DD>] [--run [--logs <dir>] [--skip <names>]]
+jellymoon shape --say <your words> --project <folder name> [--date <YYYY-MM-DD>] [--logs <dir>] [--skip <names>]
+jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] --shaped [--run [--logs <dir>] [--skip <names>]]
 ```
+
+`shape` keeps no wish: it asks the person's Claude Code, which only reads, to say the wish more sharply, and a
+sharper wish that passed core's check waits in `pages/<day>.shape.json`. `wish --shaped` keeps the wish with the
+shape that waits for these same words and project (the kept wish then has `shaped`, the prompt its run is given),
+and as typed when there is none, which it says on stderr
+([ADR 0025](../adr/0025-the-wish-is-shaped-before-a-run.md)).
 
 It prints one line of JSON and exits 0. With no `--date` the day is today in the computer's time zone, which `TZ`
 overrides.

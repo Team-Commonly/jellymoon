@@ -28,6 +28,7 @@ mod never;
 mod obeyed;
 mod place;
 mod record;
+mod shape;
 mod show;
 mod steps;
 mod stop;
@@ -51,14 +52,15 @@ pub use apart::{Started, run_apart};
 pub(crate) use asks::kept as kept_question;
 pub(crate) use end::bury;
 use end::{lock_file, settle};
-pub use follow::followable;
-pub(crate) use follow::project as followed;
+pub use follow::{followable, wish_after};
 pub use keep::{KeepOptions, Kept, keep_run};
 pub(crate) use left::tidy;
 pub(crate) use place::{plain, theirs};
 use record::Record;
 pub(crate) use record::work_waits;
 use serde::{Deserialize, Serialize};
+pub(crate) use shape::kept as kept_shaped;
+pub use shape::{SHAPE_MODEL, Shape, ShapeOutcome, Shaped, shape, wish_of_shape, wish_shaped};
 pub use show::{
     Alone, FileChange, FileKind, Shown, ShownEntry, ShownFile, WorkState, ended_alone, show_file, show_run,
 };
@@ -215,7 +217,7 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     // work beside this run's own, and a copy no wish names is taken back (`left.rs`). It is done before the
     // folder is looked up, so none of its waits stands between that lookup and git opening the folder.
     tidy(home, &wish::kept_of(home, &day)?);
-    let (repo, from) = place::found(home, &day, &wish, options)?;
+    let (repo, from) = place::found(home, &day, &wish.project, options)?;
     // A test's build can wait here, with the folder looked up and nothing yet asked of git.
     busy::pause("JELLYMOON_TEST_PLACE_WAIT_MS");
     cap::room(home, cap::AGAIN)?;
@@ -243,7 +245,8 @@ pub fn run(home: &Path, options: &RunOptions) -> Result<Ran, Error> {
     // Every check a run makes of a repo is passed: it is a project Jellymoon knows from now on (`project.rs`).
     project::used(home, &repo, &wish.project, &day);
     let limit = or_test(LIMIT, "JELLYMOON_TEST_RUN_LIMIT_MS");
-    let said = format!("{}\n", wish.said);
+    // A wish kept from a shape gives the harness its shaped prompt (`shape.rs`); every other its typed words.
+    let said = format!("{}\n", wish.shaped.as_ref().unwrap_or(&wish.said));
     let go = follow::Go { home, run: &copy.run, folder: &copy.folder, start: &began_at, said, limit };
     let ended = go.started(harness, session, fork.as_deref());
     let never = match &ended {

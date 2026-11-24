@@ -1,6 +1,7 @@
 //! A scene in the order its page is read: one column, from its top. First the day's own notes, the ones of no made
 //! wish. Then each made wish, the oldest first: what the person typed for it, and under that the wish's notes, in
-//! one fixed order of what they are ([`ORDER`]), whatever order they were put on the scene in. A pure function:
+//! one fixed order of what they are ([`ORDER`]), whatever order they were put on the scene in. Last the notes of a
+//! wish that is not made yet (`shaping.rs`): the newest thing on the page, over the entry. A pure function:
 //! the scene's notes are moved and none is changed, added to or taken away, but the list of the made wishes
 //! (`scene::MADE`), whose rows are the words each `Said` now carries.
 //!
@@ -15,18 +16,17 @@ use crate::scene::MADE;
 /// on the wish's work, so the person's own words are `typed-<wish>`.
 pub const TYPED: &str = "typed-";
 
-/// The notes of one wish, by what their ids begin with, in the order they stand under what the person typed: how
-/// the wish is being shaped, what its run is doing and the choice to stop it, what the run says it did, the work
-/// that waits and its files, a choice to be sure of, what is being done with the work, the wish's own note, and
-/// last the answer.
-pub const ORDER: [&str; 11] =
-    ["shape-", "shaping", "steps-", "stop-", "told-", "work-", "file-", "sure-", "busy-", "wish-", "said-"];
+/// The notes of one wish, by what their ids begin with, in the order they stand under what the person typed: what
+/// its run is doing and the choice to stop it, what the run says it did, the work that waits and its files, a
+/// choice to be sure of, what is being done with the work, the wish's own note, and last the answer.
+pub const ORDER: [&str; 9] = ["steps-", "stop-", "told-", "work-", "file-", "sure-", "busy-", "wish-", "said-"];
 
 /// The scene in the order of its column.
 pub fn column(scene: &Scene) -> Scene {
     let made = |note: &Note| matches!(note, Note::Whole { title, .. } if title == MADE);
-    let Some(Note::Whole { rows, .. }) = scene.notes.iter().find(|note| made(note)) else {
-        return scene.clone();
+    let rows = match scene.notes.iter().find(|note| made(note)) {
+        Some(Note::Whole { rows, .. }) => rows.as_slice(),
+        _ => &[],
     };
     // The made wishes are the scene's last characters, one for each row and in the rows' order (`scene::ruled`).
     let first = scene.characters.len().saturating_sub(rows.len());
@@ -40,12 +40,13 @@ pub fn column(scene: &Scene) -> Scene {
             }
         }
     }
-    let own = left.into_iter().flatten().cloned();
-    Scene { notes: own.chain(under).collect(), ..scene.clone() }
+    let newest = |note: &&Note| crate::working::id_of(note).is_some_and(crate::shaping::names);
+    let (last, own): (Vec<&Note>, Vec<&Note>) = left.into_iter().flatten().partition(newest);
+    Scene { notes: own.into_iter().cloned().chain(under).chain(last.into_iter().cloned()).collect(), ..scene.clone() }
 }
 
 /// Whether `note` is a note of the wish `wish` of the kind `prefix`: its id is the prefix and then the wish's id,
-/// with or without something of the note's own between them and a `-` (`file-3-m1`, `shaping-m1`).
+/// with or without something of the note's own between them and a `-` (`file-3-m1`).
 fn of(note: &Note, prefix: &str, wish: &str) -> bool {
     let (Note::Text { id, .. } | Note::Choice { id, .. } | Note::Told { id, .. }) = note else { return false };
     let Some(rest) = id.strip_prefix(prefix) else { return false };
@@ -100,7 +101,6 @@ mod tests {
             .flat_map(|wish| {
                 ORDER.iter().rev().map(move |prefix| match *prefix {
                     "file-" => text(&format!("file-3-{wish}")),
-                    "shaping" => text(&format!("shaping-{wish}")),
                     prefix => text(&format!("{prefix}{wish}")),
                 })
             })
@@ -108,10 +108,7 @@ mod tests {
         notes.extend([text("wish-w1"), own, text("work-m11")]);
         let ordered = ids(&column(&day(notes)));
         let of = |wish: &str| {
-            let kinds = [
-                "shape-", "shaping-", "steps-", "stop-", "told-", "work-", "file-3-", "sure-", "busy-", "wish-",
-                "said-",
-            ];
+            let kinds = ["steps-", "stop-", "told-", "work-", "file-3-", "sure-", "busy-", "wish-", "said-"];
             [vec![format!("typed-{wish}")], kinds.iter().map(|kind| format!("{kind}{wish}")).collect()].concat()
         };
         let own = ["wish-w1", "own", "work-m11"].map(String::from).to_vec();
@@ -125,5 +122,15 @@ mod tests {
         assert_eq!(ordered.notes, [said("typed-m1", "first words"), said("typed-m2", "second words")]);
         let none = Scene { notes: vec![text("work-m1")], ..Scene::default() };
         assert_eq!(column(&none), none);
+    }
+
+    // A wish that is not made yet is the newest thing on the page: it stands last, over the entry it was typed in.
+    #[test]
+    fn a_wish_that_is_being_read_or_stands_sharper_is_the_column_s_last() {
+        let pair = [text("shape-said"), text("shape")];
+        let ordered = ids(&column(&day(pair.into_iter().chain([text("wish-w1"), text("work-m2")]).collect())));
+        assert_eq!(ordered, ["wish-w1", "typed-m1", "typed-m2", "work-m2", "shape-said", "shape"]);
+        let reading = Scene { notes: vec![text("shaping"), text("wish-w1")], ..Scene::default() };
+        assert_eq!(ids(&column(&reading)), ["wish-w1", "shaping"]);
     }
 }

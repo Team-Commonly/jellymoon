@@ -81,6 +81,8 @@ Not measured: Windows, Linux, an older Claude Code, and a link inside the projec
 - A wish refused after a tap (the day has its eight wishes; the project is no longer on offer) leaves a note with
   the start of the typed words, not the whole of them in the entry.
 - Enter while a sharper wish stands reads the new words in its place; the first words are gone with no note.
+- A sharper wish that stands when the app is quit is not shown at the next open: its shape waits in its file, and
+  neither it nor the typed words are on the page (found on a walk of the one-column page).
 - A shape made by the command for the same words on the same day, while a pair stands in the window, is the one a
   tap keeps: the text is checked, and it is not the one on show.
 - A build before this one refuses a day's made wishes when one of them holds `shaped`.

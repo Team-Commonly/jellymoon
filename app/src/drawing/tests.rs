@@ -248,11 +248,11 @@ fn a_tap_at_the_picture_s_place_opens_and_closes_the_note_on_show() {
     let shown = Showing::of(Some(OnShow { today, page: None, scene: scene.clone() }));
     let told_on = |shown: &Showing| seen(&shown.column(&scene), "told-m1").0;
     assert!(!told_on(&shown));
-    let tapped = shown.chose("work-m1", PICTURE_PLACE);
+    let tapped = shown.chose("work-m1", PICTURE_PLACE, "");
     assert!(matches!(&tapped, Some((now, None)) if *now == scene), "the scene on show, and nothing left to do");
     assert!(told_on(&shown) && told_on(&shown));
-    assert!(shown.chose("told-m1", PICTURE_PLACE).is_none() && told_on(&shown));
-    assert!(shown.chose("work-m1", PICTURE_PLACE).is_some() && !told_on(&shown));
+    assert!(shown.chose("told-m1", PICTURE_PLACE, "").is_none() && told_on(&shown));
+    assert!(shown.chose("work-m1", PICTURE_PLACE, "").is_some() && !told_on(&shown));
     assert_eq!(shown.scene(), Some(scene), "the scene the app keeps is as it was");
-    assert!(Showing::default().chose("work-m1", PICTURE_PLACE).is_none(), "a page with no day has no such tap");
+    assert!(Showing::default().chose("work-m1", PICTURE_PLACE, "").is_none(), "a page with no day has no such tap");
 }

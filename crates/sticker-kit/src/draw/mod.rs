@@ -17,6 +17,7 @@ mod input;
 mod measure;
 mod paint;
 mod pencil;
+mod settle;
 mod shapes;
 mod sprites;
 mod stage;
@@ -29,9 +30,9 @@ use gpui::{
     div, img, prelude::*, px,
 };
 
-use crate::geom::Viewport;
+use crate::geom::{Rect, Viewport};
 use crate::layout::{PieceKind, Placed, entry_top, layout, layout_entry, page_scale, scroll_most};
-use crate::scene::{PICTURE_PLACE, Scene, speaker};
+use crate::scene::Scene;
 use crate::scroll::Scroll;
 use crate::theme::Theme;
 
@@ -44,6 +45,8 @@ use measure::hsla;
 pub use measure::{GlyphMeasure, load_fonts};
 use paint::Shape;
 use pencil::Sketched;
+pub use settle::SETTLE;
+use settle::Settled;
 use shapes::Brush;
 use sprites::Sprites;
 use stage::{Stage, is_art};
@@ -54,10 +57,12 @@ pub enum Tap {
     Character {
         id: String,
     },
-    /// An option of a note, or, at [`PICTURE_PLACE`], the picture of a drawn note or its `?`.
+    /// An option of a note with its `words` as the scene that was drawn held them, or, at
+    /// [`crate::PICTURE_PLACE`] and with no words, the picture of a drawn note or its `?`.
     Option {
         note_id: String,
         index: usize,
+        words: String,
     },
     /// The action of the entry `id` ([`crate::Entry::action`]).
     Action {
@@ -110,6 +115,8 @@ pub struct Page {
     stage: Stage,
     /// When each picture came, for the pencil that draws it.
     sketched: Sketched,
+    /// Where each choice stands and since when: one that has just moved takes no tap (`settle.rs`).
+    settled: Settled,
     sprites: Sprites,
     themed: bool,
     pressed: Option<usize>,
@@ -139,6 +146,7 @@ impl Page {
             stale: Stale::Spring,
             stage: Stage::default(),
             sketched: Sketched::default(),
+            settled: Settled::default(),
             sprites: Sprites::default(),
             themed: false,
             pressed: None,
@@ -227,7 +235,11 @@ impl Page {
         self.stage.retarget(&self.placed, &placed, &self.scene, animate);
         self.sketched.meet(&placed, self.started.elapsed().as_secs_f32());
         self.most = scroll_most(&placed, &self.theme, viewport);
+        let before = self.scroll.at();
         self.scroll.fit(self.most);
+        let place = (before, self.scroll.at(), settle::SLACK * page_scale(&self.theme, viewport));
+        let moved = self.stale == Stale::Spring;
+        self.settled.meet(&placed, &self.scene, place, self.settle_time(), moved);
         self.placed = placed;
         self.viewport = viewport;
         self.stale = Stale::Fresh;
@@ -243,23 +255,6 @@ impl Page {
         }
         self.stats.frames += 1;
         (now.duration_since(self.started).as_secs_f32(), dt)
-    }
-
-    fn tap(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(piece) = self.placed.get(index) else {
-            return;
-        };
-        let tap = match piece.piece {
-            PieceKind::Option => Tap::Option { note_id: piece.id.clone(), index: piece.index },
-            PieceKind::Action => Tap::Action { id: piece.id.clone() },
-            PieceKind::Picture => Tap::Option { note_id: piece.id.clone(), index: PICTURE_PLACE },
-            // A tap on what the person typed is a tap on the character it is of.
-            PieceKind::Quote => Tap::Character { id: speaker(&piece.id).to_string() },
-            _ => Tap::Character { id: piece.id.clone() },
-        };
-        if let Some(handler) = &self.on_tap {
-            handler(&tap, window, cx);
-        }
     }
 
     /// The frame's flat shapes and its elements in paint order (sticker art, then text, then the invisible tap
@@ -278,6 +273,7 @@ impl Page {
         order.sort_by_key(|&i| self.placed[i].z);
         let mut flat = [Vec::new(), Vec::new()];
         let mut parts: [[Vec<AnyElement>; 3]; 2] = Default::default();
+        self.settled.targets.clear();
         for i in order {
             let piece = &self.placed[i];
             let at = usize::from(piece.piece.in_band());
@@ -302,6 +298,10 @@ impl Page {
             }
             if self.taps(piece) {
                 parts[at][2].push(self.tap_target(i, piece, pose, cx));
+                // What is moved under the band's top takes no tap, and is no target.
+                let room = if at == 0 { entry_top(&self.theme, viewport).max(0.0) } else { viewport.h };
+                let seen = Rect::new(0.0, 0.0, viewport.w, room);
+                self.settled.targets.push(piece.rect.moved(pose.dx, pose.dy).clipped(&seen));
             }
         }
         let layer = |(flat, parts): (Vec<Shape>, [Vec<AnyElement>; 3])| -> Layer {

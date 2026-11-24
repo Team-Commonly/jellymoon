@@ -856,7 +856,12 @@ max_file_lines = 400
 # rest of the view (221), and its tests (`tests/pencil.rs`, 320).
 # A wish's work is drawn raised the kit by 68: a drawn note's field, placed and typed in by the text note's code
 # (`src/scene.rs`, `layout/drawn.rs`, `layout/notes.rs`, `draw/field.rs`, 12), and its two tests (56).
-"crates/sticker-kit" = 12390
+# A tap means what was seen raised the kit by 283: which choice has settled and the words a tap carries
+# (`draw/settle.rs`, 168, its own test 30 of them; `Scene::option`, 16; the view, 1 fewer), and its tests at the
+# window (`tests/column_draw.rs`, 99; `tests/entry_draw.rs`, 1).
+# The place a tap's guard keeps is the window's as a layout moved it, raised the kit by 43: the rule and its own
+# test (`draw/settle.rs`, 10; the view, 1) and two tests at the window of a column held at its end (32).
+"crates/sticker-kit" = 12716
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1074,7 +1079,10 @@ max_file_lines = 400
 # Every wish keeps its place raised it by 438: its tests at the made-up window (`tests/several_wishes.rs`, 271) and
 # which wishes a look makes again (`src/showing/turns.rs`, 94), and 73 more in all across the files and tests
 # where the rules of one open wish were replaced.
-"app" = 18306
+# A tap means what was seen raised it by 59: the words of a tap compared with the note on show
+# (`src/showing.rs`, 9), and its tests (`tests/several_wishes.rs`, 26; `src/showing/tests.rs`, 11;
+# `tests/f43/showing.rs`, 4; the made-up window's tap that carries words, `tests/support/tapper.rs`, 9).
+"app" = 18365
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

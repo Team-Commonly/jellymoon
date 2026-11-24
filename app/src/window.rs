@@ -267,8 +267,8 @@ fn poked(id: &str, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
 /// A tap on an option: its scene is shown at once, and what it left to do (a stop, which waits for the run to
 /// end, or a show, a keep or a toss of work that waits) is run off the window's thread. A tap on a drawn note's
 /// picture comes here too, and leaves nothing to do: the note is drawn open, or closed again (`drawing.rs`).
-fn chose(note: &str, index: usize, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
-    let Some((after, left)) = shown.chose(note, index) else { return };
+fn chose(note: &str, (index, words): (usize, &str), shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
+    let Some((after, left)) = shown.chose(note, index, words) else { return };
     // The view is in the middle of handling the tap: it takes the new scene once that is done.
     let (now, open) = (page.clone(), shown.clone());
     cx.defer(move |cx| {
@@ -294,7 +294,7 @@ pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> 
         let tapped = move |tap: &Tap, _: &mut gpui::Window, cx: &mut App| {
             let (id, option) = match tap {
                 Tap::Character { id } => (id, None),
-                Tap::Option { note_id, index } => (note_id, Some(*index)),
+                Tap::Option { note_id, index, words } => (note_id, Some((*index, words.as_str()))),
                 Tap::Action { id } => {
                     say(&tap_line(id, None));
                     return choosing(&on_show, page.clone(), cx);
@@ -310,10 +310,10 @@ pub(crate) fn view(scene: Scene, theme: Theme, shown: Showing, cx: &mut App) -> 
                     });
                 }
             };
-            say(&tap_line(id, option));
+            say(&tap_line(id, option.map(|(index, _)| index)));
             match option {
                 None => poked(id, &on_show, page.clone(), cx),
-                Some(index) => chose(id, index, &on_show, page.clone(), cx),
+                Some(tapped) => chose(id, tapped, &on_show, page.clone(), cx),
             }
         };
         let made = move |made: &EntryMade, _: &mut gpui::Window, cx: &mut App| {

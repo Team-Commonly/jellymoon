@@ -209,7 +209,8 @@ fn a_chip_chooses_its_option_and_the_page_under_the_entry_still_takes_taps() {
 
     let option = piece(&page, cx, PieceKind::Option, 1);
     click(cx, option.rect.center());
-    assert_eq!(*taps.borrow(), [Tap::Option { note_id: "picnic-place".into(), index: 1 }]);
+    let words = "“the hill has the best view, let's eat up there”".to_string();
+    assert_eq!(*taps.borrow(), [Tap::Option { note_id: "picnic-place".into(), index: 1, words }]);
     keys(cx, "x");
     assert_eq!(state(&page, cx), ("x".into(), 1, Some(2), true), "a press elsewhere gives the entry the keys");
     keys(cx, "backspace");

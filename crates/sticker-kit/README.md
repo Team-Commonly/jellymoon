@@ -22,6 +22,28 @@ motion. A pure function arranges the page; a theme, which is data, styles it.
 `draw::Page` is the GPUI view; taps on characters, options and pictures reach `on_tap`. Files or folders dropped on it
 from outside the app reach `on_paths`, with their paths, called while the page is in use as `on_tap` is.
 
+**A tap means what was seen** (`draw/settle.rs`). A page changes while a pointer is on its way, so:
+
+- A tap on an option is `Tap::Option { note_id, index, words }`: `words` is the scene's own string for that
+  option (`Scene::option`), whole, as the scene held it when the pieces on the page were laid out. Whoever acts
+  on the tap can compare it with what the note says now. A tap on a picture carries no words.
+- A click on an option, or on a drawn note's picture or its `?`, is no tap while the piece has not settled: for
+  `SETTLE` (400 ms) after a new layout moved it in the window by more than 4 design units, and for `SETTLE`
+  after it
+  came onto the page at a point of the window where another piece took a tap in the frame before. A piece is the
+  same one across frames by its kind, its note's id and its index.
+- What counts is what a new layout did in the window. A card that comes at the end of a column held at its end
+  slides the older choices up, and they have moved; a card that comes above while the column holds its end leaves
+  them where they were. A turn of the wheel and a window that changed size are the person's own moves and hold
+  nothing back. A new piece where nothing took a tap takes one at once.
+- A click that was no tap is not kept for later and nothing is drawn for it: the person clicks again. Characters,
+  bubbles, chips, the entry and typing are never held back.
+- The time is the page's own, the clock its drawing goes by; `page.set_settle_time(Some(seconds))` tells it one,
+  for a test.
+
+Not done: a choice whose words change in place (same note, same index, same place) takes a tap at once, and only
+the words it carries tell the two apart. No real window was clicked.
+
 ## The entry: one line to type
 
 A page may hold one `Entry` (`src/scene.rs`) beside its scene: an id, a hint, a
@@ -248,8 +270,9 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
   whole on one line), else left out of a track and written "a file" in a bar's row. The note's `words` are not
   placed while `open` is false: a `?` in a pencil ring (`PieceKind::Ask`) stands at the picture's top right when
   there are any. With `open` each is drawn under the picture to its last word. The kit keeps no state for it.
-- **Taps.** An option is a text note's: `Tap::Option` with the note's id and the option's place. A tap on the
-  picture or the `?` is `Tap::Option` with the note's id and `PICTURE_PLACE`, the place of no option.
+- **Taps.** An option is a text note's: `Tap::Option` with the note's id, the option's place and its words. A
+  tap on the picture or the `?` is `Tap::Option` with the note's id, `PICTURE_PLACE`, the place of no option, and
+  no words. Both wait until the piece has settled ("A tap means what was seen", above).
 - **Inks.** `palette.pencil`, `palette.added`, `palette.taken`. A theme file that sets none gets the sticker
   theme's; they are held to no floor.
 - **Reading one without a window.** The `Picture` piece carries its `sketch`: the strokes, and its parts by name

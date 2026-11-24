@@ -1,6 +1,7 @@
 //! The column in the view, headless: no window is shown. A turn of the wheel moves the column and never the entry,
 //! the column is shown over the entry's band only, a page opens at the column's end and stays there while it grows,
-//! and a click on what a person typed is a tap on the character it is of.
+//! and a click on what a person typed is a tap on the character it is of. A click means what was seen: a choice
+//! that has just moved in the column, or has just come where another piece took a tap, takes none for `SETTLE`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::cell::RefCell;
@@ -10,7 +11,7 @@ use gpui::{
     Entity, Modifiers, ScrollDelta, ScrollEvent, TestAppContext, TestDispatcher, VisualTestContext, point, px, size,
 };
 use sticker_kit::draw::headless::text_system;
-use sticker_kit::draw::{Page, Tap, load_fonts};
+use sticker_kit::draw::{Page, SETTLE, Tap, load_fonts};
 use sticker_kit::{
     Entry, Kept, Note, PICTURE_PLACE, Picture, PieceKind, Placed, Rect, Scene, Theme, Viewport, entry_top, scroll_most,
 };
@@ -38,6 +39,18 @@ fn long(count: usize) -> Scene {
     scene.notes.push(Note::Said { id: "typed-garden".into(), text: "plant the herbs by the door".into() });
     scene.notes.extend((0..count).map(card));
     scene
+}
+
+/// A day that fits its window, so that nothing of it is moved by the column holding its end: these cards, each
+/// with one line, under the header alone.
+fn small(cards: &[usize]) -> Scene {
+    let short = |n: &usize| match card(*n) {
+        Note::Text { id, title, options, quoted, field, .. } => {
+            Note::Text { id, title, body: vec!["One line.".into()], options, quoted, field }
+        }
+        other => other,
+    };
+    Scene { characters: Vec::new(), notes: cards.iter().map(short).collect(), ..long(0) }
 }
 
 fn open(cx: &mut TestAppContext, scene: Scene) -> (Entity<Page>, &mut VisualTestContext, Taps) {
@@ -76,6 +89,21 @@ fn click(cx: &mut VisualTestContext, at: (f32, f32)) {
     cx.run_until_parked();
 }
 
+/// The tap on the second option of the card `id`, with its words as the scene holds them.
+fn no(id: &str) -> Tap {
+    Tap::Option { note_id: id.into(), index: 1, words: "No".into() }
+}
+
+/// The page's time for what settles: a test cannot wait for a clock.
+fn at_time(page: &Entity<Page>, cx: &mut VisualTestContext, seconds: f32) {
+    page.update(cx, |page, _| page.set_settle_time(Some(seconds)));
+}
+
+fn show(page: &Entity<Page>, cx: &mut VisualTestContext, scene: Scene) {
+    page.update(cx, |page, cx| page.set_scene(scene, cx));
+    cx.run_until_parked();
+}
+
 /// A turn of the wheel over the page, `dy` logical pixels: down the window when positive.
 fn wheel(cx: &mut VisualTestContext, dy: f32) {
     let delta = ScrollDelta::Pixels(point(px(0.0), px(dy)));
@@ -96,7 +124,7 @@ fn a_page_opens_at_its_column_s_end_and_the_wheel_moves_the_column_and_never_the
     assert!(last.bottom() <= band && field.y >= band && field.bottom() <= SIZE.h, "{last:?} {band} {field:?}");
     let option = shown(&page, cx, PieceKind::Option, "card-5", 1);
     click(cx, option.center());
-    assert_eq!(*taps.borrow(), [Tap::Option { note_id: "card-5".into(), index: 1 }], "the newest card is in reach");
+    assert_eq!(*taps.borrow(), [no("card-5")], "the newest card is in reach");
 
     // The wheel shows what is higher: the column moves by the turn, and the entry stays.
     wheel(cx, 200.0);
@@ -198,6 +226,109 @@ fn a_tap_on_a_drawn_note_s_option_is_a_text_note_s_and_one_on_its_picture_or_its
         let at = shown(&page, cx, kind, "work-garden", index);
         click(cx, at.center());
     }
-    let tap = |index: usize| Tap::Option { note_id: "work-garden".into(), index };
+    let tap = |index: usize| {
+        let words = if index == 1 { "Toss it".into() } else { String::new() };
+        Tap::Option { note_id: "work-garden".into(), index, words }
+    };
     assert_eq!(*taps.borrow(), [tap(1), tap(PICTURE_PLACE), tap(PICTURE_PLACE)], "the picture's place is no option's");
+}
+
+#[test]
+fn a_choice_a_card_pushed_down_the_column_takes_no_tap_until_it_has_settled() {
+    let mut cx = context();
+    let (page, cx, taps) = open(&mut cx, small(&[0]));
+    let was = shown(&page, cx, PieceKind::Option, "card-0", 1);
+    at_time(&page, cx, 10.0);
+    // An older wish's result comes above the card: the choice is somewhere else under the pointer.
+    show(&page, cx, small(&[7, 0]));
+    assert_eq!(scrolled(&page, cx), (0.0, 0.0), "the column still fits");
+    let now = shown(&page, cx, PieceKind::Option, "card-0", 1);
+    assert!(now.y > was.y + 40.0 && now.bottom() <= entry_top(&Theme::sticker(), SIZE), "{was:?} {now:?}");
+    click(cx, now.center());
+    at_time(&page, cx, 10.0 + SETTLE.as_secs_f32() - 0.05);
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [], "a choice that has just moved took a tap");
+    at_time(&page, cx, 10.0 + SETTLE.as_secs_f32() + 0.05);
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [no("card-0")], "settled, it takes the tap, with the words that were drawn");
+    // The click that was no tap was not kept for later: one tap, not three.
+    cx.run_until_parked();
+    assert_eq!(taps.borrow().len(), 1);
+}
+
+#[test]
+fn a_turn_of_the_wheel_moves_a_choice_in_the_window_and_it_takes_a_tap_at_once() {
+    let mut cx = context();
+    let (page, cx, taps) = open(&mut cx, long(6));
+    at_time(&page, cx, 10.0);
+    let was = shown(&page, cx, PieceKind::Option, "card-4", 1);
+    wheel(cx, 120.0);
+    let now = shown(&page, cx, PieceKind::Option, "card-4", 1);
+    assert!(now.y == was.y + 120.0 && now.bottom() <= entry_top(&Theme::sticker(), SIZE), "{was:?} {now:?}");
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [no("card-4")], "the wheel is the person's own move");
+    // The same scene given again, as a look gives it: the choice is where it was in the column.
+    show(&page, cx, long(6));
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [no("card-4"), no("card-4")], "a place in the window is not what is kept");
+}
+
+#[test]
+fn a_card_at_the_end_slides_an_older_choice_up_the_window_and_it_takes_no_tap_until_it_has_settled() {
+    let mut cx = context();
+    let (page, cx, taps) = open(&mut cx, long(6));
+    let was = shown(&page, cx, PieceKind::Option, "card-5", 1);
+    at_time(&page, cx, 10.0);
+    // The newest wish's result comes at the end, and the reader is there: every older card goes up the window.
+    show(&page, cx, long(7));
+    let now = shown(&page, cx, PieceKind::Option, "card-5", 1);
+    assert!(now.y < was.y - 40.0 && now.y > 0.0, "{was:?} {now:?}");
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [], "a choice that slid up under the pointer took a tap");
+    at_time(&page, cx, 10.0 + SETTLE.as_secs_f32() + 0.05);
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [no("card-5")], "settled, it takes the tap");
+}
+
+#[test]
+fn a_card_that_comes_above_a_column_held_at_its_end_leaves_a_choice_in_its_place_and_it_takes_a_tap_at_once() {
+    let mut cx = context();
+    let (page, cx, taps) = open(&mut cx, long(6));
+    let was = shown(&page, cx, PieceKind::Option, "card-5", 1);
+    at_time(&page, cx, 10.0);
+    let mut above = long(6);
+    above.notes.insert(2, card(9));
+    show(&page, cx, above);
+    let now = shown(&page, cx, PieceKind::Option, "card-5", 1);
+    assert!((now.y - was.y).abs() < 1.0, "{was:?} {now:?}");
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [no("card-5")], "it did not move under the pointer");
+}
+
+#[test]
+fn a_card_that_comes_at_the_column_s_end_where_nothing_took_a_tap_takes_one_at_once() {
+    let mut cx = context();
+    let (page, cx, taps) = open(&mut cx, small(&[0]));
+    at_time(&page, cx, 10.0);
+    show(&page, cx, small(&[0, 1]));
+    assert_eq!(scrolled(&page, cx), (0.0, 0.0), "the column still fits: nothing of it moved in the window");
+    let option = shown(&page, cx, PieceKind::Option, "card-1", 1);
+    click(cx, option.center());
+    assert_eq!(*taps.borrow(), [no("card-1")], "a new card is not dead");
+}
+
+#[test]
+fn a_card_that_comes_under_the_pointer_where_another_choice_stood_takes_no_tap_until_it_has_settled() {
+    let mut cx = context();
+    let (page, cx, taps) = open(&mut cx, small(&[0]));
+    let was = shown(&page, cx, PieceKind::Option, "card-0", 1);
+    at_time(&page, cx, 10.0);
+    show(&page, cx, small(&[9]));
+    let now = shown(&page, cx, PieceKind::Option, "card-9", 1);
+    assert_eq!(now, was, "the new card's choice is where the other card's stood");
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [], "a choice that came under the pointer took a tap");
+    at_time(&page, cx, 10.0 + SETTLE.as_secs_f32() + 0.05);
+    click(cx, now.center());
+    assert_eq!(*taps.borrow(), [no("card-9")]);
 }

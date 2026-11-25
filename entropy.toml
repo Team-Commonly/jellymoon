@@ -922,7 +922,9 @@ max_file_lines = 400
 # what a scene that takes another's place asks of the view (`src/draw/column.rs`, 92, of which 55 are tests), less
 # a doubled line (`src/pencil.rs`). The page staying while a note's field holds typed words raised it by 12
 # (`src/draw/column.rs`, of which 6 are a test).
-"crates/sticker-kit" = 14575
+# The strip of how a wish goes raised it by 404: its tests are 266 (`tests/strip.rs`, 211, and `tests/strip_draw.rs`,
+# 55), the picture is 84 (`src/layout/pictures/strip.rs`), and the other 54 are its scene data and that it takes no tap.
+"crates/sticker-kit" = 14979
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1204,7 +1206,9 @@ max_file_lines = 400
 # the made-up window's `tap:` and `pieces` (`tests/support/tapper.rs`, 21) and the window tests
 # (`tests/the_day_folds.rs`, 206; `tests/open_a_wish/window.rs`, 10, the click that opens the day first).
 # The reading said once on a folded day raised the next by 9 (`tests/the_day_folds.rs`).
-"app" = 21438
+# The first page as a sketch of how a wish goes raised it by 242: `tests/how_a_wish_goes.rs` is 181, the tests that
+# named the old note are 34 more, and the note itself is 27 (`src/scene.rs`, 23, and where a tap on it is no tap).
+"app" = 21680
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

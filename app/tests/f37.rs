@@ -110,8 +110,8 @@ fn the_footer_says_which_wishes_are_the_model_s_reading_and_which_the_person_s_o
     );
 }
 
-// The one page a made wish moves a clash on: a page whose reading holds a clash and no wish. It says "Nothing wished
-// for yet today." above the clash, and a made wish is a wish, so the note goes and the clash stands where it was.
+// The one page a made wish moves a clash on: a page whose reading holds a clash and no wish. The strip that shows how
+// a wish goes is above the clash, and a made wish is a wish, so the note goes and the clash stands where it was.
 #[test]
 fn on_a_page_with_a_clash_and_no_wish_read_a_made_wish_takes_the_empty_note_away_and_the_clash_moves_up() {
     let wish = json!({"id": "m1", "label": MADE, "said": MADE, "project": "alpha", "state": "working", "stars": []});
@@ -130,7 +130,7 @@ fn on_a_page_with_a_clash_and_no_wish_read_a_made_wish_takes_the_empty_note_away
         };
         scene.notes.iter().map(title).collect()
     };
-    assert_eq!(titles(&none), ["Nothing wished for yet today.", "these two clash"]);
+    assert_eq!(titles(&none), ["how", "these two clash"]);
     assert_eq!(titles(&one), ["these two clash", "wished here today"]);
     for theme in [Theme::sticker(), Theme::plain()] {
         let clash = |scene: &Scene| {

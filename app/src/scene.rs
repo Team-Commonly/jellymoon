@@ -4,7 +4,7 @@
 
 use jellymoon_core::{Clash, PageData, Side, Standing, Wish, WishState};
 use sticker_kit::text::clean;
-use sticker_kit::{Character, Mark, Mood, Note, Scene, State};
+use sticker_kit::{Character, Mark, Mood, Note, Panel, Picture, Scene, Shows, State};
 
 use crate::read::{LeftOut, Page};
 
@@ -35,12 +35,34 @@ pub(crate) const READING: &str = "This is the model's reading, unedited.";
 /// each says this of one wish. Core's words for a wish at work are "is being worked on" too.
 pub(crate) const GOING: &str = "Your wish is being worked on.";
 
-/// The title of the one note of a page with no wish on it, and its body when a project is on offer. With none,
-/// the body says to choose a folder first (`Today::draw`).
-pub const NOTHING: &str = "Nothing wished for yet today.";
-pub const NOTHING_HERE: &str = "Type what you want done in the field at the bottom.";
-pub const NO_PROJECT: &str =
-    "Choose the folder you want to work in, or type a name for a new project in the field at the bottom.";
+/// The id of the one note of a page with no wish on it: a strip that shows how a wish goes ([`how`]), and the
+/// captions of its three sketches, left to right. They are Jellymoon's own words.
+pub const HOW: &str = "how";
+pub const HOW_SAYS: [&str; 3] = ["say a wish", "it gets made", "keep or toss"];
+/// The one line under the strip when a project is on offer, which says where the first step is taken. With
+/// none it says to choose a folder first (`Today::draw`). What to type is the entry's own hint.
+pub const NOTHING_HERE: &str = "Type a wish in the field at the bottom.";
+pub const NO_PROJECT: &str = "First choose a folder to work in, or name a new project.";
+
+/// The note of a page with no wish on it: the strip, and `first` under it, the one line that says the first
+/// step. It is open so that line is drawn, has no option and no field, and nothing of it takes a tap.
+pub fn how(first: &str) -> Note {
+    let shows = [Shows::Speech, Shows::Sheet, Shows::Folder];
+    let panel = |(shows, caption): (Shows, &str)| Panel { shows, caption: caption.to_string() };
+    Note::Drawn {
+        id: HOW.to_string(),
+        picture: Picture::Strip { panels: shows.into_iter().zip(HOW_SAYS).map(panel).collect() },
+        words: vec![first.to_string()],
+        open: true,
+        options: Vec::new(),
+        field: None,
+    }
+}
+
+/// Whether a note is the one of a page with no wish on it.
+pub(crate) fn is_how(note: &Note) -> bool {
+    matches!(note, Note::Drawn { id, .. } if id == HOW)
+}
 
 /// [`ruled`] for a page nobody ruled on, with no made wish on it.
 pub fn scene(page: &Page) -> Scene {
@@ -49,7 +71,8 @@ pub fn scene(page: &Page) -> Scene {
 
 /// The page as the kit's pieces: a hero, one little one per wish in page order with one star per finished job, a list
 /// of what came true (a made wish that was let go has no star and is not listed), one choice note per clash, and a
-/// plain note for each thing the app has no piece for. When the file held more than the app draws, the first note
+/// plain note for each thing the app has no piece for. A page with no wish and no such thing has the strip that
+/// shows how a wish goes ([`how`]), where its notes begin. When the file held more than the app draws, the first note
 /// says how much was left out. `standing` holds, clash by clash, what core says of it: its two statements as a
 /// ruling would carry them, and the side the person chose with a tap.
 /// A clash core says is no choice (its statements are the same once cleaned, or one is empty) is a plain note.
@@ -69,7 +92,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let tracks = if data.clashes.is_empty() { going(made) } else { Vec::new() };
     let mut notes: Vec<Note> = left_out(page.left_out).into_iter().chain(tracks).collect();
     if data.wishes.is_empty() && page.unknown.is_empty() {
-        notes.push(Note::Plain { title: NOTHING.to_string(), body: NOTHING_HERE.to_string() });
+        notes.push(how(NOTHING_HERE));
     }
     let rows = |wish: &Wish| wish.stars.iter().map(|star| (star.clone(), wish.label.clone())).collect::<Vec<_>>();
     let came_true: Vec<(String, String)> = data.wishes[..first].iter().flat_map(rows).collect();

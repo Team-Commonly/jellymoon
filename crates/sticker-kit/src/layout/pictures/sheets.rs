@@ -107,6 +107,13 @@ fn folder(d: &mut Draft, right: f32, state: Kept, under: f32) {
         d.pencil.ink(Ink::Pencil);
         d.part("barred", over);
     }
+    folder_at(d, left, waits);
+    d.caption(place(state), (d.at.x + d.u(left + 28.0), under), 0.5);
+}
+
+/// A folder whose left side is `left` design units in: dashed while work `waits` for it, solid with a tick in
+/// the added ink once work is in it.
+pub(super) fn folder_at(d: &mut Draft, left: f32, waits: bool) {
     let body = d.rect(left, 14.0, 56.0, 36.0);
     d.pencil.frame(body, waits);
     // The folder's tab, over its top left corner.
@@ -122,7 +129,6 @@ fn folder(d: &mut Draft, right: f32, state: Kept, under: f32) {
         d.pencil.ink(Ink::Pencil);
         d.part("tick", tick);
     }
-    d.caption(place(state), (d.at.x + d.u(left + 28.0), under), 0.5);
 }
 
 /// How many files, as the picture says it under its sheets.

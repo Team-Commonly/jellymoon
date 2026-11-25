@@ -1,6 +1,6 @@
 //! Invented scenes for the examples and the tests.
 
-use crate::scene::{Bar, Character, Kept, Mood, Note, Picture, Scene, Stage, State};
+use crate::scene::{Bar, Character, Kept, Mood, Note, Panel, Picture, Scene, Shows, Stage, State};
 
 fn small(id: &str, label: &str, hue: u8, stars: u8, state: State) -> Character {
     Character { id: id.into(), label: label.into(), hue, stars, state, mood: Mood::Happy, says: String::new() }
@@ -64,6 +64,8 @@ impl Scene {
         let sheets = |made, changed, removed, state| Picture::Sheets { made, changed, removed, state };
         let bar = |name: &str, added, taken| Bar { name: name.into(), added, taken };
         let rows = vec![bar("src/hello.py", 30, 10), bar("README.md", 12, 0), bar("notes of mine.txt", 0, 7)];
+        let panel = |shows, caption: &str| Panel { shows, caption: caption.into() };
+        let last = panel(Shows::Folder, "kept, or thrown away");
         let pictures = vec![
             track(3, Stage::Thinking),
             track(7, Stage::Looking),
@@ -73,6 +75,7 @@ impl Scene {
             sheets(1, 1, 1, Kept::Tossed),
             sheets(0, 0, 0, Kept::Waiting),
             Picture::Bars { rows, more: 2 },
+            Picture::Strip { panels: vec![panel(Shows::Speech, "ask"), panel(Shows::Sheet, "made"), last] },
         ];
         let drawn = |(n, picture): (usize, Picture)| Note::Drawn {
             id: format!("drawn-{n}"),

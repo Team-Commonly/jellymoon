@@ -60,9 +60,9 @@ pub(crate) fn waits(scene: &Scene) -> bool {
     scene.notes.iter().any(|note| id_of(note) == Some(SHAPE))
 }
 
-/// Whether a note is the one that says the day has no wish.
+/// Whether a note is the one of a day with no wish: the strip that shows how a wish goes.
 pub(crate) fn nothing(note: &Note) -> bool {
-    matches!(note, Note::Plain { title, .. } if title == crate::scene::NOTHING)
+    crate::scene::is_how(note)
 }
 
 fn text(id: &str, title: &str, quoted: String, options: &[&str]) -> Note {

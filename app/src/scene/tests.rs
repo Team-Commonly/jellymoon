@@ -125,7 +125,19 @@ fn a_page_with_nothing_on_it_says_so() {
     let mut empty = page(vec![], vec![]);
     empty.data.read = PageRead { turns: 0, projects: vec![], no_logs: false };
     let scene = scene(&empty);
-    assert!(matches!(&scene.notes[..], [Note::Plain { title, .. }] if title == "Nothing wished for yet today."));
+    // The strip that shows how a wish goes, alone: three sketches in the order a wish goes, each with its
+    // caption, one line under them and nothing to tap.
+    let [Note::Drawn { id, picture: Picture::Strip { panels }, words, open: true, options, field: None }] =
+        &scene.notes[..]
+    else {
+        panic!("the strip alone: {:?}", scene.notes)
+    };
+    let drawn: Vec<(Shows, &str)> = panels.iter().map(|panel| (panel.shows, panel.caption.as_str())).collect();
+    let want = [(Shows::Speech, "say a wish"), (Shows::Sheet, "it gets made"), (Shows::Folder, "keep or toss")];
+    assert_eq!((id.as_str(), drawn, &words[..]), (HOW, want.to_vec(), &[NOTHING_HERE.to_string()][..]));
+    assert!(options.is_empty(), "{options:?}");
+    let old = "Nothing wished for yet today.";
+    assert!(!format!("{scene:?}").contains(old), "the old title is said nowhere");
     assert_eq!(scene.characters, []);
     assert_eq!(scene.footer, "", "no reading to speak of");
 }

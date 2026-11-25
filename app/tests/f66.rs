@@ -63,7 +63,10 @@ fn with_no_project_on_offer_the_entry_holds_one_choice_a_field_for_a_name_and_th
         let said = notes(&placed).join(" ");
         assert!(!said.contains("Ask one of your agents") && !said.contains("open Jellymoon again"), "{said}");
         // With no project the field takes a name: the page says to choose a folder first (the entry-first slice).
-        let (folder, name) = (said.find("hoose the folder you want to work in"), said.find("a name for a new project"));
+        // A day with no logs has the note that it has no page; one whose logs were read, the strip's line.
+        let none = ("hoose the folder you want to work in", "a name for a new project");
+        let own = if logs { ("hoose a folder to work in", "name a new project") } else { none };
+        let (folder, name) = (said.find(own.0), said.find(own.1));
         assert!(folder.is_some() && folder < name, "logs {logs}: {said}");
         assert!(!called(&w.day), "logs {logs}: a reading call was made");
     }

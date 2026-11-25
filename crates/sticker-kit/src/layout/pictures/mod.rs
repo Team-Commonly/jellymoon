@@ -1,12 +1,14 @@
 //! The pictures of a drawn note, each laid out from its top left in the column's design units and drawn by the
 //! pencil: a run at work (`track.rs`), finished work and where it is (`sheets.rs`), changed lines to one scale
-//! (`bars.rs`), rows of a label and counted marks (`tally.rs`). A picture is a `Picture` piece: its strokes and named parts are its sketch, and every word it
+//! (`bars.rs`), rows of a label and counted marks (`tally.rs`), a row of small sketches joined by arrows
+//! (`strip.rs`). A picture is a `Picture` piece: its strokes and named parts are its sketch, and every word it
 //! draws is a caption in the theme's handwriting, measured as every text is. A picture drawn small, on one line
 //! under what a person typed, is `small.rs`.
 
 mod bars;
 mod sheets;
 mod small;
+mod strip;
 mod tally;
 mod track;
 
@@ -100,6 +102,7 @@ pub(super) fn draw(cx: &Ctx, id: &str, picture: &Picture, at: Rect) -> Placed {
         }
         Picture::Bars { rows, more } => bars::draw(&mut draft, rows, *more),
         Picture::Tally { title, rows, more, under, open } => tally::draw(&mut draft, title, rows, (more, under), *open),
+        Picture::Strip { panels } => strip::draw(&mut draft, panels),
     };
     let rect = Rect::new(at.x, at.y, at.w, draft.low - at.y + cx.px(4.0));
     let mut placed = piece(PieceKind::Picture, id, 0, rect);

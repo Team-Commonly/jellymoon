@@ -69,6 +69,30 @@ sketches on paper. The sentences stay, and are drawn when the person asks for th
 9. **The print names what a picture counts.** `sticker_kit::print(placed)` writes one line a piece: for a
    picture, what it is and counts (`track steps=7 stage=making file=hello.py`), its parts with their numbers,
    and every caption; the words only when they are placed. Tests read parts and captions, never pixels.
+10. **The first page is a sketch of how a wish goes.** A day with no wish showed a note of two sentences, and a
+    person who had never made a wish learned from it where to type and nothing of what happens next. In its
+    place is one drawn note, a **strip** (`Picture::Strip { panels }`, `src/layout/pictures/strip.rs`): three
+    small sketches in one row, an arrow from each to the next, a caption of three words at most under each. The
+    app says which three and their captions (`app/src/scene.rs`, `how`): a speech bubble, "say a wish"; a sheet
+    with a pencil, "it gets made"; a folder with a tick and a small cross beside it, "keep or toss". The kit
+    knows only `Shows::{Speech, Sheet, Folder}` and draws the last two from the shapes a track and the sheets
+    already have, so the first page shows the marks the next pages use. No new pencil mark was needed.
+    - *Why a drawing.* The three steps are the product, and each later page draws one of them with the same
+      strokes. Three sketches are read at a glance; three sentences were not read.
+    - *What it never is.* It is no control: `Picture::taps` is false for a strip, so the view makes no tap target
+      of it, its note has no `?`, and the app opens nothing for its id. Its one line of words is always drawn.
+      Nothing of it moves once it is drawn, and with motion reduced it is whole at once. Every word of it is
+      Jellymoon's own: no model, file or session log is read for it. It is on the page only where the old note
+      was, and goes when the day has a wish.
+    - *Narrow windows.* Every length of a strip is the column's design unit, so the smallest window draws the
+      same row smaller, never a second row. A caption that does not fit its third of the picture wraps, in two
+      lines at most, and what is left ends in the kit's ellipsis.
+    - *Rejected.* A tour that walks the person through the window in steps: it takes the page from someone who
+      came to type, and has to be dismissed. A video or a moving loop: it never stops, and the kit's rule is
+      that a picture is still after its time. Sample wishes to tap: a tap that makes a wish nobody typed puts
+      words on the page that are not the person's, and a tap that only fills the field is a second entry.
+    - *An older build.* The app keeps no scene, so no kept page holds a strip. A scene file with a strip, given
+      to a kit built before this, is refused whole: the picture's `type` is one it does not know.
 
 ## Open
 

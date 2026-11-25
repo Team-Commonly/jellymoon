@@ -27,7 +27,8 @@ pub(super) fn sheet(
     sheet.cursor = at.bottom() + gap;
     sheet.options.push(drawn);
     let words: Vec<&String> = words.iter().filter(|text| has_visible(text)).collect();
-    if !words.is_empty() {
+    // A picture that takes no tap has no mark that would take one.
+    if !words.is_empty() && picture.taps() {
         sheet.options.push(ask(cx, id, at));
     }
     let (size, shown) = (cx.size(Role::Body), if opened { words.as_slice() } else { &[] });

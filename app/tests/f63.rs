@@ -26,7 +26,10 @@ const EMPTY: &str = "{\"day\":\"2026-03-10\",\"wishes\":[],\"clashes\":[],\"read
 /// The same of a day with no logs at all, which has a page since something is made or on offer.
 pub const NO_LOGS: &str =
     "{\"day\":\"2026-03-10\",\"wishes\":[],\"clashes\":[],\"read\":{\"turns\":0,\"projects\":[],\"no_logs\":true}}\n";
-pub const NOTHING: &str = "Nothing wished for yet today.";
+/// The captions of the strip an empty day shows, as its picture says them, and the one line under it.
+pub const HOW: &str = "say a wish it gets made keep or toss";
+pub const TYPE_ONE: &str = "Type a wish in the field at the bottom.";
+pub const FOLDER_FIRST: &str = "First choose a folder to work in, or name a new project.";
 pub const UNREAD: &str = "Today could not be read.";
 pub const NO_PAGE: &str = "There is no page for this day yet.";
 pub const HINT: &str = "What do you want done in the project below?";
@@ -73,6 +76,13 @@ pub fn of<'a>(placed: &'a [Piece], kind: &str) -> Vec<&'a Piece> {
     placed.iter().filter(|piece| piece.kind() == kind).collect()
 }
 
+/// Whether the strip that shows how a wish goes is placed: the one picture of the note `how`, with its three
+/// captions in their order and no other word.
+pub fn how(placed: &[Piece]) -> bool {
+    let own = of(placed, "picture").into_iter().filter(|piece| piece.id() == "how");
+    own.map(Piece::said).collect::<Vec<String>>() == [HOW]
+}
+
 /// The words on the pieces of a kind, in the order placed.
 pub fn words(placed: &[Piece], kind: &str) -> Vec<String> {
     of(placed, kind).iter().map(|piece| piece.said()).collect()
@@ -95,7 +105,7 @@ fn a_day_with_nothing_typed_nothing_made_and_no_project_on_offer_is_drawn_as_it_
             (vec![NEW_HINT.to_string()], vec![START.to_string()])
         );
         let said = notes(&placed);
-        assert!(said.len() == 1 && said[0].contains(NOTHING), "{logs:?}: {said:?}");
+        assert!(said == [FOLDER_FIRST] && how(&placed), "{logs:?}: {said:?}");
         assert!(words(&placed, "footer").is_empty(), "{logs:?}: nothing read and no wish, so no footer");
         assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), EMPTY, "{logs:?}");
         assert!(!called(&w.day), "{logs:?}: a reading call was made");
@@ -113,7 +123,7 @@ fn a_day_with_nothing_typed_nothing_made_and_no_project_on_offer_is_drawn_as_it_
     let said = notes(&placed);
     assert!(said.len() == 1 && said[0].contains(NO_PAGE) && said[0].contains("No Claude Code session logs"));
     assert!(!said[0].contains(UNREAD), "{said:?}");
-    assert!(!said[0].contains(NOTHING), "{said:?}");
+    assert!(!how(&placed), "{said:?}");
     assert!(!kept(&w.day).exists() && !called(&w.day));
 }
 
@@ -128,7 +138,7 @@ fn a_project_on_offer_gives_the_day_an_entry_and_its_chip_and_no_wish() {
         assert!(of(&placed, "character").is_empty() && of(&placed, "more").is_empty(), "{logs:?}");
         // No wish and no clash is made up, and the day is not said to be unreadable.
         let said = notes(&placed);
-        assert!(said.len() == 1 && said[0].contains(NOTHING), "{logs:?}: {said:?}");
+        assert!(said == [TYPE_ONE] && how(&placed), "{logs:?}: {said:?}");
         let page = if logs == Logs::Absent { NO_LOGS } else { EMPTY };
         assert!(words(&placed, "footer").is_empty(), "{logs:?}: nothing read and no wish, so no footer");
         assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), page, "{logs:?}");
@@ -189,5 +199,5 @@ fn a_project_that_is_forgotten_takes_the_entry_with_it_and_logs_that_come_are_re
         (words(&placed, "entry"), words(&placed, "chip")),
         (vec![NEW_HINT.to_string()], vec![START.to_string()])
     );
-    assert!(notes(&placed)[0].contains(NOTHING) && !called(&w.day));
+    assert!(notes(&placed) == [FOLDER_FIRST] && how(&placed) && !called(&w.day));
 }

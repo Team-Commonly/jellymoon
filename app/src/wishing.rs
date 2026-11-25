@@ -277,7 +277,7 @@ impl Today {
     pub(crate) fn again(&self, page: Option<&Page>, drawn: &Scene) -> Scene {
         let mut shown = page.map_or_else(|| self.made_alone(), |page| self.draw(page));
         // Notes of a page's own come and go with what is kept: none is carried over as the app's.
-        let own = |title: &str| [crate::scene::NOTHING, UNTOLD].contains(&title);
+        let own = |title: &str| title == UNTOLD;
         let over = |note: &&Note| {
             stopping::asks(note)
                 || working::ours(note)

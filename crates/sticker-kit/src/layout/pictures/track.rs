@@ -30,7 +30,7 @@ pub(super) fn draw(d: &mut Draft, steps: usize, stage: Stage, file: &str) -> Str
     match stage {
         Stage::Thinking => dots(d, mid),
         Stage::Looking => magnifier(d, mid),
-        Stage::Making => pencil(d, mid),
+        Stage::Making => pencil(d, mid, true),
     }
     let (centre, top, room) = (d.at.x + d.u(mid), d.at.y + d.u(66.0), d.u(wide * 0.4));
     d.caption(caption, (centre, top), 0.5);
@@ -75,8 +75,9 @@ fn magnifier(d: &mut Draft, mid: f32) {
     d.part("magnifier", d.rect(mid, 16.0, 32.0, 34.0));
 }
 
-/// A pencil with its point on the sheet: two sides, the end, and two strokes to the point.
-fn pencil(d: &mut Draft, mid: f32) {
+/// A pencil with its point on the sheet: two sides, the end, and two strokes to the point. It `rocks` while it
+/// is the tool of a run at work, and is at rest in a picture of how work is made (`strip.rs`).
+pub(super) fn pencil(d: &mut Draft, mid: f32, rocks: bool) {
     sheet(d, mid);
     let (tip, (along, down), (aside, below)) = ((mid - 2.0, 44.0), (0.664, -0.747), (2.39, 2.12));
     let (neck, end) = ((tip.0 + along * 9.0, tip.1 + down * 9.0), (tip.0 + along * 46.0, tip.1 + down * 46.0));
@@ -88,7 +89,7 @@ fn pencil(d: &mut Draft, mid: f32) {
         (side(neck, 1.0), tip),
         (side(neck, -1.0), tip),
     ];
-    d.pencil.rocking(true);
+    d.pencil.rocking(rocks);
     for (from, to) in strokes {
         let (from, to) = (d.point(from.0, from.1), d.point(to.0, to.1));
         d.pencil.line(from, to);

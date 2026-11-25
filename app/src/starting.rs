@@ -89,10 +89,8 @@ pub fn named(id: &str, typed: &str) -> Option<Given> {
 /// project, in the order the entry's hint does (`starting::NEW_HINT`). The window and the picture share this.
 pub fn no_project(shown: &mut Scene) {
     for note in &mut shown.notes {
-        if let Note::Plain { title, body } = note
-            && title == scene::NOTHING
-        {
-            *body = scene::NO_PROJECT.to_string();
+        if scene::is_how(note) {
+            *note = scene::how(scene::NO_PROJECT);
         }
     }
 }
@@ -184,9 +182,13 @@ mod tests {
         let read = PageRead { turns: 0, projects: vec![], no_logs: false };
         let data = PageData { day: "2026-03-10".to_string(), wishes: vec![], clashes: vec![], read };
         let mut shown = scene::scene(&Page { data, unknown: vec![], left_out: LeftOut::default() });
-        assert!(matches!(&shown.notes[..], [Note::Plain { body, .. }] if body == scene::NOTHING_HERE));
+        let said = |shown: &Scene| match &shown.notes[..] {
+            [Note::Drawn { id, words, open: true, .. }] if id == scene::HOW => words.clone(),
+            other => panic!("the strip alone, open: {other:?}"),
+        };
+        assert_eq!(said(&shown), [scene::NOTHING_HERE]);
         no_project(&mut shown);
-        assert!(matches!(&shown.notes[..], [Note::Plain { body, .. }] if body == scene::NO_PROJECT));
+        assert_eq!(said(&shown), [scene::NO_PROJECT]);
         let said = scene::NO_PROJECT.to_lowercase();
         let hint = NEW_HINT.to_lowercase();
         assert!(said.find("folder") < said.find("name") && hint.find("folder") < hint.find("name"));

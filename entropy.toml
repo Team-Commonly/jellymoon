@@ -910,7 +910,11 @@ max_file_lines = 400
 # note, the piece, its tap and the quiet ink, 121 (`src/layout/pictures/small.rs`, 88; `src/scene.rs`,
 # `src/layout/column.rs`, `src/layout/pictures/sheets.rs`, `src/draw/`, `src/pencil.rs`), and the tests, 170
 # (`tests/small.rs`, 143; `tests/column_draw.rs`, 26; `tests/typed.rs`, 1).
-"crates/sticker-kit" = 13837
+# The day folds (ADR 0030, decision 12) raised the next by 490: the picture of rows of a label and counted marks, 157
+# (`src/layout/pictures/tally.rs`, 126; `src/scene.rs`, 28; `src/layout/pictures/mod.rs`, `src/lib.rs`), its place first in
+# the column, 24 (`src/layout/column.rs`), a view held at its top, 88 (`src/scroll.rs`, 57, of which 34 are tests;
+# `src/draw/`, 31), and the tests, 221 (`tests/tally.rs`).
+"crates/sticker-kit" = 14327
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1186,7 +1190,12 @@ max_file_lines = 400
 # tests (`src/drawing/ended.rs`, 160, of which 100 are tests), where it is set (`src/drawing.rs`, 9;
 # `src/column.rs`, 3), the picture example's `--tucked` (`examples/snapshot.rs`, 4) and the window tests
 # (`tests/finished_wishes_tuck_away.rs`, 55).
-"app" = 20793
+# The day folds (ADR 0030, decision 12) raised the next by 636: the fold and its tests (`src/drawing/folded.rs`, 124;
+# `src/drawing/folded/tests.rs`, 226), where it is held and applied (`src/drawing.rs`, 25; `src/showing.rs`, 6;
+# `src/scene.rs`, 8; `src/lines.rs`, 5), the picture example's `--folded` and `--unfolded` (`examples/snapshot.rs`, 5),
+# the made-up window's `tap:` and `pieces` (`tests/support/tapper.rs`, 21) and the window tests
+# (`tests/the_day_folds.rs`, 206; `tests/open_a_wish/window.rs`, 10, the click that opens the day first).
+"app" = 21429
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

@@ -128,7 +128,7 @@ pub struct Page {
 impl Page {
     pub fn new(scene: Scene, theme: Theme) -> Self {
         let now = Instant::now();
-        let (fields, apart) = field::fit(&scene, Vec::new());
+        let ((fields, apart), scroll) = (field::fit(&scene, Vec::new()), column::opening(&scene));
         Self {
             scene,
             theme,
@@ -141,7 +141,7 @@ impl Page {
             apart,
             placed: Vec::new(),
             viewport: Viewport::default(),
-            scroll: Scroll::default(),
+            scroll,
             most: 0.0,
             stale: Stale::Spring,
             stage: Stage::default(),
@@ -188,6 +188,7 @@ impl Page {
     pub fn set_scene(&mut self, scene: Scene, cx: &mut Context<Self>) {
         let was = std::mem::take(&mut self.fields).into_iter().chain(std::mem::take(&mut self.apart));
         (self.fields, self.apart) = field::fit(&scene, was.collect());
+        self.hold_for(&scene);
         self.scene = scene;
         self.stale = Stale::Spring;
         cx.notify();

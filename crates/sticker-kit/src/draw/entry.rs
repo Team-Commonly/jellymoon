@@ -352,6 +352,9 @@ impl Page {
     pub(super) fn entry_made(&mut self, which: Which, made: Made, window: &mut Window, cx: &mut Context<Self>) {
         let view = self.view_mut(which);
         view.asked_as = view.what.as_ref().map(|what| what.id.clone()).unwrap_or_default();
+        if which.is_none() {
+            self.scroll.entered();
+        }
         cx.notify();
         match (&self.entry.on_made, &self.view(which).what) {
             (Some(handler), Some(entry)) => {

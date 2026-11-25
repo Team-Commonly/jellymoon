@@ -16,6 +16,9 @@
 //! - `placed`: the pieces `layout` places of the scene on show at the window's size, as a list.
 //! - `column`: the scene on show as the window gives it to the kit's view (`Showing::column`): its drawn notes
 //!   open or closed, the offer of a follow-up under one wish, in the order of its column.
+//! - `tap:<note>`: a tap on the picture of a drawn note, which the kit gives only of a picture it placed: the
+//!   column on show is laid out at the window's size, and a note with no picture there prints `null`.
+//! - `pieces`: the pieces of the column on show (`Showing::column`) at the window's size, as `placed` lists them.
 //! - `run`: the oldest work a tap left, on another thread, and the scene its answer shows.
 //! - `hold:<file>`: waits until the test leaves that file, half a minute at most.
 //! - `left:<file>`, as the first act only: the note in that file, as JSON, is on show from the start, as a page
@@ -92,6 +95,19 @@ fn looked(showing: &Showing, now: &mut Scene, look: Look) {
 fn placed(scene: &Scene, size: Viewport) -> Vec<Value> {
     let lines = jellymoon_app::lines::lines(scene, None, &Theme::sticker(), size);
     lines.lines().map(|line| serde_json::from_str(line).unwrap()).collect()
+}
+
+/// The pieces of the column the window gives the kit's view of the scene on show.
+fn pieces(showing: &Showing, now: &Scene, size: Viewport) -> Vec<Value> {
+    let lines = jellymoon_app::lines::laid(&showing.column(now), None, &Theme::sticker(), size);
+    lines.lines().map(|line| serde_json::from_str(line).unwrap()).collect()
+}
+
+/// A tap on the picture of `note`, when the column on show places it: the scene shown at once.
+fn tapped(showing: &Showing, now: &Scene, size: Viewport, note: &str) -> Option<Scene> {
+    let is = |piece: &Value| piece["kind"] == "picture" && piece["id"] == note;
+    let on = pieces(showing, now, size).iter().any(is);
+    on.then(|| showing.chose(note, sticker_kit::PICTURE_PLACE, "")).flatten().map(|(scene, _)| scene)
 }
 
 /// Prints what an act showed, and keeps it as the scene on show when it showed one.
@@ -291,6 +307,11 @@ fn main() {
                 let asking = asked.pop_front().expect("a follow-up left an asking");
                 shown(&mut now, showing.asked(elsewhere(asking)));
             }
+            ["tap", note] => {
+                let scene = tapped(&showing, &now, size, note);
+                shown(&mut now, scene);
+            }
+            ["pieces"] => show(&pieces(&showing, &now, size)),
             ["placed"] => show(&placed(&now, size)),
             ["column"] => show(&showing.column(&now)),
             ["hold", file] => held(file),

@@ -39,7 +39,8 @@ pub use layout::{
 };
 pub use pencil::{Ink, Part, Pencil, Sketch, Stroke};
 pub use scene::{
-    Bar, Character, Entry, Field, Kept, Mark, Mood, Note, PICTURE_PLACE, Picture, Scene, Stage, State, ToldRow, speaker,
+    Bar, Character, Entry, Field, Kept, MAX_TALLY_MARKS, MAX_TALLY_ROWS, Mark, Mood, Note, PICTURE_PLACE, Picture,
+    Scene, Stage, State, TallyRow, ToldRow, speaker,
 };
 pub use scroll::Scroll;
 pub use text::{FixedAdvance, Measure, Role};

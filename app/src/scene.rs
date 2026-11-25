@@ -23,6 +23,14 @@ pub const MADE: &str = "wished here today";
 /// The footer of a day with no session logs at all.
 const FOUND_NO_LOGS: &str = "No Claude Code session logs were found, so nothing was read.";
 
+/// The titles of the reading's own notes, and the footer's sentence that says whose reading it is: the fold of a
+/// read day tells them by these (`drawing/folded.rs`).
+pub(crate) const CAME_TRUE: &str = "came true today";
+pub(crate) const CHANGED: &str = "you changed your mind";
+pub(crate) const CLASH: &str = "these two clash";
+pub(crate) const SAME: &str = "two things you said clash";
+pub(crate) const READING: &str = "This is the model's reading, unedited.";
+
 /// The first words of the track of a made wish whose run goes (`live.rs`). Each working wish has its own, and
 /// each says this of one wish. Core's words for a wish at work are "is being worked on" too.
 pub(crate) const GOING: &str = "Your wish is being worked on.";
@@ -66,7 +74,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     let rows = |wish: &Wish| wish.stars.iter().map(|star| (star.clone(), wish.label.clone())).collect::<Vec<_>>();
     let came_true: Vec<(String, String)> = data.wishes[..first].iter().flat_map(rows).collect();
     if !came_true.is_empty() {
-        notes.push(Note::List { title: "came true today".to_string(), rows: came_true });
+        notes.push(Note::List { title: CAME_TRUE.to_string(), rows: came_true });
     }
     // A clash the person has not chosen on comes before one they have: when the notes do not all fit, the ones left
     // out and counted are the ones already settled. A clash keeps its id, its place among the page's clashes.
@@ -76,7 +84,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
     notes.extend(clashes.map(|index| match standing.get(index) {
         // Nothing to choose, so nothing to tap: the clash is said, and neither statement is drawn.
         Some(standing) if !standing.is_choice() => Note::Plain {
-            title: "two things you said clash".to_string(),
+            title: SAME.to_string(),
             body: "Their words cannot be told apart here, so there is nothing to choose.".to_string(),
         },
         standing => choice(index, &data.clashes[index], standing),
@@ -227,8 +235,8 @@ fn choice(index: usize, clash: &Clash, standing: Option<&Standing>) -> Note {
     let (a, b) = standing.map_or((&clash.quote_a, &clash.quote_b), |standing| (&standing.a, &standing.b));
     let (title, footer) = match (stands, clash.settled) {
         (Some(_), _) => ("you chose", "tap the other to change it"),
-        (None, true) => ("you changed your mind", "the first one was let go"),
-        (None, false) => ("these two clash", "tap the one that stands"),
+        (None, true) => (CHANGED, "the first one was let go"),
+        (None, false) => (CLASH, "tap the one that stands"),
     };
     let quote = |side: Side| quoted(if side == Side::A { a } else { b });
     Note::Choice {
@@ -268,7 +276,7 @@ fn footer(data: &PageData, made: usize) -> String {
         0 => String::new(),
         n => format!(" in {} ({})", count(n, "project"), read.projects.join(", ")),
     };
-    format!("Read from {} you typed{projects}. This is the model's reading, unedited.", count(read.turns, "thing"))
+    format!("Read from {} you typed{projects}. {READING}", count(read.turns, "thing"))
 }
 
 #[cfg(test)]

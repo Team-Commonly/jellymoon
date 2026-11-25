@@ -10,10 +10,37 @@ use super::shapes::Brush;
 use super::stage::Pose;
 use crate::geom::Rect;
 use crate::layout::{PieceKind, Placed, TextRun, page_scale};
-use crate::scene::{Note, speaker};
+use crate::scene::{Note, Picture, Scene, speaker};
+use crate::scroll::Scroll;
 use crate::text::Role;
 
+/// Whether the tally of `scene` is open, when it has one.
+fn tally(scene: &Scene) -> Option<bool> {
+    scene.notes.iter().find_map(|note| match note {
+        Note::Drawn { picture: Picture::Tally { open, .. }, .. } => Some(*open),
+        _ => None,
+    })
+}
+
+/// The scroll of a page that opens on `scene`: at the column's end, or at its top when the scene has a tally,
+/// which stands there.
+pub(super) fn opening(scene: &Scene) -> Scroll {
+    let mut scroll = Scroll::default();
+    if tally(scene).is_some() {
+        scroll.hold();
+    }
+    scroll
+}
+
 impl Page {
+    /// `scene` is about to be shown in place of the one on show: when its tally was opened or closed, or it has
+    /// one and the one on show has none, the view stays where it is (`Scroll::hold`).
+    pub(super) fn hold_for(&mut self, scene: &Scene) {
+        if tally(scene).is_some() && tally(scene) != tally(&self.scene) {
+            self.scroll.hold();
+        }
+    }
+
     /// How far up the window `piece` is drawn from where the layout put it: the column's scroll, and nothing for a
     /// piece of the entry's band.
     pub(super) fn lift(&self, piece: &Placed) -> f32 {

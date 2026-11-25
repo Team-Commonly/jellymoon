@@ -47,7 +47,12 @@ pub(crate) struct At {
 /// options, in the window's, when the page has an entry. Every drawn note is printed open, with its sentences
 /// and what its run says it did: the print has no tap to ask for them with (`drawing.rs`).
 pub fn lines(scene: &Scene, entry: Option<&Entry>, theme: &Theme, viewport: Viewport) -> String {
-    let (scene, measure) = (&column(scene, &every(scene)), BundledMeasure::new(theme));
+    laid(&column(scene, &every(scene)), entry, theme, viewport)
+}
+
+/// [`lines`] of a scene that is in its column's order already, as a window gives it to the kit's view.
+pub fn laid(scene: &Scene, entry: Option<&Entry>, theme: &Theme, viewport: Viewport) -> String {
+    let measure = BundledMeasure::new(theme);
     let mut placed = layout(scene, theme, viewport, &measure);
     placed.extend(entry.into_iter().flat_map(|entry| layout_entry(entry, theme, viewport, &measure)));
     placed.iter().filter_map(|piece| Some(format!("{}\n", serde_json::to_string(&line(piece, scene)).ok()?))).collect()

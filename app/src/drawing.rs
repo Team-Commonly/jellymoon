@@ -14,11 +14,11 @@
 //! The same pass leaves out the notes of the made wishes that are tucked away (`drawing/tucked.rs`, ADR 0030,
 //! decision 11): which those are is held with what is open, and `layout` tucks none away.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
-use jellymoon_core::Waits;
+use jellymoon_core::{PageData, Waits};
 use sticker_kit::{Field, Kept, Note, Picture, Scene};
 
 use crate::again::{Again, Remade};
@@ -28,7 +28,9 @@ use crate::told::{TOLD, rows_shown};
 use crate::working::{FILE, WORK};
 
 mod ended;
+mod folded;
 mod tucked;
+pub use folded::FOLD;
 use tucked::Tucked;
 
 /// The note of work that waits, drawn: a sheet for each file core counted, in a copy still, with core's choices
@@ -119,11 +121,18 @@ pub fn first(scene: &Scene) -> Scene {
     Open::opening(scene).column(scene)
 }
 
+/// `column`, a scene [`first`] or [`column`] gave, with the day of the page data it was made from folded, or
+/// `open` under its tally (`drawing/folded.rs`). For a picture, which has no window.
+pub fn fold(column: Scene, data: &PageData, open: bool) -> Scene {
+    folded::folded(column, Some(data), open)
+}
+
 /// The drawn notes a person opened in one window, by their ids, the made wish they tapped last, and the made
 /// wishes that are tucked away. An id that leaves the page leaves the set. And core's answers that a wish was
-/// made again, each with the wish it speaks of (`again.rs`).
+/// made again, each with the wish it speaks of (`again.rs`). And whether the
+/// day is open under its tally: a window starts with it folded (`drawing/folded.rs`).
 #[derive(Clone, Default)]
-pub struct Open(Rc<RefCell<BTreeSet<String>>>, Rc<RefCell<Option<String>>>, Tucked, Again);
+pub struct Open(Rc<RefCell<BTreeSet<String>>>, Rc<RefCell<Option<String>>>, Tucked, Again, Rc<Cell<bool>>);
 
 impl Open {
     /// What a window that opens on `scene` starts with: no note open, and every settled made wish tucked away
@@ -155,6 +164,22 @@ impl Open {
         open.retain(|id| on.contains(&id.as_str()));
         let column = crate::column::column(&passed(scene, &open, self.1.borrow().as_deref(), &away));
         ended::marked(column, scene, &away)
+    }
+
+    /// [`Open::column`] of the page made from `data`, with what the reading put on it folded into its tally, or
+    /// open under the tally once the tally was tapped (`drawing/folded.rs`). A scene with no page data, and a
+    /// day the reading has no wish on, are the column as it is.
+    pub(crate) fn day(&self, scene: &Scene, data: Option<&PageData>) -> Scene {
+        folded::folded(self.column(scene), data, self.4.get())
+    }
+
+    /// A tap on the picture of the note `note`: when that is the tally, the day opens, or folds when it was
+    /// open. Whether it was the tally.
+    pub(crate) fn fold(&self, note: &str) -> bool {
+        if note == FOLD {
+            self.4.set(!self.4.get());
+        }
+        note == FOLD
     }
 
     /// Core answered a tap on a choice of the made wish `wish` that a wish was made again and is being worked

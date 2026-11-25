@@ -312,7 +312,8 @@ what core keeps.
 - **While core is asked the entry takes the next words.** From Enter until core's answer the entry keeps the
   words aside, and the field is empty for what is typed next. Every key is taken as at any other time: a letter,
   a paste, an input method's composition, the editing keys, Tab, a click on a chip, Escape. None is dropped. Only
-  Enter gives nothing until core has answered, and what was typed since stays. While nothing was typed since,
+  Enter gives nothing until core has answered, and what was typed since stays (the next point says what
+  becomes of that Enter). While nothing was typed since,
   the words are shown in the field, pale, with the caret at the field's start; the first key puts the typed text
   there in ink. The time until the answer is that of one read of the day's logs, and at most that and the 3
   seconds core waits for a day that is locked. Kept: what was typed since is in the field, whole, with its caret
@@ -321,6 +322,26 @@ what core keeps.
   follow one another. Until 2026-11-24 the entry took no key while core was asked: a person who typed the next
   wish straight after Enter lost its first characters, and the wish was made with what was left
   (`app/tests/f43/window.rs` holds that none is lost now).
+- **An Enter pressed while core is asked is not lost.** A person types a wish, presses Enter, types the next
+  one while the first is read and presses Enter again. Until 2026-11-25 that second Enter did nothing, and the
+  words sat in the entry with nothing on the page to say why. Now the kit's entry remembers one such Enter (its
+  `README.md`, "One Enter is remembered"), and when core's answer kept the first words the window's
+  `page.answer_entry` gives it to the window's own handler, `entered`, as an Enter pressed at that moment,
+  with the words and the chip it was pressed on, read and kept like any wish. Both wishes are kept, in
+  their order, and a run is asked for each. Four cases give nothing, and the words stay typed for the person to
+  enter themselves. The kit's two: the first words were refused, so they are back in the entry in front of the
+  later ones; and the words or the chip changed after that Enter (typed on, a character taken, another chip;
+  or the page's entry changed under it: another entry, the chip's project no longer offered, the entry taken
+  away), so what stands in the entry is not what Enter was pressed on. The app's two: the first words were a new
+  project's name (`listing`): the entry answered is the one a name is typed in, and an Enter given there would
+  name a second project. And (`Showing::takes_enter`, `shaping::waits`): the answer to the first words is a sharper
+  wish that waits for the person's choice. An Enter in the entry takes that pair's place, so the first words
+  would be gone before the person had seen the question; the window calls `page.forget_enter()` before it
+  answers the entry. A page whose window was closed since Enter is given none either. No sentence on the page
+  says any of this and nothing drawn changes. Held by `app/tests/shape_first.rs` through the made-up window,
+  whose `press:wish@<project>:<words>` act types into the kit's own `EntryState` and answers it as the window
+  does, and by `app/tests/f43/window.rs` through the window's own wiring on GPUI's test platform (the two
+  wishes kept; not the sharper wish, which needs the made-up agent of another process).
 - **An entry with words in it is never taken away.** The window gives the page the entry of each reading step,
   and none when no project is offered any more (every folder switched off in `skip.txt` while the reading runs,
   logs that cannot be read). The kit keeps an entry that holds words, or is owed an answer, on the page as it was, with the

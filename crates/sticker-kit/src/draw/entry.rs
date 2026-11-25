@@ -13,7 +13,7 @@ use gpui::{
 use super::field::Which;
 use super::measure::{font_for, hsla};
 use super::{Page, Stale, Tap};
-use crate::entry::{EntryState, MAX_ENTRY_OPTIONS};
+use crate::entry::{EntryState, MAX_ENTRY_OPTIONS, Made};
 use crate::geom::Rect;
 use crate::layout::{PieceKind, Placed, line_height, page_scale};
 use crate::scene::Entry;
@@ -154,12 +154,10 @@ impl Page {
     /// has them to give back. An entry given meanwhile takes its place, with the words.
     pub fn set_entry(&mut self, entry: Option<Entry>, cx: &mut Context<Self>) {
         match &entry {
-            Some(entry) => {
-                let was = self.entry.what.as_ref().map(|was| was.options.as_slice()).unwrap_or_default();
-                self.entry.state.keep_option(was, &entry.options);
-                self.entry.state.fit(entry);
-            }
+            Some(entry) => self.entry.state.moved(self.entry.what.as_ref(), entry),
             None if self.entry.state.holds() => {
+                // An Enter remembered is not given to an entry the page no longer offers.
+                self.entry.state.forget_enter();
                 self.entry.leaving = true;
                 return;
             }
@@ -168,20 +166,6 @@ impl Page {
         (self.entry.what, self.entry.leaving) = (entry, false);
         self.stale = Stale::Spring;
         cx.notify();
-    }
-
-    /// The answer to what Enter gave: kept, and the words kept aside are forgotten; not kept, and they come back
-    /// in front of what was typed since ([`EntryState::answer`]).
-    pub fn answer_entry(&mut self, kept: bool, window: &Window, cx: &mut Context<Self>) {
-        self.entry.state.answer(kept);
-        self.entry_changed(window, cx);
-    }
-
-    /// As [`Page::answer_entry`], for a page whose window was closed since Enter: there is no text input of the
-    /// platform's to tell, and the page that is shown again does not wait.
-    pub fn answer_entry_closed(&mut self, kept: bool, cx: &mut Context<Self>) {
-        self.entry.state.answer(kept);
-        self.entry_settled(cx);
     }
 
     /// Chooses the entry's option of that name, when it is one of the options offered: false when it is not.
@@ -356,10 +340,14 @@ impl Page {
 
     /// Enter where the keys are. What a note's field gives carries the note's id, and goes to the entry's handler.
     fn entry_entered(&mut self, which: Which, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(made) = self.view_mut(which).state.enter() {
+            self.entry_made(which, made, window, cx);
+        }
+    }
+
+    /// What Enter gave where `which` is, handed to the entry's handler.
+    pub(super) fn entry_made(&mut self, which: Which, made: Made, window: &mut Window, cx: &mut Context<Self>) {
         let view = self.view_mut(which);
-        let Some(made) = view.state.enter() else {
-            return;
-        };
         view.asked_as = view.what.as_ref().map(|what| what.id.clone()).unwrap_or_default();
         cx.notify();
         match (&self.entry.on_made, &self.view(which).what) {

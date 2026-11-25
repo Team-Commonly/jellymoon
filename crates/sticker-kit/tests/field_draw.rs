@@ -147,7 +147,11 @@ fn a_click_gives_a_note_s_field_the_keys_and_enter_gives_its_words_once_with_the
     assert_eq!(typed(&page, cx).1, "the old x!");
     keys(cx, "enter");
     assert_eq!(entered.borrow().last(), Some(&made("asks", "the old x!")));
+    // An Enter pressed meanwhile is the entry's alone to remember: a field's gives nothing at the answer.
+    keys(cx, "z enter");
     answer(&page, cx, "asks", true);
+    assert_eq!(typed(&page, cx).1, "z", "a field gave an Enter pressed while its answer was owed");
+    keys(cx, "backspace");
     assert_eq!(typed(&page, cx), (String::new(), String::new(), String::new(), true));
     // An answer for a note with no field changes nothing.
     answer(&page, cx, "nobody", true);

@@ -18,7 +18,7 @@ use jellymoon_app::wishing::{UNKEPT, UNSTARTED};
 use serde_json::{Value, json};
 use sticker_kit::{Field, Note, Scene, ToldRow};
 use support::day::{DAY, answer, noon, result, said, shown, write_log};
-use support::wished::{SAID, World, quiet, world};
+use support::wished::{SAID, World, quiet, wait_until, world};
 
 const WISH: &str = "Make the uploader try a failed upload twice more before it gives up.";
 const DONE: &str = "A failed upload is tried three times in all.";
@@ -359,4 +359,41 @@ fn a_sharper_wish_that_waits_and_the_choice_on_it_are_not_under_that_note_either
     assert!(shaping(&scene(&printed[3])).is_empty() && !says_nothing(&printed[3]), "{}", printed[3]);
     assert!(!says_nothing(&printed[5]) && w.kept()["id"] == "m1", "{}", printed[5]);
     w.ended();
+}
+
+const NEXT: &str = "say hello in the readme";
+
+/// Two wishes typed into the made-up window's entry, the kit's own state of one, with Enter after each: the
+/// second Enter is pressed before core has answered the first. Then the first is answered, and `then`.
+fn two_entered(w: &World, then: &[&str]) -> Vec<Value> {
+    let typed = [SAID, NEXT].map(|typed| format!("press:wish@alpha:{typed}"));
+    let printed = window(w, &[&[typed[0].as_str(), typed[1].as_str(), "answer"][..], then].concat());
+    assert_eq!(printed[1], Value::Null, "the entry is owed an answer: its Enter gives nothing yet");
+    printed
+}
+
+#[test]
+fn a_wish_entered_while_the_one_before_is_read_is_kept_after_it_with_its_own_words_and_both_are_run() {
+    let w = ready();
+    let printed = two_entered(&w, &["answer", "start", "start"]);
+    assert_eq!(shaping(&scene(&printed[2]["again"])), [text(SHAPING, READING, NEXT, &[])], "it is read at once");
+    assert_eq!((&printed[2]["entry"], &printed[3]["again"]), (&json!(""), &Value::Null), "given once");
+    assert_eq!(printed[4..], [Value::Null, Value::Null], "each run was started, with nothing to say");
+    let kept: Value = serde_json::from_str(&fs::read_to_string(wishes(&w)).unwrap()).unwrap();
+    let said = |at: usize| kept["wishes"][at]["said"].clone();
+    assert_eq!((said(0), said(1)), (json!(SAID), json!(NEXT)), "in their order, each with its own words");
+    for at in 0..2 {
+        let lock = w.at("jm").join("runs").join(kept["wishes"][at]["run"].as_str().unwrap()).join("run.lock");
+        wait_until("the end of the command", || !lock.exists());
+    }
+}
+
+#[test]
+fn an_enter_remembered_is_not_given_over_a_sharper_wish_that_asks_and_its_words_stay_in_the_entry() {
+    let w = ready();
+    says(&w, &sharper());
+    let printed = two_entered(&w, &["column"]);
+    assert_eq!((&printed[2]["again"], &printed[2]["entry"]), (&Value::Null, &json!(NEXT)), "{}", printed[2]);
+    assert_eq!((shaping(&scene(&printed[2]["scene"])), shaping(&scene(&printed[3]))), (pair(), pair()));
+    assert!(!wishes(&w).exists() && w.starts() == 0, "no wish is kept until the person chooses, and none is run");
 }

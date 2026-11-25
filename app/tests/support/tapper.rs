@@ -32,6 +32,12 @@
 //!   asks it on another thread and prints `{"kept":…,"scene":…}`.
 //! - `enter:wish@<project>:<words>` and `type:wish@<project>:<words>`: the same for Enter in the entry, with
 //!   that project's chip chosen (F91): the scene shown at once says the wish is being read.
+//! - `press:wish@<project>:<words>`: the words typed into the window's entry, which is the kit's own state of
+//!   one (`EntryState`), and Enter pressed there with that project's chip chosen. What the entry gives goes on
+//!   as `enter:wish@…` does; an entry that is owed its answer gives nothing, and the line is `null`. The
+//!   `answer` to an Enter the entry gave answers the entry as `window.rs` does, and its line has two more
+//!   keys: `again`, the scene shown at once by an Enter the entry remembered and gave then, or `null`, and
+//!   `entry`, the words typed in it then.
 //! - `start`: the oldest asking a `type` left, on another thread, and the scene it shows, or `null`.
 //! - `core:<wish>:<index>`: no window at all: core's own answer to a tap on that choice of the wish's work, as
 //!   `[title, body]`, or `null` when it is no sentence.
@@ -50,7 +56,32 @@ use jellymoon_app::wishing::{Asking, Look, Wishing};
 use jellymoon_core::{RunOptions, WorkDone, WorkTap};
 use serde::Serialize;
 use serde_json::{Value, json};
+use sticker_kit::entry::{EntryState, Made};
 use sticker_kit::{Scene, Theme, Viewport};
+
+/// The made-up window's entry: the kit's state of it, and the project on its chosen chip.
+#[derive(Default)]
+struct Typed(EntryState, String);
+
+/// What each Enter left to ask of core, oldest first, and whether the entry gave it and is owed its answer.
+type Entering = VecDeque<(Wishing, bool)>;
+
+impl Typed {
+    /// `words` typed where the caret is, and Enter with the chip of `note`'s project chosen: what the entry gives.
+    fn pressed(&mut self, note: &str, words: &str) -> Option<Made> {
+        self.1 = note.strip_prefix("wish@").expect("the entry").to_string();
+        self.0.replace(None, words);
+        self.0.enter()
+    }
+
+    /// What the entry gave, carried on as the window's handler carries an Enter: the scene shown at once, with
+    /// what is to be asked of core kept as the entry's own.
+    fn given(&self, showing: &Showing, made: Option<Made>, entering: &mut Entering) -> Option<Scene> {
+        let wishing = showing.wishing(&made?.text, Some(&self.1))?;
+        entering.push_back((wishing, true));
+        showing.scene()
+    }
+}
 
 /// A look or a tap on a character, made on another thread, and what the window then shows.
 fn looked(showing: &Showing, now: &mut Scene, look: Look) {
@@ -172,15 +203,32 @@ fn entered(
 
 /// Core's answer to an Enter, asked for on another thread: the line of what the field is told and the scene
 /// then on show, with the scene shown at once when the Enter's own act did not print it. The asking for a run
-/// it left is given back.
-fn answered(showing: &Showing, typing: Wishing, at_once: Option<Option<Scene>>, now: &mut Scene) -> Option<Asking> {
+/// it left is given back. `entry` is the entry when it gave that Enter: it is answered as `window.rs` answers
+/// it, forgetting the Enter it remembered when the page takes none, and what it gives then is carried on.
+fn answered(
+    showing: &Showing,
+    typing: Wishing,
+    at_once: Option<Option<Scene>>,
+    now: &mut Scene,
+    entry: Option<(&mut Typed, &mut Entering)>,
+) -> Option<Asking> {
     let Entered { kept, scene, asking } = showing.answered(Some(elsewhere(typing)));
     let mut line = json!({ "kept": kept, "scene": scene });
     if let Some(at_once) = at_once {
         line["at_once"] = json!(at_once);
     }
+    let mut on_show = scene;
+    if let Some((entry, entering)) = entry {
+        if !showing.takes_enter() {
+            entry.0.forget_enter();
+        }
+        let made = entry.0.answer_and_enter(kept);
+        let again = entry.given(showing, made, entering);
+        (line["again"], line["entry"]) = (json!(again), json!(entry.0.text()));
+        on_show = again.or(on_show);
+    }
     show(&line);
-    if let Some(scene) = scene {
+    if let Some(scene) = on_show {
         *now = scene;
     }
     asking
@@ -198,14 +246,14 @@ fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     let (today, scene, showing, acts) = opened(&args);
     let mut left: VecDeque<After> = VecDeque::new();
-    let (mut asked, mut entering) = (VecDeque::new(), VecDeque::new());
+    let (mut asked, mut entering, mut entry) = (VecDeque::new(), Entering::new(), Typed::default());
     // The scene on show, as the view has it, and the window's size.
     let (mut now, mut size) = (scene, Viewport { w: 1440.0, h: 900.0 });
     for act in acts {
         // A file's name can hold a colon of its own, so only `hold` keeps the rest whole.
         let parts: Vec<&str> = match act.split_once(':').map(|(name, _)| name) {
             Some("hold") => act.splitn(2, ':').collect(),
-            Some("type" | "enter") => act.splitn(3, ':').collect(),
+            Some("type" | "enter" | "press") => act.splitn(3, ':').collect(),
             _ => act.split(':').collect(),
         };
         match parts[..] {
@@ -222,17 +270,22 @@ fn main() {
                 size = Viewport { w: w.parse().unwrap(), h: h.parse().unwrap() };
             }
             ["type", note, typed] => match entered(&showing, &now, size, note, typed) {
-                Some((at_once, typing)) => asked.extend(answered(&showing, typing, Some(at_once), &mut now)),
+                Some((at_once, typing)) => asked.extend(answered(&showing, typing, Some(at_once), &mut now, None)),
                 None => show(&Value::Null),
             },
             ["enter", note, typed] => {
                 let (at_once, typing) = entered(&showing, &now, size, note, typed).expect("a field on show");
                 shown(&mut now, at_once);
-                entering.push_back(typing);
+                entering.push_back((typing, false));
+            }
+            ["press", note, typed] => {
+                let made = entry.pressed(note, typed);
+                shown(&mut now, entry.given(&showing, made, &mut entering));
             }
             ["answer"] => {
-                let typing = entering.pop_front().expect("an Enter left an answer to ask for");
-                asked.extend(answered(&showing, typing, None, &mut now));
+                let (typing, pressed) = entering.pop_front().expect("an Enter left an answer to ask for");
+                let entry = pressed.then_some((&mut entry, &mut entering));
+                asked.extend(answered(&showing, typing, None, &mut now, entry));
             }
             ["start"] => {
                 let asking = asked.pop_front().expect("a follow-up left an asking");

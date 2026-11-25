@@ -2,7 +2,8 @@
 //! composing (marked), a caret and the chosen option. Nothing here draws or knows a window, so every rule is tested
 //! with no display. Enter gives the words and keeps them aside until it is answered ([`EntryState::answer`]), so
 //! words are never lost before whoever was given them has kept them. The entry takes every key meanwhile: what is
-//! typed then is the next text, and no key is dropped. Places are bytes into the text, always between characters;
+//! typed then is the next text, and no key is dropped. One Enter pressed meanwhile is remembered, and given when
+//! the words were kept ([`EntryState::answer_and_enter`]). Places are bytes into the text, always between characters;
 //! the ranges a platform's input method speaks are UTF-16 and are turned into bytes here and nowhere else.
 
 use std::ops::Range;
@@ -34,6 +35,9 @@ pub struct EntryState {
     most: usize,
     /// The words Enter gave, as they were typed, while no answer has come for them. They are no part of `text`.
     owed: Option<String>,
+    /// Enter was pressed while that answer was owed, with words typed since: one Enter, however many times.
+    /// It is of the words and the option as they were then: a change to either forgets it.
+    again: bool,
 }
 
 impl Default for EntryState {
@@ -48,7 +52,7 @@ impl EntryState {
     pub fn new(options: usize, most: usize) -> Self {
         let most = if most == 0 { MAX_ENTRY_CHARS } else { most.min(MAX_ENTRY_CHARS) };
         let options = options.min(MAX_ENTRY_OPTIONS);
-        Self { text: String::new(), marked: None, caret: 0, chosen: 0, options, most, owed: None }
+        Self { text: String::new(), marked: None, caret: 0, chosen: 0, options, most, owed: None, again: false }
     }
 
     pub fn of(entry: &Entry) -> Self {
@@ -59,8 +63,9 @@ impl EntryState {
     pub fn fit(&mut self, entry: &Entry) {
         let bounds = Self::of(entry);
         (self.options, self.most) = (bounds.options, bounds.most);
-        self.chosen = self.chosen.min(self.options.saturating_sub(1));
-        let kept = prefix(&self.text, self.most);
+        let (chosen, kept) = (self.chosen.min(self.options.saturating_sub(1)), prefix(&self.text, self.most));
+        self.again &= chosen == self.chosen && kept == self.text.len();
+        self.chosen = chosen;
         if kept < self.text.len() {
             self.text.truncate(kept);
             self.marked = None;
@@ -70,9 +75,21 @@ impl EntryState {
 
     /// Keeps the chosen option by its name when the options change: `was` are the names before, `now` the names
     /// to come. A name that is still offered is chosen where it now stands; one that is gone leaves the place.
+    /// An Enter remembered was pressed on that name: it is forgotten with a name that is gone, or one that is new.
     pub fn keep_option(&mut self, was: &[String], now: &[String]) {
-        let at = was.get(self.chosen).and_then(|name| now.iter().take(MAX_ENTRY_OPTIONS).position(|one| one == name));
+        let name = was.get(self.chosen);
+        let at = name.and_then(|name| now.iter().take(MAX_ENTRY_OPTIONS).position(|one| one == name));
+        self.again &= at.is_some() || (name.is_none() && now.is_empty());
         self.chosen = at.unwrap_or(self.chosen);
+    }
+
+    /// The entry `now` takes the place of `was` on its page (none before the first): the chosen option is kept
+    /// by its name and what is typed is held to the new bounds. An Enter remembered stays only while it is still
+    /// of the same entry, the same option by its name and the same words.
+    pub fn moved(&mut self, was: Option<&Entry>, now: &Entry) {
+        self.again &= was.is_some_and(|was| was.id == now.id);
+        self.keep_option(was.map(|was| was.options.as_slice()).unwrap_or_default(), &now.options);
+        self.fit(now);
     }
 
     /// Whether the entry holds words of the person's, a composition among them: text with a character a person
@@ -85,7 +102,7 @@ impl EntryState {
 
     /// Whether an answer is owed: Enter gave the words and no answer has come. The entry takes every key
     /// meanwhile, as at any other time: text, a composition, the editing keys, the caret, another option. Only
-    /// Enter gives nothing then, and what was typed since stays. No key is dropped.
+    /// Enter gives nothing then, and what was typed since stays: it is remembered. No key is dropped.
     pub fn waiting(&self) -> bool {
         self.owed.is_some()
     }
@@ -99,7 +116,9 @@ impl EntryState {
     /// as it is, with its caret. Not kept: the words come back as they were typed, in front of what was typed
     /// since with one space between, as much of them as the cap leaves room for beside it, and the caret is at
     /// the end (a composition keeps its caret). An option chosen since stays. Nothing when no answer is owed.
+    /// An Enter remembered meanwhile is forgotten: this answer gives none.
     pub fn answer(&mut self, kept: bool) {
+        self.again = false;
         let Some(words) = self.owed.take().filter(|_| !kept) else { return };
         let since = self.text.chars().count();
         let gap = if since == 0 { "" } else { " " };
@@ -113,6 +132,21 @@ impl EntryState {
         self.text.insert_str(0, &format!("{back}{gap}"));
         self.marked = self.marked.take().map(|marked| marked.start + moved..marked.end + moved);
         self.caret = if self.marked.is_some() { self.caret + moved } else { self.text.len() };
+    }
+
+    /// [`answer`](Self::answer), and then the Enter that was remembered while the answer was owed, when the
+    /// words were kept: what [`enter`](Self::enter) gives now. The text and the option are the ones that Enter
+    /// was pressed on: a change to either since has forgotten it, so nothing is sent that Enter was not pressed on.
+    /// Words that were not kept are back in the text, so that Enter is forgotten: it would give both as one.
+    pub fn answer_and_enter(&mut self, kept: bool) -> Option<Made> {
+        let again = self.again && kept;
+        self.answer(kept);
+        again.then(|| self.enter()).flatten()
+    }
+
+    /// Forgets the Enter remembered while an answer is owed. The words typed since stay as they are.
+    pub fn forget_enter(&mut self) {
+        self.again = false;
     }
 
     pub fn text(&self) -> &str {
@@ -168,6 +202,7 @@ impl EntryState {
         let new: String = new.chars().filter_map(one_line).take(self.most + 1).collect();
         let stays = self.text.chars().count() - self.text[range.clone()].chars().count();
         let new = &new[..prefix(&new, self.most.saturating_sub(stays))];
+        self.again &= self.text[range.clone()] == *new;
         self.text.replace_range(range.clone(), new);
         self.caret = range.start + new.len();
         range.start..self.caret
@@ -185,6 +220,7 @@ impl EntryState {
 
     fn cut(&mut self, range: Range<usize>) {
         if self.marked.is_none() {
+            self.again &= range.is_empty();
             self.text.replace_range(range.clone(), "");
             self.caret = range.start;
         }
@@ -238,15 +274,22 @@ impl EntryState {
 
     pub fn choose(&mut self, option: usize) {
         if option < self.options {
+            self.again &= option == self.chosen;
             self.chosen = option;
         }
     }
 
     /// What was entered. The words are kept aside for [`answer`](Self::answer) and the text is empty from then
     /// on. Nothing while a composition is marked (that Enter belongs to the input method, to confirm it), nothing
-    /// for text with no words in it, and nothing while an answer is owed: what was typed since stays.
+    /// for text with no words in it, and nothing while an answer is owed: what was typed since stays, and that
+    /// Enter is remembered for [`answer_and_enter`](Self::answer_and_enter), once however often it is pressed,
+    /// until the text or the chosen option changes.
     pub fn enter(&mut self) -> Option<Made> {
-        if self.marked.is_some() || self.waiting() || !has_visible(&self.text) {
+        if self.marked.is_some() || !has_visible(&self.text) {
+            return None;
+        }
+        if self.waiting() {
+            self.again = true;
             return None;
         }
         let words = std::mem::take(&mut self.text);

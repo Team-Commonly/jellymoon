@@ -50,6 +50,13 @@ pub(crate) fn taken(scene: &Scene) -> bool {
     scene.notes.iter().any(|note| id_of(note).is_some_and(names))
 }
 
+/// Whether a sharper wish on the scene waits for the person's choice. An Enter in the entry takes the pair's
+/// place and the first words are gone: that is for an Enter pressed in sight of the pair, and never for one the
+/// entry remembered from before it stood (`Showing::takes_enter`).
+pub(crate) fn waits(scene: &Scene) -> bool {
+    scene.notes.iter().any(|note| id_of(note) == Some(SHAPE))
+}
+
 /// Whether a note is the one that says the day has no wish.
 pub(crate) fn nothing(note: &Note) -> bool {
     matches!(note, Note::Plain { title, .. } if title == crate::scene::NOTHING)

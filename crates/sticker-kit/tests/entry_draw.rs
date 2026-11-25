@@ -263,10 +263,17 @@ fn an_entry_that_is_owed_an_answer_takes_every_key_and_only_its_enter_gives_noth
     assert_eq!((state(&page, cx), waiting(cx)), (since.clone(), true), "a key was dropped while an answer was owed");
     assert_eq!(*made.borrow(), [wish("tea", "kitchen")], "a second Enter gave words while an answer was owed");
 
-    // Kept: what was typed since is whole, with its caret, and is what the next Enter gives.
+    // Kept: the Enter pressed meanwhile was on other words and another chip than stand now, so none is given.
     answer(&page, cx, true);
-    assert_eq!((state(&page, cx), waiting(cx), accepts(cx)), (since, false, true));
-    keys(cx, "enter t w o");
+    assert_eq!(*made.borrow(), [wish("tea", "kitchen")], "an Enter was given on words it was not pressed on");
+    assert_eq!((state(&page, cx), waiting(cx)), (since, false), "the words stay for the person's own Enter");
+    // Entered, and the next words entered before the answer: that Enter is given at the kept answer, once.
+    keys(cx, "enter t w o enter");
+    answer(&page, cx, true);
+    let all = [wish("tea", "kitchen"), wish("ixk你", "letters"), wish("two", "letters")];
+    assert_eq!(*made.borrow(), all, "the Enter was lost");
+    assert_eq!((state(&page, cx), waiting(cx), accepts(cx)), ((String::new(), 0, Some(2), true), true, true));
+    keys(cx, "s i x");
     // The options move while the answer is owed: the option is kept by its name. Then the words are not kept:
     // they come back in front of what was typed since.
     let moved = Entry { options: ["letters", "kitchen", "garden"].map(String::from).to_vec(), ..entry() };
@@ -274,13 +281,34 @@ fn an_entry_that_is_owed_an_answer_takes_every_key_and_only_its_enter_gives_noth
     cx.run_until_parked();
     assert_eq!((state(&page, cx).2, waiting(cx)), (Some(0), true), "letters is still the chosen option");
     answer(&page, cx, false);
-    assert_eq!((state(&page, cx), waiting(cx)), (("ixk你 two".into(), 10, Some(0), true), false));
+    assert_eq!((state(&page, cx), waiting(cx)), (("two six".into(), 7, Some(0), true), false));
     keys(cx, "enter");
-    assert_eq!(made.borrow().last(), Some(&wish("ixk你 two", "letters")), "the option is given by its name");
+    assert_eq!(made.borrow().last(), Some(&wish("two six", "letters")), "the option is given by its name");
 
     answer(&page, cx, true);
     take_away(&page, cx);
     assert!(!accepts(cx), "a page with no entry takes no text input");
+}
+
+#[test]
+fn a_remembered_enter_is_not_given_for_words_not_kept_nor_when_the_page_forgets_it_nor_with_no_window() {
+    let mut cx = context();
+    let (page, cx, made, _) = open(&mut cx);
+    let held = |cx: &mut VisualTestContext| page.read_with(cx, |page, _| page.entry().text().to_string());
+    keys(cx, "t e a enter t w o enter");
+    answer(&page, cx, false);
+    assert_eq!((held(cx).as_str(), made.borrow().len()), ("tea two", 1), "both stand, and nothing was given");
+    keys(cx, "enter o n e enter");
+    page.update(cx, |page, _| page.forget_enter());
+    answer(&page, cx, true);
+    assert_eq!((held(cx).as_str(), made.borrow().len()), ("one", 2), "the page forgot the Enter: its words stay");
+    keys(cx, "enter x enter");
+    page.update(cx, |page, cx| page.answer_entry_closed(true, cx));
+    assert_eq!((held(cx).as_str(), made.borrow().len()), ("x", 3), "no handler is called with no window");
+    keys(cx, "enter y enter");
+    take_away(&page, cx);
+    answer(&page, cx, true);
+    assert_eq!((held(cx).as_str(), made.borrow().len()), ("y", 4), "an entry taken away was given the Enter");
 }
 
 #[test]

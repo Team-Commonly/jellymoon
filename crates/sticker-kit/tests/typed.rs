@@ -146,3 +146,44 @@ fn the_quote_and_the_field_stay_when_the_body_is_cut_and_the_options_go() {
         assert!(inside(sheet.rect, paper.rect) && inside(of(&placed, PieceKind::Field)[0].rect, sheet.rect));
     }
 }
+
+/// The bubble of what a person typed for the sample's first small character, with `answer` under the words.
+fn bubble(answer: &str, theme: &Theme, viewport: Viewport) -> Placed {
+    let scene = Scene::sample();
+    let id = format!("typed-{}", scene.characters[0].id);
+    let said = Note::Said { id, text: "write our opening hours in twelve lines".into(), answer: answer.into() };
+    let placed = layout(&Scene { notes: vec![said], ..scene }, theme, viewport, &FixedAdvance(0.56));
+    placed.into_iter().filter(|piece| piece.piece == PieceKind::Quote).collect::<Vec<_>>().remove(0)
+}
+
+// What a person answered to go on is more of their own words: in the bubble of what they typed, under it, by the
+// rules of every quoted text. A hook the pencil draws tells the two apart, and no word does.
+#[test]
+fn an_answer_is_in_the_bubble_under_the_typed_words_behind_a_hook_and_a_bubble_with_none_is_as_it_was() {
+    for (theme, viewport) in [Theme::sticker(), Theme::plain()].iter().flat_map(|theme| SIZES.map(|size| (theme, size)))
+    {
+        let (plain, both) = (bubble("", theme, viewport), bubble("Only seven, one per day", theme, viewport));
+        let typed = plain.text.len();
+        assert!(typed > 0 && plain.sketch.is_none(), "a bubble with no answer has its words and no mark");
+        assert_eq!(both.text[..typed], plain.text[..], "the typed words stand where they stood");
+        let answer = &both.text[typed..];
+        let words: Vec<&str> = answer.iter().map(|run| run.text.as_str()).collect();
+        assert_eq!(words.join(" "), "Only seven, one per day");
+        assert!(both.text.iter().all(|run| run.role == Role::Quoted && inside(run.rect, both.rect)));
+        let (last, first) = (plain.text[typed - 1].rect, answer[0].rect);
+        assert!(first.y >= last.bottom() && first.x > plain.text[0].rect.x, "under the typed words, and set in");
+        assert_eq!((both.rect.x, both.rect.y, both.rect.w), (plain.rect.x, plain.rect.y, plain.rect.w));
+        assert!(both.rect.h >= plain.rect.h + first.h, "the bubble is taller by the answer");
+        let sketch = both.sketch.as_ref().expect("the hook");
+        assert_eq!((sketch.what.as_str(), sketch.count("hook"), sketch.strokes.len()), ("answered", 1, 1));
+        let hook = sketch.parts[0].rect;
+        assert!(inside(hook, both.rect) && hook.right() <= first.x && hook.y >= last.bottom(), "{hook:?}");
+    }
+    let (theme, size) = (Theme::sticker(), SIZES[0]);
+    // An answer that cleans to nothing is none, and one of any words is cleaned as every text is.
+    assert_eq!(bubble(" \u{200b}\n\u{202e} ", &theme, size), bubble("", &theme, size));
+    let odd = bubble("<b>seven</b>\u{202e}\u{1b}[31m [Keep it](https://example.test)", &theme, size);
+    let drawn: Vec<&str> = odd.text.iter().skip(1).map(|run| run.text.as_str()).collect();
+    assert_eq!(drawn.join(" "), "<b>seven</b>[31m [Keep it](https://example.test)");
+    assert!(odd.text.iter().all(|run| run.role == Role::Quoted));
+}

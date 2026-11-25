@@ -44,6 +44,8 @@ const PROMPT: &str = "A person typed a wish for the project in the folder named 
 /// The two lines of the call's input, each before what core puts after it: the folder, then the typed words.
 const IN_FOLDER: &str = "The project is in the folder: ";
 const THE_WISH: &str = "The wish: ";
+/// What stands before the person's answer in a run's prompt, after the question it answers.
+const ANSWER: &str = " | The person's answer: “";
 
 /// How long the shaping call may take, and how many bytes of what it prints are read.
 const LIMIT: Duration = Duration::from_secs(20);
@@ -226,7 +228,7 @@ fn prompt(shape: &Shape, said: &str, answer: Option<&str>) -> Option<String> {
         }
     }
     if let Some(answer) = answer {
-        built.push_str(&format!(" | Asked of the person: {} | The person's answer: “{answer}”", shape.ask));
+        built.push_str(&format!(" | Asked of the person: {}{ANSWER}{answer}”", shape.ask));
     }
     built.push_str(&format!(" | The person's own words: “{said}”"));
     Some(built).filter(|built| kept(built))
@@ -240,6 +242,17 @@ fn answered(typed: &str) -> Result<String, &'static str> {
         marks if marks_only(marks) => Err(MARKS),
         _ => Ok(answer),
     }
+}
+
+/// Whether a text is an answer as a wish keeps it and a page draws it: what [`answered`] leaves of itself.
+pub(crate) fn answer_kept(answer: &str) -> bool {
+    answered(answer).is_ok_and(|clean| clean == answer)
+}
+
+/// Whether `answer` is the answer the prompt `shaped` of its wish was built with: one a wish keeps, standing
+/// in that prompt under its label. A kept wish's answer is a file's word: it is used only while this holds.
+pub(crate) fn answered_in(shaped: &str, answer: &str) -> bool {
+    answer_kept(answer) && shaped.contains(&format!("{ANSWER}{answer}” | "))
 }
 
 /// Whether a text is one a wish keeps as its run's prompt: what the door leaves of itself, within its length.
@@ -256,7 +269,7 @@ pub fn wish_shaped(home: &Path, day: Option<&str>, typed: &str, project: &str) -
     let (day, said) = (wish::day_of(day)?, wish::words(typed)?);
     let shaped = waiting(home, &day, &said).filter(|kept| kept.0.project == project).map(|kept| kept.1);
     let with_shape = shaped.is_some();
-    let made = wish::wish_with(home, &day, typed, project, shaped)?;
+    let made = wish::wish_with(home, &day, typed, project, shaped.map(|shaped| (shaped, None)))?;
     if with_shape {
         let _ = fs::remove_file(file(home, &day));
     }
@@ -288,6 +301,8 @@ pub struct ShapeSeen {
 /// Refused, with nothing written, when the shape that waits is not the one seen (other words, another project,
 /// or other texts: one made since for the same words), whatever `go` says, and with the shape still waiting
 /// when an answer is one the shape did not ask for, is not one once cleaned, or leaves no prompt to build.
+/// A wish kept with an answer keeps it too, as it stands in the prompt, in that write: a page shows it with
+/// the typed words, which alone do not say what the run was asked.
 pub fn wish_of_shape(read: &DayOptions, seen: &ShapeSeen, go: ShapeGo) -> Result<Wished, Error> {
     let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };
     let refused = |why: &str| Error::Wish(why.to_string());
@@ -295,16 +310,28 @@ pub fn wish_of_shape(read: &DayOptions, seen: &ShapeSeen, go: ShapeGo) -> Result
     let (waits, shaped) = waiting(home, day, &wish::words(&seen.said)?).filter(same).ok_or_else(|| refused(GONE))?;
     let shaped = match go {
         ShapeGo::Typed => None,
-        ShapeGo::Shape => Some(shaped),
+        ShapeGo::Shape => Some((shaped, None)),
         ShapeGo::Answer(_) if waits.shape.ask.is_empty() => return Err(refused(NO_ASK)),
         ShapeGo::Answer(answer) => {
             let answer = answered(answer).map_err(refused)?;
-            Some(prompt(&waits.shape, &waits.said, Some(&answer)).ok_or_else(|| refused(UNBUILT))?)
+            let shaped = prompt(&waits.shape, &waits.said, Some(&answer)).ok_or_else(|| refused(UNBUILT))?;
+            Some((shaped, Some(answer)))
         }
     };
     let made = wish::offered_with(read, &seen.said, &waits.project, shaped)?;
     let _ = fs::remove_file(file(home, day));
     Ok(made)
+}
+
+/// `Make it again` of the made wish `of` (`run/waits/again.rs`): a new wish kept as that one was made, for a
+/// project on offer as [`wish::wish_offered`] keeps one, with its words and, when it was kept from a shape, the
+/// same prompt for its run and the answer in it. Both are a file's words, read through the door every made wish
+/// is read through. A day with no such wish keeps nothing.
+pub fn wish_again(read: &DayOptions, of: &str) -> Result<Wished, Error> {
+    let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };
+    let old = wish::kept_of(home, day)?.into_iter().find(|wish| wish.id == of);
+    let old = old.ok_or_else(|| Error::Wish(format!("the page of {day} has no made wish of that id")))?;
+    wish::offered_with(read, &old.said, &old.project, old.shaped.map(|shaped| (shaped, old.answered)))
 }
 
 #[cfg(test)]

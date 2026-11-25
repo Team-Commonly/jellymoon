@@ -16,7 +16,8 @@ jellymoon wish --say <your words> --project <folder name> [--date <YYYY-MM-DD>] 
 
 `shape` keeps no wish: it asks the person's Claude Code, which only reads, to say the wish more sharply, and a
 sharper wish that passed core's check waits in `pages/<day>.shape.json`. `wish --shaped` keeps the wish with the
-shape that waits for these same words and project (the kept wish then has `shaped`, the prompt its run is given),
+shape that waits for these same words and project (the kept wish then has `shaped`, the prompt its run is given;
+one kept in the window with an answer to the shape's question has `answered` too, the answer as it was cleaned),
 and as typed when there is none, which it says on stderr
 ([ADR 0025](../adr/0025-the-wish-is-shaped-before-a-run.md)). A sharper wish may ask one question. It is
 answered in the window only, in the field under the two choices; `wish --shaped` has no answer. The window
@@ -98,6 +99,11 @@ made with `--after <id>` in place of `--project`:
 
 - **Where.** `pages/<day>.wishes.json` in Jellymoon's own folder: `{day, wishes}`, each wish as printed. It is not in
   the kept page `pages/<day>.json`, because every reading writes that file again.
+- **The fields.** `id`, `said` (the typed words), `project`, `state`, `stars`, and only when they apply:
+  `shaped` (the prompt of a wish kept from a sharper wish), `answered` (the cleaned answer of a wish kept with
+  one: the same text that stands in `shaped`, and never without it), and what a run, a follow-up or a question
+  adds. A file with any other field, or with an `answered` that is not the one in its `shaped`, is not read as
+  the day's made wishes. A page's wish has `answered` too, and the window draws it under the typed words.
 - **The words.** What is kept is what a page draws, by the rule of a clash's statement: one line, each run of
   spaces made one, nothing that cannot be seen, credential shapes replaced by `[redacted]`, each `"` made `'`.
 - **A credential split by a line break.** A line break is read as a space, so a key typed on two lines was two

@@ -51,7 +51,7 @@ pub use run::{
     SHAPE_MODEL, Shape, ShapeGo, ShapeOutcome, ShapeSeen, Shaped, Shown, ShownEntry, ShownFile, Started, Step, Steps,
     Told, Tool, Tossed, Undone, Waiting, Waits, WorkDone, WorkState, WorkTap, answer_run, doing, ended_alone,
     followable, keep_run, kept_itself, run, run_apart, shape, show_file, show_run, stands, stop_run, toss_run,
-    undo_run, waiting, waits, wish_after, wish_of_shape, wish_shaped, work_tapped,
+    undo_run, waiting, waits, wish_after, wish_again, wish_of_shape, wish_shaped, work_tapped,
 };
 pub use shapes::{Clash, Harness, HookState, PageData, PageRead, ReaderDay, ReaderTurn, Ruling, Wish, WishState};
 pub use tap::{CLASHES_MAX, Settled, Side, Standing, keep_private, kept_page, settle, settle_kept, standing};

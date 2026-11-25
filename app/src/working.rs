@@ -122,8 +122,16 @@ fn standing(wish: &Wish, alone: Option<&Alone>) -> Note {
 pub(crate) fn at_work(asked: &Note) -> Note {
     let Note::Text { id, body, .. } = asked else { return asked.clone() };
     let (none, state) = (String::new, WishState::Working);
-    let wish =
-        Wish { id: none(), label: none(), said: none(), project: none(), state, stars: Vec::new(), question: None };
+    let wish = Wish {
+        id: none(),
+        label: none(),
+        said: none(),
+        project: none(),
+        state,
+        stars: Vec::new(),
+        question: None,
+        answered: None,
+    };
     text(id.clone(), jellymoon_core::stands(&wish, None).0, body.clone(), Vec::new())
 }
 

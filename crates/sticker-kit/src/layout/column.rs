@@ -7,12 +7,15 @@
 use super::notes::{fill, stick};
 use super::page::{self, BODY_BOTTOM, BODY_TOP};
 use super::typed::block;
-use super::{Ctx, MAX_PIECES, PieceKind, little, piece};
+use super::{Ctx, MAX_PIECES, PieceKind, Placed, little, piece};
 use crate::geom::Rect;
+use crate::pencil::{Part, Pencil, Sketch};
 use crate::scene::{Character, Note, Scene, State, speaker};
 
 /// What is left between two cards, in design units: the strip of tape over a card stands in it.
 const GAP: f32 = 36.0;
+/// How far an answer is set in from the left of the words it is under, in design units: the room of its hook.
+const SET_IN: f32 = 18.0;
 
 pub(super) fn lay(cx: &mut Ctx, scene: &Scene) {
     let under = page::header(cx, scene);
@@ -22,8 +25,8 @@ pub(super) fn lay(cx: &mut Ctx, scene: &Scene) {
         if cx.out.len() >= MAX_PIECES {
             break;
         }
-        if let Note::Said { id, text } = note {
-            top = said(cx, scene, id, text, top) + gap;
+        if let Note::Said { id, text, answer } = note {
+            top = said(cx, scene, (id, text, answer), top) + gap;
             owed = true;
             continue;
         }
@@ -71,17 +74,20 @@ fn rows(cx: &mut Ctx, scene: &Scene, under: f32) -> f32 {
 
 /// What the person typed, at `top`: a bubble that ends short of the column's right edge, where its character
 /// stands with its stars and its state, and under them what the character says. Returns the bottom of it all.
-fn said(cx: &mut Ctx, scene: &Scene, id: &str, text: &str, top: f32) -> f32 {
+/// With an `answer` the bubble holds it too, under the typed words ([`answered`], [`hook`]).
+fn said(cx: &mut Ctx, scene: &Scene, (id, text, answer): (&str, &str, &str), top: f32) -> f32 {
     let ((left, wide), (across, down), gap) = (cx.column(), little::room(cx), cx.px(8.0));
     let end = left + wide - across - gap;
     let mut bottom = top;
     if let Some(mut bubble) = block(cx, (id, 0), text, Rect::new(end - wide * 0.72, top, wide * 0.72, 0.0), usize::MAX)
     {
+        let under = answered(cx, &mut bubble, answer);
         // The bubble is as wide as its longest line, and ends where its character begins.
         let longest = bubble.text.iter().map(|run| run.rect.right()).fold(bubble.rect.x, f32::max);
         let spare = (bubble.rect.right() - longest - cx.px(10.0)).max(0.0);
         bubble.rect = Rect::new(bubble.rect.x + spare, bubble.rect.y, bubble.rect.w - spare, bubble.rect.h);
         bubble.text.iter_mut().for_each(|run| run.rect = run.rect.moved(spare, 0.0));
+        hook(cx, &mut bubble, under);
         bottom = bubble.rect.bottom();
         cx.out.push(bubble);
     }
@@ -95,6 +101,30 @@ fn said(cx: &mut Ctx, scene: &Scene, id: &str, text: &str, top: f32) -> f32 {
         bottom = little::put(cx, tag, at).bottom();
     }
     bottom
+}
+
+/// The answer a person went on with, in the bubble of what they typed: its lines under the typed ones, set in,
+/// and the bubble as much taller. They are the person's own words as the typed ones are: the same block, so
+/// the same cleaning and the same role, and never anything but text. Returns the place of its first run among
+/// the bubble's, or None for an answer that cleans to nothing: the bubble is then as it was.
+fn answered(cx: &Ctx, bubble: &mut Placed, answer: &str) -> Option<usize> {
+    let (set_in, first) = (cx.px(SET_IN), bubble.text.len());
+    let at = Rect::new(bubble.rect.x + set_in, bubble.rect.bottom() - cx.px(7.0), bubble.rect.w - set_in, 0.0);
+    let more = block(cx, (&bubble.id, 0), answer, at, usize::MAX)?;
+    bubble.rect.h = more.rect.bottom() - bubble.rect.y;
+    bubble.text.extend(more.text);
+    Some(first)
+}
+
+/// What tells an answer from the typed words over it: a small hook the pencil draws, down from under those
+/// words and across to the answer's first line, whose run is the bubble's `first`. No word says it.
+fn hook(cx: &Ctx, bubble: &mut Placed, first: Option<usize>) {
+    let Some(line) = first.and_then(|first| bubble.text.get(first)).map(|run| run.rect) else { return };
+    let (left, right, mid) = (bubble.rect.x + cx.px(13.0), line.x - cx.px(5.0), line.y + line.h / 2.0);
+    let mut pencil = Pencil::new(&format!("{}>", bubble.id), cx.k);
+    pencil.path(&[(left, line.y), (left, mid), (right, mid)]);
+    let part = Part { name: "hook".to_string(), rect: Rect::new(left, line.y, right - left, line.h / 2.0) };
+    bubble.sketch = Some(Sketch { what: "answered".to_string(), parts: vec![part], strokes: pencil.finish() });
 }
 
 /// The big character left of the card at `top`, the `turn`th down the column, as large as the theme has it or as

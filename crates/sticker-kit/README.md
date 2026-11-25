@@ -458,10 +458,13 @@ whole list's and a told note's first 12, 24 lines of a text note's body, four op
 count that is cut says so in the card's last line, `+N more`. Behind all of it `layout` returns at most
 `MAX_PIECES` pieces.
 
-`Note::Said { id, text }` is what a person typed. It is no card: a bubble at the column's right, one `quote`
+`Note::Said { id, text, answer }` is what a person typed. It is no card: a bubble at the column's right, one `quote`
 piece in `Role::Quoted` with the note's id, drawn by the rules every quoted text is drawn by (cleaned, at most
 `MAX_QUOTED_LINES` lines, cut with `…`). The character it is of (`speaker(id)`: the id after its first `-`)
-stands small at the bubble's end with its stars and its state, and its label and what it says under them. A tap
+stands small at the bubble's end with its stars and its state, and its label and what it says under them.
+`answer` is what the person answered to go on, when they did: lines of the same piece under the typed ones, by
+the same rules, set in behind a small hook the pencil draws (the piece's sketch, `answered`, with one part,
+`hook`). No word tells the two apart, and with an empty `answer` the bubble is `text` alone. A tap
 on the bubble is a tap on that character; a bubble of no character takes none. The big character stands left of
 the first card after each `Said`, and of the column's first card, no larger than the room left of the column.
 

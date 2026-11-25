@@ -89,6 +89,18 @@ the heart of the decision.
    the note is titled "What you typed", quotes the typed words, and has no field. (The same day, after a walk
    with a real harness: the question first stood as a last row of the sharper wish, a whole note and a quote
    of the typed words away from the field it is answered in, under a sentence for an offer.)
+9. **The answer stays with its wish** (2026-11-25). A wish kept with an answer is made of more than its typed
+   words, and the page showed the typed words only. The kept wish now has `answered` beside `said`: the cleaned
+   answer, the one that stands in `shaped`, written in the same one write, and only when the wish went on with
+   an answer. `Go with this`, `Go with what I typed`, a typed wish and `wish --shaped` keep none, and the field
+   is then left out of the file. A day's file written before this reads with none. A kept answer is a file's
+   word: a wish whose `answered` is not what cleaning leaves of itself, or does not stand in its `shaped` under
+   the answer's label, or has no `shaped`, is not a made wish of the day, as with any other field out of place.
+   A page's wish carries `answered`, and the window draws it in the wish's bubble, on lines of its own under
+   the typed words: the person's own words, as text and nothing else, cut as the typed words are. A small hook
+   the pencil draws, with the answer set in behind it, tells the two apart. No word or label does. A wish with
+   no answer is drawn as it was. `Make it again` makes the wish as it was made: the new wish has the old one's
+   `shaped` and `answered`, so its run is given the same prompt.
 
 ## Measured
 
@@ -137,9 +149,15 @@ Not measured: Windows, Linux, an older Claude Code, and a link inside the projec
 - The person's own words may hold `|`, `“` and `”`, and so may their answer: cleaning leaves them. A person can
   so write a part that reads, to their own run, as a label of Jellymoon's. Only a model's text is refused for
   those marks; the person is the one the run works for.
-- The answer is in the run's prompt and nowhere else: the wish's bubble shows the typed words (with a question
-  the pair draws them nowhere), a wish made again is made of the typed words alone, and a follow-up's run is
-  given the follow-up's words.
+- The answer was in the run's prompt and nowhere else: the wish's bubble showed the typed words, and a wish
+  made again was made of the typed words alone. Closed 2026-11-25 (decision 9) for the bubble and for
+  `Make it again`. Still open: a follow-up's run is given the follow-up's words and not the answer; an opened
+  wish's note (`wish-<wish>`) shows its label and what it says, never the typed words, and so not the answer;
+  the question that was answered is drawn nowhere once the wish is made.
+- A build from before decision 9 refuses a day's made wishes when one of them has `answered`: a kept wish has
+  no field it does not know. Nothing is lost, and the newer build reads the day again.
+- The hook that tells an answer from the typed words is a drawn mark with no words. Whether a first-time person
+  reads it as "what I answered" was not asked of anyone.
 - An answer that core refuses leaves the pair on the page with core's reason over it. When the reason is that
   the shape waits no more, the pair still stands, and the next tap on it says so and takes it away.
 - The model reads what the project holds, so a file's text can steer what the sharper wish says. It can only

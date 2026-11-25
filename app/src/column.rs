@@ -4,7 +4,8 @@
 //! wish that is not made yet (`shaping.rs`): the newest thing on the page, over the entry. And under those, the
 //! very last, the note that a newer build is installed (`newer.rs`), when the scene has it. A pure function:
 //! the scene's notes are moved and none is changed, added to or taken away, but the list of the made wishes
-//! (`scene::MADE`), whose rows are the words each `Said` now carries.
+//! (`scene::MADE`), whose rows are the words each `Said` now carries: the typed words and, after a line break,
+//! the answer the wish went on with (`scene::typed`).
 //!
 //! It is applied where a scene goes to the kit to be drawn or placed, by `drawing::column` and nowhere else,
 //! after the pass that opens and closes the drawn notes: every scene the app makes, keeps and compares is as it
@@ -39,7 +40,8 @@ pub fn column(scene: &Scene) -> Scene {
     let mut left: Vec<Option<&Note>> = rest.map(Some).collect();
     let mut under = Vec::new();
     for (who, (_, said)) in scene.characters[first..].iter().zip(rows) {
-        under.push(Note::Said { id: format!("{TYPED}{}", who.id), text: said.clone() });
+        let (text, answer) = said.split_once('\n').unwrap_or((said, ""));
+        under.push(Note::Said { id: format!("{TYPED}{}", who.id), text: text.into(), answer: answer.into() });
         for prefix in ORDER {
             for note in &mut left {
                 under.extend(note.take_if(|note| of(note, prefix, &who.id)).cloned());
@@ -150,8 +152,15 @@ mod tests {
     #[test]
     fn the_typed_words_are_the_person_s_and_a_scene_with_no_made_wish_is_as_it_was() {
         let ordered = column(&day(Vec::new()));
-        let said = |id: &str, text: &str| Note::Said { id: id.into(), text: text.into() };
-        assert_eq!(ordered.notes, [said("typed-m1", "first words"), said("typed-m2", "second words")]);
+        let said =
+            |id: &str, text: &str, answer: &str| Note::Said { id: id.into(), text: text.into(), answer: answer.into() };
+        assert_eq!(ordered.notes, [said("typed-m1", "first words", ""), said("typed-m2", "second words", "")]);
+        // A row with an answer under its typed words gives its own bubble both, and no other bubble anything.
+        let mut answered = day(Vec::new());
+        let Some(Note::Whole { rows, .. }) = answered.notes.last_mut() else { panic!("the made wishes") };
+        rows[1].1 = "second words\nonly seven".into();
+        let both = [said("typed-m1", "first words", ""), said("typed-m2", "second words", "only seven")];
+        assert_eq!(column(&answered).notes, both);
         let none = Scene { notes: vec![text("work-m1")], ..Scene::default() };
         assert_eq!(column(&none), none);
     }

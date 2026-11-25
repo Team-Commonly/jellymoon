@@ -197,3 +197,73 @@ fn a_prompt_past_what_the_door_looks_at_is_not_built_and_the_shape_still_waits()
     let shaped = wish_of_shape(&read, &shown, ShapeGo::Answer("two seconds")).unwrap().wish.shaped.unwrap();
     assert!(shaped.contains(" | The person's answer: “two seconds” | ") && shaped.len() <= crate::still::LOOKED);
 }
+
+/// The wish kept from [`sharper`] as `go` says, and the read of its day.
+fn made_with(go: ShapeGo) -> (tempfile::TempDir, DayOptions, wish::MadeWish) {
+    let (dir, read) = waits(SAID, &sharper(ASK));
+    let made = wish_of_shape(&read, &seen(SAID, &sharper(ASK)), go).unwrap().wish;
+    (dir, read, made)
+}
+
+// The typed words alone do not say what a run was asked: the answer a wish went on with is kept beside them, as
+// it stands in the prompt, and a page's wish carries it. Kept any other way, a wish has none.
+#[test]
+fn a_wish_kept_with_an_answer_keeps_the_cleaned_answer_and_one_kept_any_other_way_keeps_none() {
+    let (_dir, read, made) = made_with(ShapeGo::Answer("  two\u{7} \t seconds\r\n"));
+    assert_eq!(made.answered.as_deref(), Some("two seconds"), "the cleaned answer, never the typed one");
+    assert_eq!(made.shaped.as_deref(), Some(ANSWERED), "which is the one the prompt holds");
+    let home = read.home.as_ref().unwrap();
+    assert_eq!(wish::kept_of(home, DAY).unwrap(), [made], "it is read back as it was kept");
+    let drawn = &wish::made(home, DAY)[0];
+    assert_eq!((drawn.said.as_str(), drawn.answered.as_deref()), (SAID, Some("two seconds")));
+    for go in [ShapeGo::Shape, ShapeGo::Typed] {
+        let (_dir, read, made) = made_with(go);
+        let home = read.home.as_ref().unwrap();
+        assert_eq!((made.answered, &wish::made(home, DAY)[0].answered), (None, &None), "{go:?}");
+        let kept = fs::read_to_string(home.join("pages").join(format!("{DAY}.wishes.json"))).unwrap();
+        assert!(!kept.contains("answered"), "{go:?}: {kept}");
+    }
+    // An answer that is refused keeps no wish, so no answer: nothing is written (`refused` looks).
+    assert_eq!(refused(&sharper(ASK), SAID, ShapeGo::Answer("\u{7} \n")), NO_ANSWER);
+}
+
+// A kept wish is a file. One written before answers were kept has none; one whose answer is not the answer its
+// prompt holds, or is not what cleaning leaves, or has no prompt, is not a made wish of the day.
+#[test]
+fn a_day_written_before_answers_were_kept_reads_with_none_and_a_kept_answer_is_the_one_in_the_prompt() {
+    let (_dir, read) = waits(SAID, &sharper(ASK));
+    let home = read.home.as_ref().unwrap();
+    let write = |shaped: Option<&str>, answered: Option<&str>| {
+        let mut wish =
+            serde_json::json!({"id": "m1", "said": SAID, "project": "alpha", "state": "working", "stars": []});
+        for (name, text) in [("shaped", shaped), ("answered", answered)] {
+            if let Some(text) = text {
+                wish[name] = text.into();
+            }
+        }
+        let made = serde_json::json!({"day": DAY, "wishes": [wish]});
+        put(&home.join("pages").join(format!("{DAY}.wishes.json")), &format!("{made}\n"), false).unwrap();
+        wish::kept_of(home, DAY).map(|kept| kept[0].answered.clone()).map_err(|_| ())
+    };
+    assert_eq!(write(Some(ANSWERED), None), Ok(None), "as an earlier build wrote it");
+    assert_eq!(wish::made(home, DAY)[0].answered, None);
+    assert_eq!(write(Some(ANSWERED), Some("two seconds")), Ok(Some("two seconds".to_string())));
+    for odd in ["three seconds", "two", " two seconds", "two seconds\u{7}", ""] {
+        assert_eq!(write(Some(ANSWERED), Some(odd)), Err(()), "{odd:?}");
+    }
+    assert_eq!(write(None, Some("two seconds")), Err(()), "an answer with no prompt it stands in");
+}
+
+// `Make it again` makes the wish as it was made: the same prompt for its run, and the answer in it.
+#[test]
+fn a_wish_made_again_is_kept_with_the_prompt_and_the_answer_it_was_made_with() {
+    let (_dir, read, first) = made_with(ShapeGo::Answer("two seconds"));
+    let again = wish_again(&read, "m1").unwrap().wish;
+    assert_eq!((again.id.as_str(), &again.said, &again.shaped), ("m2", &first.said, &first.shaped));
+    assert_eq!(again.answered.as_deref(), Some("two seconds"));
+    let typed = wish::wish_offered(&read, "say hello", "alpha").unwrap().wish;
+    let again = wish_again(&read, &typed.id).unwrap().wish;
+    assert_eq!((again.said.as_str(), again.shaped, again.answered), ("say hello", None, None));
+    let home = read.home.as_ref().unwrap();
+    assert!(wish_again(&read, "m9").is_err() && wish::made(home, DAY).len() == 4, "no such wish keeps nothing");
+}

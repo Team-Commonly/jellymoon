@@ -447,7 +447,10 @@ max_file_lines = 400
 # file of their own with the one that was there (`run/shape/tests.rs`, 156 new).
 # After the verifier, a wish is kept only from the shape a page showed raised it by 41: the shape on show that a
 # page hands core and the comparison (`run/shape.rs`, 14), and its test (`run/shape/tests.rs`, 27).
-"crates/jellymoon-core" = 20001
+# The answer stays with its wish (ADR 0025, decision 9) raised it by 127: the kept answer, its check and a wish
+# made again as it was made (`run/shape.rs`, 27; `shapes.rs`, 4; `reading.rs`, 9; `run.rs`, 2), and the tests
+# (`run/shape/tests.rs`, 70; `wish/tests.rs`, 15).
+"crates/jellymoon-core" = 20128
 # A test's reading of the home past a file Windows holds locked raised the binary by 2.
 # A look that reads the record again behind the mark, for a run that finished meanwhile, raised core by 15
 # (`run/end.rs`, with the wait a test's build reads) and the binary by 36 (its test, `tests/f40/closed.rs`).
@@ -891,7 +894,9 @@ max_file_lines = 400
 # `tests/entry_waits.rs`, 15; `tests/entry_draw.rs`, 7).
 # The same when the entry under it changes (another entry, its option gone, a cap that cuts the words, the
 # entry taken away): 43 (`src/entry.rs`, 13; `draw/entry.rs`, -2; `tests/entry_waits.rs`, 31; `tests/entry_draw.rs`, 1).
-"crates/sticker-kit" = 13022
+# An answer in the bubble of what a person typed raised it by 104: the field, its lines and its hook
+# (`src/scene.rs`, 5; `src/layout/column.rs`, 30), and the tests (`tests/typed.rs`, 41; `tests/column_draw.rs`, 28).
+"crates/sticker-kit" = 13126
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1149,7 +1154,10 @@ max_file_lines = 400
 # that waits (`src/shaping.rs`, 7; `src/showing.rs`, 7; `src/window.rs`, 6), the made-up window's entry and its
 # `press` act (`tests/support/tapper.rs`, 53), and the tests (`tests/shape_first.rs`, 37; `tests/f43/window.rs`, 22).
 # No remembered Enter where a new project's name was entered: 1 (`src/window.rs`).
-"app" = 20113
+# The answer on a made wish's row and in its bubble raised it by 140: the row and the bubble's two texts
+# (`src/scene.rs`, 11; `src/column.rs`, 9; `src/again.rs`, 1; `src/working.rs`, 8), and the tests
+# (`src/scene/tests.rs`, 25; `tests/the_answer_stays.rs`, 86).
+"app" = 20253
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

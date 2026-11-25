@@ -31,6 +31,15 @@ fn tap(page: &Entity<Page>, cx: &mut VisualTestContext, id: &str) {
     cx.run_until_parked();
 }
 
+/// A click on the day's tally: the day opens under it. Folded, no wish of the reading is placed to be tapped.
+fn unfold(page: &Entity<Page>, cx: &mut VisualTestContext) {
+    let is = |piece: &&sticker_kit::Placed| piece.piece == PieceKind::Picture && piece.id == "fold";
+    let tally = page.read_with(cx, |page, _| page.placed().iter().find(is).map(|piece| page.shown_at(piece)));
+    let (x, y) = tally.expect("the day's tally").center();
+    cx.simulate_click(point(px(x), px(y)), Modifiers::default());
+    cx.run_until_parked();
+}
+
 /// Whether the note of the wish `id` is on show.
 fn open(shown: &Showing, id: &str) -> bool {
     let named = |note: &Note| matches!(note, Note::Text { id: of, .. } if *of == format!("wish-{id}"));
@@ -46,6 +55,7 @@ fn a_tap_on_a_wish_of_the_reading_chooses_its_project_s_chip_and_the_next_wish_s
     let (_, options, chosen, _, _) = held(&page, cx);
     assert_eq!((options, chosen), (vec!["alpha".to_string(), "beta".to_string()], Some(0)));
     types(&page, cx, "and the changelog", false);
+    unfold(&page, cx);
     tap(&page, cx, "w2");
     let (_, _, chosen, text, keys) = held(&page, cx);
     assert_eq!((chosen, text.as_str(), keys), (Some(1), "and the changelog", true), "beta, and the words stay");

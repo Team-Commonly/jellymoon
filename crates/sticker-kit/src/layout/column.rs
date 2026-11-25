@@ -2,7 +2,8 @@
 //! in the scene's order, each a card of the column's width at its full height. What the person typed
 //! (`Note::Said`) is a bubble at the column's right with its character at the bubble's end, and the big character
 //! stands left of the first card of the column and of the first card after each of those bubbles. No piece is
-//! moved, made smaller or left out for room: the column is as long as what it holds.
+//! moved, made smaller or left out for room: the column is as long as what it holds. A note whose picture is a
+//! tally stands first of all, right under the header ([`tallied`]).
 
 use super::notes::{fill, stick};
 use super::page::{self, BODY_BOTTOM, BODY_TOP};
@@ -19,11 +20,15 @@ const SET_IN: f32 = 18.0;
 
 pub(super) fn lay(cx: &mut Ctx, scene: &Scene) {
     let under = page::header(cx, scene);
+    let (tally, under, mut heroes) = tallied(cx, scene, under);
     let mut top = rows(cx, scene, under);
-    let (gap, mut heroes, mut owed) = (cx.px(GAP), 0, true);
+    let (gap, mut owed) = (cx.px(GAP), heroes == 0);
     for (index, note) in scene.notes.iter().enumerate() {
         if cx.out.len() >= MAX_PIECES {
             break;
+        }
+        if tally == Some(index) {
+            continue;
         }
         if let Note::Said { id, text, answer, small } = note {
             top = said(cx, scene, (id, text, answer), small.as_ref(), top) + gap;
@@ -39,6 +44,39 @@ pub(super) fn lay(cx: &mut Ctx, scene: &Scene) {
         top = bottom + gap;
     }
     page::paper(cx, top - gap);
+}
+
+/// The scene's first note whose picture is a tally, at `top`: it stands over the small characters' rows, wherever
+/// it is among the notes, so what it counts is under it. While it is closed the big character stands beside it,
+/// as beside a first card; open, the big character is where a column with no tally has it. Returns the note's
+/// place, where the column goes on, and how many big characters stand so far.
+fn tallied(cx: &mut Ctx, scene: &Scene, top: f32) -> (Option<usize>, f32, usize) {
+    let open = |note: &Note| match note {
+        Note::Drawn { picture: Picture::Tally { open, .. }, .. } => Some(*open),
+        _ => None,
+    };
+    let found = scene.notes.iter().enumerate().find_map(|(index, note)| Some((index, note, open(note)?)));
+    let Some((index, note, open)) = found else { return (None, top, 0) };
+    let Some((sheet, id, tilt)) = fill(cx, &once(cx, note), index, top) else { return (None, top, 0) };
+    let mut bottom = stick(cx, sheet, (&id, index), tilt);
+    if !open {
+        bottom = bottom.max(hero(cx, scene, 0, top));
+    }
+    (Some(index), bottom + cx.px(GAP), usize::from(!open))
+}
+
+/// The tally `note` with no line at its foot where the footer placed over it says that line already, whole: one
+/// sentence stands once. Where the footer was cut short of it, or says something else, the tally keeps its own.
+fn once(cx: &Ctx, note: &Note) -> Note {
+    let footer = cx.out.iter().filter(|piece| piece.piece == PieceKind::Footer).flat_map(|piece| &piece.text);
+    let said = footer.map(|run| run.text.as_str()).collect::<Vec<&str>>().join(" ");
+    let mut note = note.clone();
+    if let Note::Drawn { picture: Picture::Tally { under, .. }, .. } = &mut note
+        && said.contains(cx.clean(under).as_str())
+    {
+        under.clear();
+    }
+    note
 }
 
 /// Whether a `Said` of the scene is of the character `id`.

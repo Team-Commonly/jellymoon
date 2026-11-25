@@ -201,6 +201,34 @@ pub enum Picture {
     Sheets { made: usize, changed: usize, removed: usize, state: Kept },
     /// Changed lines a file, to one scale. `more` counts the files that have no row.
     Bars { rows: Vec<Bar>, more: usize },
+    /// A tally under a `title`: rows of a label and small marks, one mark for one thing ([`TallyRow`]), and a
+    /// chevron that says a tap on the picture opens what the tally counts, turned while `open`. The rows past
+    /// [`MAX_TALLY_ROWS`] are not drawn: `more` stands for them in one quiet line, or `+N more` when it is
+    /// empty. `under` is one quiet line at its foot. A note with this picture stands at the column's top, over
+    /// the small characters' rows, wherever it is among the scene's notes (`layout/column.rs`).
+    Tally {
+        title: String,
+        rows: Vec<TallyRow>,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        more: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        under: String,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        open: bool,
+    },
+}
+
+/// The most rows a [`Picture::Tally`] draws, and the most marks of one row: the marks past them are a count.
+pub const MAX_TALLY_ROWS: usize = 5;
+pub const MAX_TALLY_MARKS: usize = 12;
+
+/// One row of a [`Picture::Tally`]: a label, cleaned and cut in its middle as an entry's chip is, and its marks
+/// in the order given. What each [`Mark`] means on a whole list's row it means here, drawn by the pencil: a
+/// star, a ring with three dots, a ring with a `?`, and a cross in the quiet ink.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TallyRow {
+    pub label: String,
+    pub marks: Vec<Mark>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

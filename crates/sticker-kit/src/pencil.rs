@@ -34,6 +34,10 @@ pub enum Ink {
     Added,
     Taken,
     Quiet,
+    /// The palette's `star`: what fills a star.
+    Star,
+    /// The palette's `accent`: the mark of a thing that asks for the person.
+    Asks,
 }
 
 /// One stroke: the narrow pass, the wide faint pass under it, and when it is drawn.
@@ -196,6 +200,15 @@ impl Pencil {
         let mut hand = self.hand(0);
         let off = 0.5 * self.k;
         self.lay(ideal.iter().map(|point| (point.0 + off * hand.next(), point.1 + off * hand.next())).collect());
+    }
+
+    /// A stroke through `ideal` as wide as `width`, with no wobble of its own: what fills a small shape with the
+    /// ink. A wide stroke that wobbled would show each turn as a spike.
+    pub fn fill(&mut self, ideal: &[Point], width: f32) {
+        self.lay(ideal.to_vec());
+        if let Some(last) = self.strokes.last_mut() {
+            last.width = width;
+        }
     }
 
     /// Lays the stroke twice: `line`, and a wide pass under it whose wobble differs a little.

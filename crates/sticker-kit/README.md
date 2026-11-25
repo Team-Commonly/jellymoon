@@ -321,6 +321,21 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
   (`unfit`) is drawn as waiting work with the arrow barred in the taken ink and "does not fit your folder".
   `Bars { rows, more }`, changed lines a file: a name, a box in the added ink and one in the taken ink to one
   scale, `+6 −1`, at most six rows and then `+N more`, and a ruler labelled in lines ("0", "20", "40 lines").
+  `Tally { title, rows, more, under, open }`, rows of a label and counted marks: the title on the first line
+  with a chevron at its end (pointing on while `open` is false, down while it is true); then a row for each
+  `TallyRow { label, marks }`, five at most (`MAX_TALLY_ROWS`): the label in the hand, cleaned and cut in its
+  middle to one width, then its marks in the order given, twelve at most (`MAX_TALLY_MARKS`) and then `+N`,
+  so a row is always one line. A mark is a whole list's `Mark`, drawn small in pencil: a star, a ring with
+  three dots (`Busy`), a `?` in a ring (`NeedsYou`), a cross in the quiet ink (`Dimmed`). A star is filled with
+  `palette.star` (`Ink::Star`) under its pencil outline. The ring of a `?` is filled with `palette.accent`
+  (`Ink::Asks`) where `palette.pencil` on it has a contrast of 3; where not, the ring alone is in the accent if
+  that has 3 on `palette.note_list`, and else it is pencil. Past five rows one
+  quiet line, `more` (or `+N more` when it is empty), and under everything `under`, quiet too; `under` is left
+  out where the footer placed over the tally says it whole, and the picture then ends under its last row's
+  words. The kit knows
+  no meaning of a row or a mark. The first tally of a scene stands first in the column, under the header,
+  wherever it is among the notes, so a scene with one has every other piece where it was, further down; the
+  big character stands beside it while it is closed.
 - **Words.** A caption is the kit's own or a number, in the theme's handwriting (`Role::Caption`). A file's name
   is someone else's word: it is drawn by the rule a told row's `name` is (no blank, unseen or control character,
   whole on one line), else left out of a track and written "a file" in a bar's row. The note's `words` are not
@@ -329,14 +344,15 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
 - **Taps.** An option is a text note's: `Tap::Option` with the note's id, the option's place and its words. A
   tap on the picture or the `?` is `Tap::Option` with the note's id, `PICTURE_PLACE`, the place of no option, and
   no words. Both wait until the piece has settled ("A tap means what was seen", above).
-- **Inks.** `palette.pencil`, `palette.added`, `palette.taken`. A theme file that sets none gets the sticker
+- **Inks.** `palette.pencil`, `palette.added`, `palette.taken`; a tally's marks also `palette.quiet`, `palette.star`
+  and `palette.accent`. A theme file that sets none gets the sticker
   theme's; they are held to no floor.
 - **Reading one without a window.** The `Picture` piece carries its `sketch`: the strokes, and its parts by name
   (`tally`, `sheet made`, `folder dashed`, `bar added`, ...). `print(placed)` writes a line a piece, such as
   `picture work-1 0 [track steps=7 stage=making file=hello.py] (tally×6, across×1, sheet×1, pencil×1, dashed×1,
   place×1) "making the change" "hello.py"`. `tests/pencil.rs` reads these.
 
-Not done: no app builds these notes yet, and no stroke was seen in a real window.
+Not done: no stroke was seen in a real window.
 
 ## The edge scene: a character at a corner of the screen
 
@@ -524,7 +540,12 @@ far a column scrolls: what of it is below `entry_top`. `Page` keeps a `Scroll`: 
 column, held between its top and its end; a page opens at its end, and one that is at its end stays there when
 the column grows, while one a reader has moved stays where it was. The view paints the column in a layer clipped
 at the band's top and the entry in a second layer over it, so no card is drawn or tapped under the entry.
-`page.shown_at(piece)` says where a piece is in the window now.
+`page.shown_at(piece)` says where a piece is in the window now. A page whose scene has a tally and nothing a
+person said (`Note::Said`) opens held at its top instead (`Scroll::hold`), and a view is held where it is when its
+tally opens or closes; a held view that reaches its column's end follows it again. Enter in the entry, and any
+scene that holds one more thing a person said than the one on show, takes a held view no wheel moved to the end
+(`Scroll::entered`; `draw/column.rs`, `turn`), but not while a field of a note holds typed words: the page does
+not leave them by itself.
 
 **Text breaks at a space, and never inside a character** (`text::wrap`,
 `text::fit`). A word too long for a line of its own, such as an address or

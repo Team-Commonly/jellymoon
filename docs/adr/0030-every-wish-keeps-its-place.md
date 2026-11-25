@@ -225,8 +225,83 @@ answer and two bare bubbles, and could not tell that the other two had finished.
       `layout`, which has no tap, prints every wish's notes. A tucked wish has no offer of a follow-up
       under it: the offer is under a wish whose notes are drawn (decision 4).
 
+12. **The day folds** (2026-11-25; `drawing/folded.rs`). Decision 11 tucked the made wishes away and left
+    the reading as it was: a read day opened as a row for each of its wishes, each with a label, a list of
+    what came true as long as the day was busy, and its clashes, and the window opened at the end of all
+    that. The entry, and whatever the person had made, was under a wall of the model's sentences. So what
+    the reading put on a day's page is first one drawn note at the column's top, a **tally**, and a page
+    with no made wish opens at its top.
+
+    - *What is folded.* The reading's pieces and no other: the little ones nobody typed for, with their
+      labels and stars; the list of what came true; a change of mind the reading found settled; a clash
+      with nothing to choose; and the note a tap on a read wish brought, while it has no choice and no
+      field. A made wish is never folded: its typed words, its little one, its notes, its tuck and its
+      mark stand under the tally as they stood.
+    - *The tally.* A picture first (the kit's `Picture::Tally`). A row for each project the reading has a
+      wish in, in the order the day's projects were first typed in, which is the order of the entry's
+      chips: the project's name in the hand, cleaned and cut in its middle as a chip's is, then one small
+      pencil mark for one piece the open page draws. A `?` in a ring for a little one that needs the
+      person and for a clash nobody chose on; a ring with three dots for a little one at work; a star for
+      each row of what came true; a cross in the quiet ink for a little one that was let go. They are the
+      marks of a whole list's rows, which is what the page already means by them. A row is one line: past
+      twelve marks the rest are a count (`+9`). Past five rows one quiet line of Jellymoon's counts the
+      projects left ("and 3 more projects"). Its title is Jellymoon's, "today so far".
+    - *The marks have the page's colours.* A row of hollow stars read as an empty rating, so a star is
+      filled with the theme's star colour, the one a star of the open day has, under the pencil's outline;
+      the outline is what tells it from the note's ground, so no theme's star colour is refused. The `?`
+      is the one mark that asks for the person: its ring is filled with the theme's accent, the colour of
+      the badge on a little one that asks, where the pencil's `?` on that accent has a contrast of 3 to 1.
+      Where it has not (the plain theme), the ring alone is in the accent if the accent has 3 to 1 on
+      the note's ground, and else the mark is all pencil. The mark at work and the cross stay pencil and
+      quiet. No colour is new.
+    - *Whose reading, said once.* The footer under the page's title ends in "This is the model's reading,
+      unedited.", right over the tally, with no tap. The app gives the tally that sentence as its last
+      line too, and the kit leaves the line out where the footer it placed says it whole. So it stands
+      once; and where the footer was cut at its four lines before the sentence (a day of many projects
+      with long names), the tally says it.
+    - *No word of the model's.* The tally draws no label, no star's text and no quote. A project's name
+      is a folder's name from the session logs, which core holds a read wish to (`read.projects`).
+    - *A tap opens it, and a second folds it.* A small chevron at the end of the title's line says so, and
+      turns. Open, the tally stays, and under it is every piece of the page as it was before this
+      decision: the tally is the scene's last note, which the kit stands at the column's top, so no other
+      note's place among the notes, and so no id and no tilt, is another. The big character stands beside
+      a folded tally, as beside a first card, and where it stood once the day is open.
+    - *Never hidden.* The fold never hides a thing that waits for the person's tap. A clash nobody chose
+      on is drawn under the folded tally, with its `?` in the row of its first statement's wish. A clash
+      the person chose on is theirs, with the tap that changes it, and stays too. A note of a read wish
+      that has a choice or a field stays (none has one today: `working.rs`, `read_note`). The note that
+      delivery is off, the note of what was left out, and every status note are not the reading's and are
+      never folded.
+    - *Where.* Whether the day is open is the window's own state, held with which notes are open and
+      which wishes are tucked away (`drawing::Open`): no call to core, nothing written, and a new window
+      starts folded. It is applied last where a scene is made ready to be drawn (`Open::day`, from
+      `Showing::column`), on the column decision 11 left. A page that is read again stays as the person
+      left it. `layout`, which has no tap, prints no tally and every piece of the reading.
+    - *Counted from what is drawn.* Which pieces are the reading's is read from the scene the app holds.
+      The page data that scene was made from gives the two facts it does not carry, by the wish's id: a
+      wish's project and how many of its jobs came true. Where a little one of the reading is no wish of
+      that page data, nothing is folded and there is no tally: never a count of something not drawn.
+    - *The page opens at its top.* A view opened at its column's end and stayed there (`Scroll::default`,
+      ADR 0026). A page that opens on a tally and no made wish is held instead (`Scroll::hold`): at its
+      top, with the date, the title and the tally. A page that holds a made wish opens at its end as it
+      always did: that wish may wait for a tap there, and the tally above it is short now. When the tally
+      is opened or folded the view is held where it is, so the tally stays under the pointer. A view that
+      is at the end of its column is at its end again when the column grows; and a held view no wheel has
+      moved goes to the end when the page holds one more made wish than before, wherever it was made
+      (the entry, a card's field, `More like this`, `Make it again`, the command), so a new wish is not
+      left under the window's edge. One thing stops it: while a field of a note holds words the person is
+      typing, the page does not move by itself, whoever made the wish.
+    - *Rejected.* Folding the made wishes too: they are the person's own, and decision 11 already puts
+      away the ones that need nothing. A sentence in place of the picture ("8 wishes in 4 projects"): it
+      is the wall again, shorter. A row for each wish: that is the page it folds. Keeping the fold in a
+      file, so the day opens as it was left: the reading changes under it, and a window is cheap to tap.
+      A second vocabulary of marks for the tally: the page has one already.
+
 ## Open
 
+- A folded day shows no label, so which wish a `?` in the tally is of is seen only once the day is open. A
+  day with no made wish whose open clashes are longer than the window opens at its top, with the last of
+  them below the window's edge until the person scrolls.
 - A day of many made wishes made a very long column. Settled wishes now tuck away (decision 11); a day of
   many wishes that are not settled (work that waits, runs that failed) is as long as before, and its bubbles
   alone can fill a window. Nobody has seen either page in a real window.

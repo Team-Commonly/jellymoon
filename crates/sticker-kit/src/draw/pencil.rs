@@ -78,16 +78,23 @@ impl Sketched {
             let Some([soft, line]) = stroke.passes(since) else { continue };
             let dx = pose.dx + if stroke.rocks { sway } else { 0.0 };
             let moved = |points: Vec<(f32, f32)>| points.into_iter().map(|(x, y)| (x + dx, y + pose.dy)).collect();
-            let ink = match stroke.ink {
-                Ink::Pencil => palette.pencil,
-                Ink::Added => palette.added,
-                Ink::Taken => palette.taken,
-                Ink::Quiet => palette.quiet,
-            };
+            let ink = inked(palette, stroke.ink);
             let pass = |share: f32| Color { a: (f32::from(ink.a) * share) as u8, ..ink };
             out.push(Shape::Stroke { points: moved(soft), width: stroke.width * SOFT, color: pass(0.2) });
             out.push(Shape::Stroke { points: moved(line), width: stroke.width, color: pass(0.86) });
         }
+    }
+}
+
+/// The colour of the theme a stroke of `ink` is painted in.
+fn inked(palette: &Palette, ink: Ink) -> Color {
+    match ink {
+        Ink::Pencil => palette.pencil,
+        Ink::Added => palette.added,
+        Ink::Taken => palette.taken,
+        Ink::Quiet => palette.quiet,
+        Ink::Star => palette.star,
+        Ink::Asks => palette.accent,
     }
 }
 
@@ -121,6 +128,17 @@ mod tests {
         let mut out = Vec::new();
         sketched.add(piece, (t, still, 1.0), crate::draw::stage::REST, (&theme.palette, &theme.motion), &mut out);
         out
+    }
+
+    // A star is filled with the colour the page's stars have, and what asks for the person has the accent its
+    // badge has: the theme's own tokens, and no colour of the pencil's own.
+    #[test]
+    fn a_stroke_of_a_star_and_of_what_asks_is_painted_in_the_theme_s_star_and_accent() {
+        for theme in [Theme::sticker(), Theme::plain()] {
+            let p = &theme.palette;
+            assert_eq!((inked(p, Ink::Star), inked(p, Ink::Asks)), (p.star, p.accent));
+            assert_eq!((inked(p, Ink::Pencil), inked(p, Ink::Quiet)), (p.pencil, p.quiet));
+        }
     }
 
     #[test]

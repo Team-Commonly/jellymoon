@@ -115,6 +115,50 @@ window shows goes through it (`Showing::column`), and the scene the app keeps an
 Not done: a keep or a toss that was done is still a text note, as core's answer does not say which it was but in
 its sentences; no file of a step is drawn; nobody has looked at it in a real window.
 
+## A read day opens folded (`app/src/drawing/folded.rs`, ADR 0030 decision 12)
+
+What the reading put on a day's page is first one drawn note at the column's top, the **tally** (id `fold`,
+the kit's `Picture::Tally`), and a page that holds no made wish opens at its top. `drawing::Open::day` makes it, last, on the column
+`drawing::column` left; `Showing::column` is the one place that calls it.
+
+| | Folded (a window opens so) | Open (after a tap on the tally) |
+|---|---|---|
+| The tally | first under the header, chevron pointing on | the same rows, chevron down |
+| The reading's little ones, their labels and stars | not on the scene | as before |
+| `came true today`, `you changed your mind`, a clash with nothing to choose, a tapped read wish's note with no choice and no field | not on the scene | as before |
+| A clash nobody chose on (`these two clash`), a clash the person chose on (`you chose`) | drawn | as before |
+| Every made wish: typed words, little one, notes, tuck, mark | drawn | as before |
+| Every other note (delivery off, what was left out, a status) | drawn | as before |
+
+- **A row** is a project the reading has a wish in, in the order of `read.projects`, which is the entry's
+  chips' order. The name is the project's, drawn by the kit as a chip's is. Its marks, in this order: a `?` for
+  each little one that needs the person and each open clash whose first statement is a wish of the project; a
+  ring with dots for each one at work; a star for each row the list of what came true has for the project's
+  wishes; a cross for each one let go. A wish that is done and has no star gives no mark.
+- **Where the facts are read.** Which little ones and notes are the reading's, and each one's state, from the
+  scene. A wish's project and its count of stars from the page data that scene was drawn from, by the wish's
+  id. Where a little one of the reading is no wish of that data, the column is left as it is, with no tally.
+- **Words.** Three sentences are Jellymoon's: the title "today so far", "and N more projects" past the fifth
+  row, and the footer's "This is the model's reading, unedited." (`scene::READING`). The footer under the title
+  says that one right over the tally, so the kit draws it once: in the tally only where the footer was cut
+  short of it. No label, star or quote is in the tally.
+- **Colours.** A star is filled with the theme's star colour and a `?` has the accent of a little one's badge
+  (the kit's README has the rule and its floor); the mark at work and the cross are pencil and quiet.
+- **The tap.** The kit reports a tap on the tally as `fold` at `PICTURE_PLACE`; `Showing::chose` turns the
+  window's own flag (`drawing::Open`) and answers with the scene on show. Core is not asked and nothing is
+  written. A new window starts folded; a page read again stays as it was left.
+- **The scroll.** A view whose scene has a tally and no made wish opens held at its top (`Scroll::hold`); one
+  that holds a made wish opens at its end, as before. The view is held where it is when the tally opens or
+  folds. At its column's end it follows the end as before, and a held view no wheel moved goes to the end when
+  the page holds one more made wish than it did, wherever that wish was made (`Scroll::entered`), unless a
+  field of a note holds words the person is typing: the page never leaves those by itself.
+- `layout` and the made-up window's `placed` have no tap and print no tally: every piece of the reading. The
+  made-up window's `pieces` prints what the window draws, and `tap:fold` is the tap.
+- The snapshot example draws either with `--folded` and `--unfolded`.
+
+Not done: nobody has looked at a tally in a real window; a folded day says which project a `?` is in and not
+which wish.
+
 ## Today's page (`app/src/today.rs`)
 
 With no `--page` the app shows a day: today in the computer's time zone, or `--date`. It calls core's `day` and `page`

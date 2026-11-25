@@ -82,7 +82,10 @@ impl Showing {
     /// Once a newer build was found installed, its note is the column's last (`newer.rs`): it is on no scene
     /// that is kept, so no tap, choice or offer knows of it.
     pub fn column(&self, scene: &Scene) -> Scene {
-        self.3.column(&Scene { notes: self.4.noted(scene.notes.clone()), ..scene.clone() })
+        let on = self.0.borrow();
+        let data = on.as_ref().and_then(|on| on.page.as_ref()).map(|page| &page.data);
+        let day = self.3.day(scene, data);
+        Scene { notes: self.4.noted(day.notes), ..day }
     }
 
     /// The entry of the first page, as work for another thread.
@@ -243,6 +246,9 @@ impl Showing {
     /// given back to be drawn again. A tap on a picture carries no words.
     pub fn chose(&self, note: &str, index: usize, words: &str) -> Option<(Scene, Option<After>)> {
         if index == sticker_kit::PICTURE_PLACE {
+            if self.3.fold(note) {
+                return self.scene().map(|scene| (scene, None));
+            }
             let wish = self.with(|on| whose(&on.scene, note)).flatten();
             wish.into_iter().for_each(|wish| self.3.offer(wish));
             return self.scene().filter(|scene| self.3.tapped(scene, note)).map(|scene| (scene, None));

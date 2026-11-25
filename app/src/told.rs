@@ -33,7 +33,7 @@ const CHECKED: &str = "Some of its changed lines were checked against the copy, 
 /// Said last when core dropped a piece that failed its check.
 const UNCHECKED: &str = "Something the run said could not be checked, so it is not here.";
 /// Said first of a run that finished and changed nothing.
-const UNCHANGED: &str = "Nothing in your folder was changed.";
+pub(crate) const UNCHANGED: &str = "Nothing in your folder was changed.";
 
 fn row(label: &str, quotes: &[String]) -> ToldRow {
     ToldRow { label: label.to_string(), quotes: quotes.to_vec(), ..ToldRow::default() }

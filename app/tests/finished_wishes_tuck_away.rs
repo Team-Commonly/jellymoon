@@ -11,10 +11,10 @@ mod support;
 use std::path::{Path, PathBuf};
 use std::{fs, thread};
 
-use sticker_kit::{Note, Scene};
+use sticker_kit::{Kept, Note, Picture, Scene};
 use support::day::DAY;
 use support::wished::{World, wait_until, world};
-use support::worked::landed;
+use support::worked::{finished, landed};
 
 /// A window tall enough that every note of the day is placed.
 const TALL: &str = "size:1440x3000";
@@ -41,6 +41,19 @@ fn under(column: &Scene, wish: &str) -> Vec<String> {
     let all: Vec<&str> = column.notes.iter().map(id).collect();
     let at = all.iter().position(|one| *one == format!("typed-{wish}")).expect("the wish's bubble");
     all[at + 1..].iter().take_while(|one| !one.starts_with("typed-")).map(|one| one.to_string()).collect()
+}
+
+/// The mark under the bubble of `wish` in a column: how a tucked wish ended, as the picture the kit draws small.
+fn mark(column: &Scene, wish: &str) -> Option<Picture> {
+    let named = format!("typed-{wish}");
+    column.notes.iter().find_map(|note| match note {
+        Note::Said { id, small, .. } if *id == named => Some(small.clone()),
+        _ => None,
+    })?
+}
+
+fn sheets(made: usize, changed: usize, removed: usize, state: Kept) -> Option<Picture> {
+    Some(Picture::Sheets { made, changed, removed, state })
 }
 
 fn choices(column: &Scene, named: &str) -> Vec<String> {
@@ -76,20 +89,29 @@ fn a_settled_wish_tucks_away_when_the_next_wish_is_made_and_a_tap_or_a_new_windo
     // A wish lands, and its result is on the page.
     let alone = column(alone);
     assert!(under(&alone, "m1").contains(&"kept-m1".to_string()), "{alone:?}");
+    assert_eq!(mark(&alone, "m1"), None, "a wish whose notes are drawn has no mark");
     // A second wish is made, by Enter in the entry: the first one's notes are gone, and its bubble is there.
     assert!(kept.contains(r#""kept":true"#), "{kept}");
     let made = column(made);
     assert_eq!(under(&made, "m1"), [""; 0], "{made:?}");
+    // Its bubble says how it ended: the three files of its own change, in the folder. The new wish has no mark.
+    let in_folder = sheets(1, 1, 1, Kept::In);
+    assert_eq!((mark(&made, "m1"), mark(&made, "m2")), (in_folder.clone(), None), "{made:?}");
     // A tap on the first wish brings its notes back, as core says the wish stands: its change can be undone.
     let back = column(back);
     assert!(under(&back, "m1").contains(&"kept-m1".to_string()), "{back:?}");
     assert_eq!(choices(&back, "kept-m1"), UNDO);
+    assert_eq!(mark(&back, "m1"), None, "the mark went as the notes came back");
     // The next made wish tucks it away again.
     let again = column(again);
     assert_eq!(under(&again, "m1"), [""; 0], "{again:?}");
+    assert_eq!(mark(&again, "m1"), in_folder, "{again:?}");
     // The second wish settled after the third was made: it is tucked away as the first is, under the third.
     let landed = column(landed);
     assert_eq!((under(&landed, "m2"), under(&landed, "m1")), (Vec::<String>::new(), Vec::new()), "{landed:?}");
+    // Each mark counts its own wish's change: the second made one file, and the first's is still three.
+    let marks = ["m1", "m2", "m3"].map(|wish| mark(&landed, wish));
+    assert_eq!(marks, [in_folder.clone(), sheets(1, 0, 0, Kept::In), None], "{landed:?}");
 
     // A window opened on that day, once the third wish's run failed and a fourth changed nothing: the notes of
     // the newest wish, and of the wish that needs the person, and of no other.
@@ -102,6 +124,39 @@ fn a_settled_wish_tucks_away_when_the_next_wish_is_made_and_a_tap_or_a_new_windo
     assert_eq!((under(&opened, "m1"), under(&opened, "m2")), (Vec::<String>::new(), Vec::new()), "{opened:?}");
     assert!(under(&opened, "m3").contains(&"wish-m3".to_string()), "{opened:?}");
     assert!(under(&opened, "m4").contains(&"wish-m4".to_string()), "{opened:?}");
+    // The wish that needs the person and the newest one have their notes, and so no mark.
+    assert_eq!((mark(&opened, "m3"), mark(&opened, "m4")), (None, None), "{opened:?}");
+    assert_eq!(mark(&opened, "m1"), in_folder, "{opened:?}");
+}
+
+// A change that was undone is in the folder no more: its work waits, so the wish is not tucked away and has no
+// mark, and no mark of the folder. Tossed then, the wish was let go, and tucked away it says so.
+#[test]
+fn a_wish_undone_before_the_next_has_no_mark_of_the_folder_and_let_go_it_says_it_was_thrown_away() {
+    let (w, _) = landed("edits");
+    let [second, third] = ["type:wish@alpha:say hello", "type:wish@alpha:and nothing more"];
+    let undo = ["look", "choose:kept-m1:0", "run", second, "column"];
+    let toss = ["choose:work-m1:2", "run", third, "column"];
+    let lines = w.taps("logs", &[&[TALL][..], &undo[..], &toss[..]].concat()).ended();
+    let [_, _, _, _, undone, _, _, _, tossed] = &lines[..] else { panic!("nine lines: {lines:#?}") };
+    let undone = column(undone);
+    assert!(under(&undone, "m1").contains(&"work-m1".to_string()), "{undone:?}");
+    assert_eq!(mark(&undone, "m1"), None, "work that waits is never tucked away, and has no mark");
+    let tossed = column(tossed);
+    assert_eq!(under(&tossed, "m1"), [""; 0], "{tossed:?}");
+    assert_eq!(mark(&tossed, "m1"), sheets(0, 0, 0, Kept::Tossed), "{tossed:?}");
+    assert_eq!(mark(&tossed, "m2"), None, "a wish at work has no mark");
+}
+
+// A change kept by a tap has no drawing of the folder on the scene, only core's sentence: tucked away, the wish
+// has no mark at all. Nothing is guessed from a sentence.
+#[test]
+fn a_tucked_wish_with_no_drawing_of_its_result_has_no_mark() {
+    let (w, _) = finished("edits");
+    let acts = [TALL, "look", "choose:work-m1:1", "run", "type:wish@alpha:say hello", "column"];
+    let lines = w.taps("logs", &acts).ended();
+    let kept = column(lines.last().expect("five lines"));
+    assert_eq!((under(&kept, "m1"), mark(&kept, "m1")), (Vec::new(), None), "{kept:?}");
 }
 
 /// A day with no made wish yet, where a finished change is kept by itself when `lands`, and its repo.

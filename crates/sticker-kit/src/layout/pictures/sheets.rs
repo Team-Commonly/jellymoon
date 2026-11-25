@@ -15,6 +15,9 @@ const MAX_SHEETS: usize = 6;
 
 const KINDS: [&str; 3] = ["sheet made", "sheet changed", "sheet removed"];
 
+/// What the picture says beside work that was thrown away.
+pub(super) const TOSSED: &str = "thrown away";
+
 /// Draws the picture and returns what it is, for the print.
 pub(super) fn draw(d: &mut Draft, [made, changed, removed]: [usize; 3], state: Kept) -> String {
     let files = made.saturating_add(changed).saturating_add(removed);
@@ -34,11 +37,7 @@ pub(super) fn draw(d: &mut Draft, [made, changed, removed]: [usize; 3], state: K
         d.caption(&format!("+{}", files - MAX_SHEETS), beside, 0.0);
         right += 76.0;
     }
-    let count = match files {
-        0 => "nothing changed".to_string(),
-        1 => "1 file".to_string(),
-        files => format!("{files} files"),
-    };
+    let count = count(files);
     let under = d.at.y + d.u(58.0);
     d.caption(&count, (d.at.x + d.u(8.0), under), 0.0);
     let name = match state {
@@ -49,7 +48,7 @@ pub(super) fn draw(d: &mut Draft, [made, changed, removed]: [usize; 3], state: K
     };
     if state == Kept::Tossed {
         let beside = d.point(right + 14.0, 18.0);
-        d.caption("thrown away", beside, 0.0);
+        d.caption(TOSSED, beside, 0.0);
     } else if files > 0 {
         folder(d, right, state, under);
     }
@@ -123,10 +122,23 @@ fn folder(d: &mut Draft, right: f32, state: Kept, under: f32) {
         d.pencil.ink(Ink::Pencil);
         d.part("tick", tick);
     }
-    let caption = match state {
+    d.caption(place(state), (d.at.x + d.u(left + 28.0), under), 0.5);
+}
+
+/// How many files, as the picture says it under its sheets.
+pub(super) fn count(files: usize) -> String {
+    match files {
+        0 => "nothing changed".to_string(),
+        1 => "1 file".to_string(),
+        files => format!("{files} files"),
+    }
+}
+
+/// Where the work is, as the picture says it under its folder.
+pub(super) fn place(state: Kept) -> &'static str {
+    match state {
         Kept::In => "in your folder",
         Kept::Unfit => "does not fit your folder",
         Kept::Waiting | Kept::Tossed => "not in your folder yet",
-    };
-    d.caption(caption, (d.at.x + d.u(left + 28.0), under), 0.5);
+    }
 }

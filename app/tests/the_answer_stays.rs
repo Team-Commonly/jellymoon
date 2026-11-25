@@ -52,7 +52,7 @@ fn rows(scene: &Scene) -> Vec<String> {
 /// What each bubble of a column holds: its id, the typed words, and the answer under them.
 fn bubbles(column: &Scene) -> Vec<(String, String, String)> {
     let said = |note: &Note| match note {
-        Note::Said { id, text, answer } => Some((id.clone(), text.clone(), answer.clone())),
+        Note::Said { id, text, answer, .. } => Some((id.clone(), text.clone(), answer.clone())),
         _ => None,
     };
     column.notes.iter().filter_map(said).collect()

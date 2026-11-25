@@ -25,7 +25,7 @@ pub const SOFT: f32 = 2.4;
 const OVER: f32 = 2.4;
 const BOW: f32 = 1.5;
 
-/// Which of the theme's three pencils a stroke is drawn with.
+/// Which of the theme's pencils a stroke is drawn with. `Quiet` is the palette's `quiet`: a thing that is gone.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Ink {
@@ -33,6 +33,7 @@ pub enum Ink {
     Pencil,
     Added,
     Taken,
+    Quiet,
 }
 
 /// One stroke: the narrow pass, the wide faint pass under it, and when it is drawn.

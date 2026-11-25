@@ -488,14 +488,22 @@ whole list's and a told note's first 12, 24 lines of a text note's body, four op
 count that is cut says so in the card's last line, `+N more`. Behind all of it `layout` returns at most
 `MAX_PIECES` pieces.
 
-`Note::Said { id, text, answer }` is what a person typed. It is no card: a bubble at the column's right, one `quote`
+`Note::Said { id, text, answer, small }` is what a person typed. It is no card: a bubble at the column's right, one `quote`
 piece in `Role::Quoted` with the note's id, drawn by the rules every quoted text is drawn by (cleaned, at most
 `MAX_QUOTED_LINES` lines, cut with `…`). The character it is of (`speaker(id)`: the id after its first `-`)
 stands small at the bubble's end with its stars and its state, and its label and what it says under them.
 `answer` is what the person answered to go on, when they did: lines of the same piece under the typed ones, by
 the same rules, set in behind a small hook the pencil draws (the piece's sketch, `answered`, with one part,
 `hook`). No word tells the two apart, and with an empty `answer` the bubble is `text` alone. A tap
-on the bubble is a tap on that character; a bubble of no character takes none. The big character stands left of
+on the bubble is a tap on that character; a bubble of no character takes none. `small` is optional: a
+`Picture` drawn small under the bubble, ending where the bubble ends, as one `small` piece with the note's id.
+Left to right it is a sign the pencil draws, the picture's own captions on one line (the words its card has,
+and no other), and a chevron; it is as high as the smallest tap target (24 design units), and a tap on it is
+the bubble's. Finished work (`Picture::Sheets`) has a small form: in the folder, a folder with its tick, the
+count and "in your folder"; waiting or not fitting, the folder dashed; no file at all, an empty sheet and
+"nothing changed"; thrown away, a sheet crossed out and "thrown away" in the quiet ink (`Ink::Quiet`). Any
+other picture has none yet, and with none the bubble is placed and drawn as if `small` were not there. The
+seam is the kit's: it draws a picture it is given, and knows nothing of why. The big character stands left of
 the first card after each `Said`, and of the column's first card, no larger than the room left of the column.
 
 A `Whole` list draws each of its first 12 rows after its mark, to its last word; `layout` returns one `mark`

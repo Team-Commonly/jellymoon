@@ -906,7 +906,11 @@ max_file_lines = 400
 # `tests/field_draw.rs` and `tests/pencil.rs`).
 # A quote's ground as wide as its words raised it by 49 (49 added, 0 removed): the width in
 # `src/layout/typed.rs` and three tests in `tests/typed.rs`.
-"crates/sticker-kit" = 13546
+# A picture drawn small under what a person typed raised it by 291 (317 added, 26 removed): the word on the
+# note, the piece, its tap and the quiet ink, 121 (`src/layout/pictures/small.rs`, 88; `src/scene.rs`,
+# `src/layout/column.rs`, `src/layout/pictures/sheets.rs`, `src/draw/`, `src/pencil.rs`), and the tests, 170
+# (`tests/small.rs`, 143; `tests/column_draw.rs`, 26; `tests/typed.rs`, 1).
+"crates/sticker-kit" = 13837
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1178,7 +1182,11 @@ max_file_lines = 400
 # The question first raised the app by 5 (43 added, 38 removed): the question's note first and its
 # two words (`src/shaping.rs`; `src/answering.rs`, `tests/shape_first.rs`, `tests/go_on_from_an_answer.rs` and
 # `tests/the_answer_stays.rs` change and do not grow).
-"app" = 20562
+# A tucked wish that says how it ended raised the app by 231 (247 added, 16 removed): the mark's rule and its
+# tests (`src/drawing/ended.rs`, 160, of which 100 are tests), where it is set (`src/drawing.rs`, 9;
+# `src/column.rs`, 3), the picture example's `--tucked` (`examples/snapshot.rs`, 4) and the window tests
+# (`tests/finished_wishes_tuck_away.rs`, 55).
+"app" = 20793
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

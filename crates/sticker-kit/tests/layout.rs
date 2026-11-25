@@ -190,7 +190,7 @@ fn every_note_is_a_card_of_the_column_s_width_at_its_full_height_and_none_is_lef
 }
 
 fn typed_for(id: &str, text: &str) -> Note {
-    Note::Said { id: format!("typed-{id}"), text: text.into(), answer: String::new() }
+    Note::Said { id: format!("typed-{id}"), text: text.into(), answer: String::new(), small: None }
 }
 
 #[test]

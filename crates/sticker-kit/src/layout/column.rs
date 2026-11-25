@@ -7,10 +7,10 @@
 use super::notes::{fill, stick};
 use super::page::{self, BODY_BOTTOM, BODY_TOP};
 use super::typed::block;
-use super::{Ctx, MAX_PIECES, PieceKind, Placed, little, piece};
+use super::{Ctx, MAX_PIECES, PieceKind, Placed, little, pictures, piece};
 use crate::geom::Rect;
 use crate::pencil::{Part, Pencil, Sketch};
-use crate::scene::{Character, Note, Scene, State, speaker};
+use crate::scene::{Character, Note, Picture, Scene, State, speaker};
 
 /// What is left between two cards, in design units: the strip of tape over a card stands in it.
 const GAP: f32 = 36.0;
@@ -25,8 +25,8 @@ pub(super) fn lay(cx: &mut Ctx, scene: &Scene) {
         if cx.out.len() >= MAX_PIECES {
             break;
         }
-        if let Note::Said { id, text, answer } = note {
-            top = said(cx, scene, (id, text, answer), top) + gap;
+        if let Note::Said { id, text, answer, small } = note {
+            top = said(cx, scene, (id, text, answer), small.as_ref(), top) + gap;
             owed = true;
             continue;
         }
@@ -74,8 +74,9 @@ fn rows(cx: &mut Ctx, scene: &Scene, under: f32) -> f32 {
 
 /// What the person typed, at `top`: a bubble that ends short of the column's right edge, where its character
 /// stands with its stars and its state, and under them what the character says. Returns the bottom of it all.
-/// With an `answer` the bubble holds it too, under the typed words ([`answered`], [`hook`]).
-fn said(cx: &mut Ctx, scene: &Scene, (id, text, answer): (&str, &str, &str), top: f32) -> f32 {
+/// With an `answer` the bubble holds it too, under the typed words ([`answered`], [`hook`]). A `small` picture
+/// stands under the bubble and ends where the bubble ends (`pictures/small.rs`).
+fn said(cx: &mut Ctx, scene: &Scene, (id, text, answer): (&str, &str, &str), small: Option<&Picture>, top: f32) -> f32 {
     let ((left, wide), (across, down), gap) = (cx.column(), little::room(cx), cx.px(8.0));
     let end = left + wide - across - gap;
     let mut bottom = top;
@@ -89,7 +90,12 @@ fn said(cx: &mut Ctx, scene: &Scene, (id, text, answer): (&str, &str, &str), top
         bubble.text.iter_mut().for_each(|run| run.rect = run.rect.moved(spare, 0.0));
         hook(cx, &mut bubble, under);
         bottom = bubble.rect.bottom();
+        let under = (bubble.rect.right(), bottom + cx.px(3.0));
         cx.out.push(bubble);
+        if let Some(mark) = small.and_then(|picture| pictures::mark(cx, id, picture, under)) {
+            bottom = mark.rect.bottom();
+            cx.out.push(mark);
+        }
     }
     let Some((index, who)) = scene.characters.iter().enumerate().find(|(_, who)| who.id == speaker(id)) else {
         return bottom;

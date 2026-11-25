@@ -22,7 +22,7 @@ pub fn text_system() -> Arc<dyn PlatformTextSystem> {
 }
 
 /// An entry as a picture shows it: empty with its hint, or, with `typed`, holding those words and the keys (so
-/// the caret is drawn) with the option of that place chosen. With `since` too, Enter was pressed on those words,
+/// the caret is drawn; with no words the keys are where the page puts them) with the option of that place chosen. With `since` too, Enter was pressed on those words,
 /// no answer has come, and `since` is what was typed meanwhile: with none typed (`""`) the words are shown pale.
 pub struct Typing {
     pub entry: Entry,
@@ -74,7 +74,10 @@ fn shot(
             window.root::<Page>().flatten().map(|page| {
                 page.update(cx, |page, cx| {
                     page.entry.state.choose(option);
-                    page.focus_entry(window, cx);
+                    // With no words the keys are where the page puts them: a field that asks may have them.
+                    if !text.is_empty() {
+                        page.focus_entry(window, cx);
+                    }
                     page.entry.state.replace(None, &text);
                     if let Some(since) = &since {
                         let _ = page.entry.state.enter();

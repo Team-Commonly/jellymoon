@@ -71,7 +71,8 @@ fn note<'a>(scene: &'a Scene, id: &str) -> Option<(&'a str, &'a [String], Option
 }
 
 fn field(offer: &str, wish: &str) -> Field {
-    Field { offer: offer.to_string(), hint: HINT.to_string(), most: 200, key: format!("more-{wish}") }
+    let (offer, key) = (offer.to_string(), format!("more-{wish}"));
+    Field { offer, hint: HINT.to_string(), most: 200, key, wants_keys: false }
 }
 
 #[test]

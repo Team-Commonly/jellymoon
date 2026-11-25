@@ -59,7 +59,7 @@ fn fielded(note: Note, quoted: &str, field: Field) -> Note {
 pub(crate) fn with_question(note: Note, wish: &str, question: Option<&str>) -> Note {
     let Some(question) = question else { return note };
     let key = format!("answer-{wish}-{question}");
-    fielded(note, question, Field { offer: String::new(), hint: ANSWER_HINT.to_string(), most: 0, key })
+    fielded(note, question, Field { hint: ANSWER_HINT.to_string(), key, ..Field::default() })
 }
 
 /// Whether a note has a field to answer in: a field under no offer (`with_question`) that is not a follow-up's
@@ -85,7 +85,7 @@ pub(crate) fn with_go_on(note: Note, wish: &str, goes_on: bool) -> Note {
 
 fn more(wish: &str, offer: &str) -> Field {
     let (offer, hint, key) = (offer.to_string(), MORE_HINT.to_string(), format!("{MORE_KEY}{wish}"));
-    Field { offer, hint, most: MADE_SAID_MAX, key }
+    Field { offer, hint, most: MADE_SAID_MAX, key, wants_keys: false }
 }
 
 /// The field of the note `note` on a scene: where the note is, whose wish it is under, and whether the field
@@ -222,7 +222,7 @@ mod tests {
     // that `asks` would never put back. A follow-up's field under no offer is not one either.
     #[test]
     fn an_answer_is_sent_only_from_a_field_to_answer_in() {
-        let field = |(o, k): (&str, &str)| Field { offer: o.into(), hint: "".into(), most: 0, key: k.into() };
+        let field = |(o, k): (&str, &str)| Field { offer: o.into(), key: k.into(), ..Field::default() };
         let note = |shape: (&str, &str)| Note::Text {
             id: "wish-m1".to_string(),
             title: String::new(),

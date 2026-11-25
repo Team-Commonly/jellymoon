@@ -51,6 +51,8 @@ pub(super) struct EntryView {
     pub key: String,
     pub offer: String,
     pub asked_as: String,
+    /// Of a note's field that asks for the keys: it has not stood on a drawn page yet (`Page::keys_asked`).
+    pub wants: bool,
 }
 
 impl EntryView {
@@ -204,6 +206,7 @@ impl Page {
     /// the typed line in the field, and what takes the clicks on the field, on its `go`, on each chip and on a
     /// field's offer. None for a page with neither.
     pub(super) fn entry_layer(&mut self, window: &mut Window, cx: &mut Context<Self>) -> [Vec<AnyElement>; 2] {
+        self.keys_asked(window, cx);
         // The keys are the entry's whenever nothing else on the page holds them, so nothing typed goes nowhere.
         if self.entry.what.is_some() && !self.entry_focused(window) {
             self.focus_view(None, window, cx);

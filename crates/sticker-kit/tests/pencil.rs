@@ -325,7 +325,8 @@ fn a_drawn_note_is_a_card_of_the_column_under_the_piece_before_it_and_ten_of_the
 // A drawn note's field is a text note's: its offer and then the field itself, under the options, open or closed.
 #[test]
 fn a_drawn_note_s_field_is_placed_under_its_options_as_a_text_note_s_is() {
-    let field = Field { offer: "More like this".into(), hint: "Type here".into(), most: 40, key: "more-m1".into() };
+    let (offer, hint) = ("More like this".into(), "Type here".into());
+    let field = Field { offer, hint, most: 40, key: "more-m1".into(), wants_keys: false };
     let options = vec!["Keep it".to_string(), "Toss it".to_string()];
     for open in [false, true] {
         let (picture, words) = (sheets(1, 0, 0, Kept::Waiting), vec!["Your folder is not changed yet.".to_string()]);

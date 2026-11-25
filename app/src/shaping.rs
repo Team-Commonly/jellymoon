@@ -75,7 +75,9 @@ pub(crate) fn settle(scene: &mut Scene, notes: Vec<Note>) {
 
 /// The two notes of a sharper wish. `said` is the typed words as core keeps them, drawn only when the sharper
 /// wish asks nothing. One that asks has its question as the quote of the choices' note, and under the choices
-/// the field of an answer, of a wish's own length, which is core's bound on an answer.
+/// the field of an answer, of a wish's own length, which is core's bound on an answer. That field asks the kit
+/// for the keys: what a person types on reading the question is the answer, with no click first, unless they
+/// were typing in the entry already (`Field::wants_keys`).
 fn pair(shape: &Shape, said: &str) -> Vec<Note> {
     let texts = [&shape.wish, &shape.done_when, &shape.not_touching];
     let rows = LABELS.iter().zip(texts).filter(|(_, text)| !text.is_empty());
@@ -92,7 +94,7 @@ fn pair(shape: &Shape, said: &str) -> Vec<Note> {
     let mut asked = text(SHAPE, ASKED, shape.ask.clone(), &[GO, GO_TYPED]);
     if let Note::Text { field, .. } = &mut asked {
         let (offer, hint) = (ANSWER.to_string(), ANSWER_HINT.to_string());
-        *field = Some(Field { offer, hint, most: MADE_SAID_MAX, key: String::new() });
+        *field = Some(Field { offer, hint, most: MADE_SAID_MAX, key: String::new(), wants_keys: true });
     }
     vec![sharper, asked]
 }

@@ -85,7 +85,7 @@ pub(crate) fn with_go_on(note: Note, wish: &str, goes_on: bool) -> Note {
 
 fn more(wish: &str, offer: &str) -> Field {
     let (offer, hint, key) = (offer.to_string(), MORE_HINT.to_string(), format!("{MORE_KEY}{wish}"));
-    Field { offer, hint, most: MADE_SAID_MAX, key, wants_keys: false }
+    Field { offer, hint, most: MADE_SAID_MAX, key, ..Field::default() }
 }
 
 /// The field of the note `note` on a scene: where the note is, whose wish it is under, and whether the field

@@ -899,7 +899,12 @@ max_file_lines = 400
 # A field that asks for the keys raised it by 184 (190 added, 6 removed): the field's word and the view's turn
 # (`src/scene.rs`, 5; `draw/field.rs`, 21; `draw/entry.rs`, 3; `draw/headless.rs`, 3), and the tests
 # (`tests/field_keys.rs`, 147; `tests/field_draw.rs`, 4; `tests/pencil.rs`, 1).
-"crates/sticker-kit" = 13310
+# The question first raised it by 187 (210 added, 23 removed): a field that is first and the quiet
+# options after it, and a quote's ground with no line round it and the pencil's line down its left
+# (`src/scene.rs`, `src/layout/typed.rs`, `src/layout/text_note.rs`, `src/layout/told.rs`, `src/draw/shapes.rs`,
+# `src/theme/own.rs`), and the tests (`tests/typed.rs`, the test in `src/draw/shapes.rs`, a word in
+# `tests/field_draw.rs` and `tests/pencil.rs`).
+"crates/sticker-kit" = 13497
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1168,7 +1173,10 @@ max_file_lines = 400
 # at the made-up window (`tests/finished_wishes_tuck_away.rs`, 34).
 # A question takes the keys raised the app by 106 (114 added, 8 removed): the one field that asks
 # (`src/shaping.rs`, 2), and the tests (`tests/a_question_takes_the_keys.rs`, 103; `tests/go_on_from_an_answer.rs`, 1).
-"app" = 20557
+# The question first raised the app by 5 (43 added, 38 removed): the question's note first and its
+# two words (`src/shaping.rs`; `src/answering.rs`, `tests/shape_first.rs`, `tests/go_on_from_an_answer.rs` and
+# `tests/the_answer_stays.rs` change and do not grow).
+"app" = 20562
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

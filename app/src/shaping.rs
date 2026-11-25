@@ -2,11 +2,12 @@
 //! ([`SHAPING`]), and core asks the person's Claude Code, which only reads, to say the wish more sharply
 //! (`jellymoon_core::shape`). Words that are clear, and every answer core throws away, go on as a typed wish
 //! always did (`wishing.rs`), and nothing more is said. A sharper wish is shown and nothing is kept: one note of
-//! the kit's holds it ([`SAID`]), every word of the model's a quote under a label of Jellymoon's, over a note with
+//! the kit's holds it ([`SAID`]), every word of the model's a quote under a label of Jellymoon's, with a note of
 //! the two choices ([`SHAPE`]). A tap on either keeps the wish and starts its run as a typed wish's is started;
-//! only what the run is given differs, and that is core's to build. With no question that note quotes the
-//! person's own words ([`TYPED`]). With one it is the question's ([`ASKED`]): the question is its quote, and a
-//! field under the choices ([`ANSWER`]) is a third way on, the sharper wish with the person's answer. The typed
+//! only what the run is given differs, and that is core's to build. With no question that note is under the
+//! sharper wish and quotes the person's own words ([`TYPED`]). With one it is the question's ([`ASKED`]) and
+//! stands first: the question is its quote, the field under it is a third way on, the sharper wish with the
+//! person's answer, and the two choices come after as the ways round the question ([`SKIP`], [`OWN`]). The typed
 //! words are held by the page on show, with the sharper wish itself (`OnShow::typed`), and never read back from a
 //! note: core keeps a wish only from the shape the page showed. The model's reason is
 //! core's to read and is not drawn.
@@ -32,8 +33,10 @@ pub const ASKED: &str = "Only you know";
 /// The two choices, in their order.
 pub const GO: &str = "Go with this";
 pub const GO_TYPED: &str = "Go with what I typed";
-/// The word over the field the question is answered in, under the choices, and the field's hint.
-pub const ANSWER: &str = "Answer";
+/// The same two, in the same order, as they read beside a question: what each does to it.
+pub const SKIP: &str = "Skip the question";
+pub const OWN: &str = "Use my own words";
+/// The hint of the field the question is answered in.
 pub const ANSWER_HINT: &str = "Type your answer, then Enter";
 /// The labels of the sharper wish's rows, in order; an empty row is left out.
 pub const LABELS: [&str; 3] = ["The wish", "Done when", "Not touching"];
@@ -74,10 +77,12 @@ pub(crate) fn settle(scene: &mut Scene, notes: Vec<Note>) {
 }
 
 /// The two notes of a sharper wish. `said` is the typed words as core keeps them, drawn only when the sharper
-/// wish asks nothing. One that asks has its question as the quote of the choices' note, and under the choices
-/// the field of an answer, of a wish's own length, which is core's bound on an answer. That field asks the kit
-/// for the keys: what a person types on reading the question is the answer, with no click first, unless they
-/// were typing in the entry already (`Field::wants_keys`).
+/// wish asks nothing: the sharper wish, then the choices under the typed words. One that asks has the question's
+/// note first, over the sharper wish: the question is its quote, directly under it is the field of an answer
+/// (`Field::first`), of a wish's own length, which is core's bound on an answer, and after the field the two
+/// ways round the question, small and quiet. That field asks the kit for the keys: what a person types on
+/// reading the question is the answer, with no click first, unless they were typing in the entry already
+/// (`Field::wants_keys`).
 fn pair(shape: &Shape, said: &str) -> Vec<Note> {
     let texts = [&shape.wish, &shape.done_when, &shape.not_touching];
     let rows = LABELS.iter().zip(texts).filter(|(_, text)| !text.is_empty());
@@ -91,12 +96,12 @@ fn pair(shape: &Shape, said: &str) -> Vec<Note> {
     if shape.ask.is_empty() {
         return vec![sharper, text(SHAPE, TYPED, said.to_string(), &[GO, GO_TYPED])];
     }
-    let mut asked = text(SHAPE, ASKED, shape.ask.clone(), &[GO, GO_TYPED]);
+    let mut asked = text(SHAPE, ASKED, shape.ask.clone(), &[SKIP, OWN]);
     if let Note::Text { field, .. } = &mut asked {
-        let (offer, hint) = (ANSWER.to_string(), ANSWER_HINT.to_string());
-        *field = Some(Field { offer, hint, most: MADE_SAID_MAX, key: String::new(), wants_keys: true });
+        let hint = ANSWER_HINT.to_string();
+        *field = Some(Field { hint, most: MADE_SAID_MAX, wants_keys: true, first: true, ..Field::default() });
     }
-    vec![sharper, asked]
+    vec![asked, sharper]
 }
 
 impl OnShow {

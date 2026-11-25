@@ -3,7 +3,7 @@
 //! pieces to act on besides its options.
 
 use sticker_kit::{
-    Field, FixedAdvance, MAX_QUOTED_LINES, Note, PieceKind, Placed, Rect, Role, Scene, Theme, Viewport, layout,
+    Field, FixedAdvance, MAX_QUOTED_LINES, Note, PieceKind, Placed, Rect, Role, Scene, Theme, ToldRow, Viewport, layout,
 };
 
 const SIZES: [Viewport; 2] = [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 960.0, h: 640.0 }];
@@ -186,4 +186,77 @@ fn an_answer_is_in_the_bubble_under_the_typed_words_behind_a_hook_and_a_bubble_w
     let drawn: Vec<&str> = odd.text.iter().skip(1).map(|run| run.text.as_str()).collect();
     assert_eq!(drawn.join(" "), "<b>seven</b>[31m [Keep it](https://example.test)");
     assert!(odd.text.iter().all(|run| run.role == Role::Quoted));
+}
+
+fn each(test: impl Fn(&Theme, Viewport)) {
+    for theme in [Theme::sticker(), Theme::plain()] {
+        SIZES.iter().for_each(|size| test(&theme, *size));
+    }
+}
+
+// A note whose field is first is answered by typing: the field is directly under the quoted words, and the
+// options, the ways round it, come after it as small pills in the tone of an offer. They are options still.
+#[test]
+fn a_field_that_is_first_stands_between_the_quote_and_the_options_and_the_options_are_small_and_quiet() {
+    let first = || Some(Field { first: true, ..field("").unwrap() });
+    each(|theme, viewport| {
+        let placed = place(note(&[], &["Skip it", "In my own words"], "Which of the two?", first()), theme, viewport);
+        assert_eq!(kinds(&placed), [PieceKind::Quote, PieceKind::Field, PieceKind::Option, PieceKind::Option]);
+        let (sheet, quote, typed) =
+            (of(&placed, PieceKind::Note)[0], of(&placed, PieceKind::Quote)[0], of(&placed, PieceKind::Field)[0]);
+        let [skip, own] = of(&placed, PieceKind::Option)[..] else { panic!("two options") };
+        assert!(quote.rect.bottom() <= typed.rect.y && typed.rect.bottom() <= skip.rect.y);
+        // Side by side on one row, each as wide as its words and lower than the field, inside the sheet.
+        assert_eq!((skip.index, own.index, skip.rect.y, skip.rect.h), (0, 1, own.rect.y, own.rect.h));
+        assert!(skip.rect.right() <= own.rect.x && inside(skip.rect, sheet.rect) && inside(own.rect, sheet.rect));
+        assert!(own.rect.right() < typed.rect.right() && skip.rect.h < typed.rect.h, "{:?} {:?}", own.rect, typed.rect);
+        let said = |piece: &Placed| piece.text.iter().map(|run| (run.text.clone(), run.role)).collect::<Vec<_>>();
+        assert_eq!(said(skip), [("Skip it".to_string(), Role::Legend)]);
+        assert_eq!(said(own), [("In my own words".to_string(), Role::Legend)]);
+        assert!(inside(skip.text[0].rect, skip.rect) && inside(own.text[0].rect, own.rect));
+        // The same note with a field that is not first is as it always was: wide options, then the field.
+        let under = place(note(&[], &["Skip it", "In my own words"], "Which of the two?", field("")), theme, viewport);
+        assert_eq!(kinds(&under), [PieceKind::Quote, PieceKind::Option, PieceKind::Option, PieceKind::Field]);
+        let wide = of(&under, PieceKind::Option)[0];
+        assert_eq!((wide.rect.w, wide.text[0].role), (of(&under, PieceKind::Field)[0].rect.w, Role::Option));
+        // Options that do not fit one row go on to the next: none lies over another or leaves the sheet.
+        let many = ["Leave the question for later", "Go on with my own words", "Ask me again", "None of these"];
+        let placed = place(note(&[], &many, "Which?", first()), theme, viewport);
+        let (sheet, chips) = (of(&placed, PieceKind::Note)[0], of(&placed, PieceKind::Option));
+        assert_eq!(chips.iter().map(|chip| chip.index).collect::<Vec<_>>(), [0, 1, 2, 3]);
+        for (n, chip) in chips.iter().enumerate() {
+            let apart = chips[n + 1..].iter().all(|other| !chip.rect.overlaps(&other.rect));
+            assert!(inside(chip.rect, sheet.rect) && apart && chip.text[0].role == Role::Legend, "{:?}", chip.rect);
+        }
+        // Under a body that is counted the options go, quiet or not, and the field stays under the quote.
+        let body: Vec<String> = (1..=60).map(|n| format!("line {n}")).collect();
+        let body: Vec<&str> = body.iter().map(String::as_str).collect();
+        let cut = place(note(&body, &["Skip it"], "Which?", first()), theme, viewport);
+        assert_eq!(kinds(&cut), [PieceKind::Quote, PieceKind::Field]);
+    });
+}
+
+// A quote under a note is told from a field by its shape: the pencil draws one line down its left, inside its
+// ground and before its words. What a person typed is a bubble and has no such line (the test above).
+#[test]
+fn a_note_s_quote_has_one_line_of_the_pencil_down_its_left_before_its_words() {
+    let row = ToldRow { label: "Decided".into(), quotes: vec!["one".into(), "two".into()], ..ToldRow::default() };
+    let told = Note::Told { id: ID.into(), title: "Said".into(), rows: vec![row], end: Vec::new() };
+    each(|theme, viewport| {
+        let long = "Which of the two did you mean? ".repeat(6);
+        for note in [note(&[], &[], "Which?", None), note(&[], &[], &long, field("")), told.clone()] {
+            let placed = place(note, theme, viewport);
+            let quotes = of(&placed, PieceKind::Quote);
+            assert!(!quotes.is_empty());
+            for quote in quotes {
+                let sketch = quote.sketch.as_ref().expect("the line");
+                assert_eq!((sketch.what.as_str(), sketch.count("line"), sketch.strokes.len()), ("quoted", 1, 1));
+                let line = sketch.parts[0].rect;
+                assert!(inside(line, quote.rect) && line.h >= quote.rect.h / 2.0, "{line:?} in {:?}", quote.rect);
+                assert!(quote.text.iter().all(|run| run.rect.x > line.right()), "the line is before the words");
+                let within = |point: &(f32, f32)| point.0 >= quote.rect.x && point.0 < quote.text[0].rect.x;
+                assert!(sketch.strokes[0].line.iter().all(within), "{:?}", sketch.strokes[0].line);
+            }
+        }
+    });
 }

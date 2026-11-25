@@ -20,7 +20,7 @@ fn note(id: &str, quoted: &str, offer: &str) -> Note {
 }
 
 fn more(key: &str) -> Option<Field> {
-    Some(Field { offer: "More of it".into(), hint: "Type here".into(), most: 12, key: key.into(), wants_keys: false })
+    Some(Field { offer: "More of it".into(), hint: "Type here".into(), most: 12, key: key.into(), ..Field::default() })
 }
 
 /// A note whose field has a key, and one with no field at all.

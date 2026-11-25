@@ -5,11 +5,13 @@
 //! Quoted words are text and nothing else: cleaned as every text is, in the role for quoted words, and cut to
 //! their lines with an ellipsis. What a person typed (`Note::Said`) is drawn by the same rules ([`block`]).
 //! Nothing in them is a link or a control, whatever they say. The field and its offer are the two pieces a person
-//! acts on.
+//! acts on. A note's quote has a line of the pencil down its left ([`lined`]) and none round it. A field that is
+//! first (`Field::first`) stands before the options, which are then small and quiet ([`quiet`]).
 
 use super::notes::Sheet;
 use super::{Ctx, PieceKind, Placed, line_height, piece, run};
 use crate::geom::Rect;
+use crate::pencil::{Part, Pencil, Sketch};
 use crate::scene::Field;
 use crate::text::{Role, wrap};
 
@@ -23,7 +25,40 @@ pub(super) fn quoted(cx: &Ctx, sheet: &mut Sheet, id: &str, words: &str) {
     let at = Rect::new(sheet.left, sheet.cursor, sheet.inner, 0.0);
     if let Some(block) = block(cx, (id, 0), words, at, MAX_QUOTED_LINES) {
         sheet.cursor = block.rect.bottom() + cx.px(10.0);
-        sheet.options.push(block);
+        sheet.options.push(lined(cx, block));
+    }
+}
+
+/// A note's quote with one line of the pencil down its left, before its words: its sketch, `quoted`, with the
+/// one part `line`. The line is what marks the words as someone else's; no line goes round them, as round a field.
+pub(super) fn lined(cx: &Ctx, mut block: Placed) -> Placed {
+    let (x, inset) = (block.rect.x + cx.px(3.0), cx.px(4.0).min(block.rect.h / 4.0));
+    let (top, low) = (block.rect.y + inset, block.rect.bottom() - inset);
+    let mut pencil = Pencil::new(&format!("{}|{}", block.id, block.index), cx.k);
+    pencil.line((x, top), (x, low));
+    let part = Part { name: "line".to_string(), rect: Rect::new(x, top, 0.0, low - top) };
+    block.sketch = Some(Sketch { what: "quoted".to_string(), parts: vec![part], strokes: pencil.finish() });
+    block
+}
+
+/// The options of a note whose field is first, after that field: the ways round it, each a small pill on one
+/// line, side by side and wrapped to a next row. Each is an `Option` piece of its index, as a wide one is.
+pub(super) fn quiet(cx: &Ctx, sheet: &mut Sheet, id: &str, options: &[String]) {
+    let (size, pad, gap) = (cx.size(Role::Legend), cx.px(10.0), cx.px(8.0));
+    let (high, mut x) = (cx.px(24.0).max(line_height(size) + 2.0), sheet.left);
+    for (index, option) in options.iter().enumerate() {
+        let (words, width) = cx.line(option, Role::Legend, sheet.inner - 2.0 * pad);
+        if x > sheet.left && x + width + 2.0 * pad > sheet.left + sheet.inner {
+            (x, sheet.cursor) = (sheet.left, sheet.cursor + high + gap);
+        }
+        let rect = Rect::new(x, sheet.cursor, width + 2.0 * pad, high);
+        let mut pill = piece(PieceKind::Option, id, index, rect);
+        pill.text.push(run(words, Role::Legend, rect.x + pad, rect.center().1, width, size));
+        sheet.options.push(pill);
+        x = rect.right() + gap;
+    }
+    if !options.is_empty() {
+        sheet.cursor += high + cx.px(10.0);
     }
 }
 

@@ -236,11 +236,28 @@ options (`layout/typed.rs`, `draw/field.rs`).
   and cut there with an ellipsis. They are text and nothing else: the piece
   takes no tap and no key, whatever the words say. Words that clean to nothing
   place no piece.
+- **A quote never looks like a field.** Every `quote` piece of a note (a text
+  note's, and each of a told note's) is drawn on a ground of its own with no
+  line round it: a soft wash of the palette's `pencil` on its `bubble`
+  (`Palette::quote_ground`), and one line of the pencil down its left, before
+  the words (the piece's sketch, `quoted`, with one part, `line`). A line
+  round a ground is a field's and the entry's, so only they look like a place
+  to type. The wash is used only where the `quoted` ink still reads on it at
+  `QUOTED_FLOOR`; under a theme where it would not, the ground is the plain
+  `bubble` the ink was measured on. What a person typed (`Note::Said`) keeps
+  its bubble and its ring.
 - **`field`: one line to type in** (`Field`: a `hint`, a cap `most`, and an
   `offer`). It is placed under the options (`PieceKind::Field`), with the
   hint in it. An `offer` that has words is a small pill over the field
   (`PieceKind::Offer`); a click on it gives the field the keys and nothing
   else.
+- **A field that is first** (`Field::first`, a text note's only). The note
+  asks something and the field is where it is answered, so the field stands
+  directly under the quoted words, and the options come after it as the ways
+  round it: small pills on one row, wrapped to another when they do not fit,
+  each drawn as an offer is and each still an `option` piece of its index,
+  with its tap. A long option is cut to one line of the note's width. A note
+  whose field is not first, and every drawn note, places and draws as before.
 - **A long body.** The quoted words and the field are placed whether the
   body is drawn whole or counted; the options still go when it is counted.
 - **Typing.** A field is typed in as the entry is, by the same code and under

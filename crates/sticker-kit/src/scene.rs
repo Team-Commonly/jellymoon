@@ -100,7 +100,8 @@ pub enum Note {
     ///
     /// `quoted` is someone else's words: drawn under the body on a ground of their own, in the tone for quoted
     /// words, cut to at most [`crate::layout::MAX_QUOTED_LINES`] lines, and never anything but text. `field` is
-    /// one line a person types in under the note; what Enter gives carries the note's `id`.
+    /// one line a person types in under the note; what Enter gives carries the note's `id`. It stands under the
+    /// options, or before them when it is first ([`Field::first`]).
     Text {
         id: String,
         title: String,
@@ -258,6 +259,11 @@ pub struct ToldRow {
 ///
 /// `wants_keys` asks for the keys: the field takes them once, at the first drawing it stands on the page, unless
 /// words are typed in the entry or where the keys are (`draw/field.rs`). A field that does not ask never does.
+///
+/// `first` puts the field of a text note before the note's options: directly under the quoted words, with the
+/// options after it small and quiet, pills as wide as their words on one row (`layout/typed.rs`). Typing is then
+/// the note's answer, and its options are the ways round it. A field that is not first stands under the options,
+/// which are drawn wide. A drawn note's field is never first.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Field {
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -268,6 +274,8 @@ pub struct Field {
     pub key: String,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub wants_keys: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub first: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

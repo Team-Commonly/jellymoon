@@ -86,7 +86,7 @@ The gate had named both halves as notes (the press beside the line's words, and 
 ## Open
 
 - Windows and Linux were not run.
-- A press on the question's own card, off its field, still gives the entry the keys (ADR 0025's rule for
+- (Closed the same day, `2026-11-25-0940-the-question-keeps-the-keys.md`.) A press on the question's own card, off its field, still gives the entry the keys (ADR 0025's rule for
   every press off a field): letters typed after it go to the entry.
 - The kit's rule that a press on a tally in its place moves no key is held by the app's test of the keys only;
   the kit has no test of its own for it.

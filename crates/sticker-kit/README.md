@@ -150,7 +150,9 @@ Page::new(scene, theme)
 - **Keys.** A page with an entry gives it the keys whenever nothing else on the
   page holds them: when the window opens, when the entry arrives, after a press
   anywhere off the fields, and after Escape, which in a note's field gives them
-  to the entry. A click on a note's field or its offer gives that field the
+  to the entry. A press on a note whose field asks for the keys (`Field::wants_keys`), on any part of it but
+  an option, moves no key: a person reading what they are asked is not typing somewhere else. A click on a
+  note's field or its offer gives that field the
   keys, and a field that asks for them takes them once, when it first stands
   ("A text note's quoted words, field and offer"). What is typed is never lost for want of a holder. Text goes in at the caret. Backspace,
   Delete, Left, Right, Home and End (or Left and Right with the platform's

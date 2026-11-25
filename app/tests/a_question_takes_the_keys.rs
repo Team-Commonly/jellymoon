@@ -13,13 +13,13 @@ mod support;
 mod window {
     use std::fs;
 
-    use gpui::{Entity, Keystroke, TestAppContext, VisualTestContext};
+    use gpui::{Entity, Keystroke, Modifiers, TestAppContext, VisualTestContext, point, px};
     use jellymoon_app::shaping::SHAPE;
     use jellymoon_app::showing::Showing;
     use jellymoon_app::wishing::ENTRY;
     use serde_json::{Value, json};
-    use sticker_kit::Note;
     use sticker_kit::draw::Page;
+    use sticker_kit::{Note, PieceKind, Rect};
 
     use crate::support::day::DAY;
     use crate::support::windowed::{context, held, opened};
@@ -83,6 +83,35 @@ mod window {
         // The question is gone: the next letters are in the entry.
         keys(cx, "n e x t");
         assert_eq!((typed(&page, cx), waits(&shown)), (("next".into(), None), false));
+    }
+
+    /// Where the first piece of kind `kind` of the note `id` is in the window now.
+    fn at(page: &Entity<Page>, cx: &mut VisualTestContext, kind: PieceKind, id: &str) -> Rect {
+        let found = |page: &Page| page.placed().iter().find(|piece| piece.piece == kind && piece.id == id).cloned();
+        page.read_with(cx, |page, _| found(page).map(|piece| page.shown_at(&piece))).expect("the piece is placed")
+    }
+
+    // A person reading the question clicks on it, as on any text they read, and types on: the letters are still
+    // the answer. Before, that press gave the entry the keys, and Enter there was a new wish in the pair's place.
+    #[test]
+    fn a_click_on_the_questions_own_card_leaves_its_field_the_keys_and_a_click_off_the_notes_gives_the_entry_them() {
+        let (w, shown) = asked();
+        let mut cx: TestAppContext = context();
+        let (page, cx) = opened(&mut cx, shown.clone());
+        keys(cx, "t i d y space i t enter");
+        keys(cx, "t w o");
+        let card = at(&page, cx, PieceKind::Note, SHAPE);
+        cx.simulate_click(point(px(card.x + 6.0), px(card.y + 6.0)), Modifiers::default());
+        cx.run_until_parked();
+        keys(cx, "space s e c");
+        assert_eq!(typed(&page, cx), (String::new(), Some("two sec".into())), "the letters are still the answer");
+        // The page's title is no note: a press there gives the entry the keys, as a press off the fields always did.
+        let (x, y) = at(&page, cx, PieceKind::Title, "title").center();
+        cx.simulate_click(point(px(x), px(y)), Modifiers::default());
+        cx.run_until_parked();
+        keys(cx, "x");
+        assert_eq!(typed(&page, cx), ("x".into(), Some("two sec".into())), "and the answer waits as it was typed");
+        assert!(waits(&shown) && made(&w).is_empty(), "the pair still waits, and nothing is kept");
     }
 
     #[test]

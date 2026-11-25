@@ -929,7 +929,8 @@ max_file_lines = 400
 # the two places that no longer take it for the column's tally, and that a press on it moves no key.
 # The walk's fix raised it by 26 (`src/draw/column.rs`): the view held when such a tally is turned, a press on its
 # card or on the note it opened moving no key, and 4 lines of their test.
-"crates/sticker-kit" = 15082
+# A press on a note whose field asks for the keys moving none raised it by 8 (`src/draw/column.rs`).
+"crates/sticker-kit" = 15090
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1219,7 +1220,8 @@ max_file_lines = 400
 # example's `--sharper` is 7.
 # The walk's fix raised it by 18 (`tests/the_sharper_wish_folds.rs`): the line stays where it was tapped, and clicks
 # on the rows' card and on the line's card move no key.
-"app" = 22093
+# The question keeping the keys through a click on its card raised it by 29: its test (`tests/a_question_takes_the_keys.rs`).
+"app" = 22122
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

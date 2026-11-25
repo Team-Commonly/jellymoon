@@ -347,7 +347,9 @@ what core keeps.
 - **Keys.** What a person types goes to the entry whenever nothing else on the page holds the keys: the window
   opens with them in the entry (on a first page, in the field that takes a name), and they are the entry's again
   after a tap on a note's option or on a character, a click anywhere off the fields, and Escape, which in a note's
-  field gives them to the entry and in the entry keeps them there. A click on a note's field, or on its offer,
+  field gives them to the entry and in the entry keeps them there. A click on the card of a sharper wish's
+  question, off its field and its two options, moves no key (until 2026-11-25 it gave the entry the keys, and
+  the answer typed next became a new wish in the pair's place). A click on a note's field, or on its offer,
   gives that field the keys, and the field of a sharper wish's question takes them by itself when it first
   stands ("The question has the keys", below). Tab chooses the next project and Shift-Tab the one before; a click on a chip chooses
   it. Enter enters the text. While an input method is composing, Enter confirms the composition and enters

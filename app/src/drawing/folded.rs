@@ -106,7 +106,8 @@ pub(super) fn folded(mut column: Scene, data: Option<&PageData>, open: bool) -> 
     }
     let rows = rows(&column, &wishes, data);
     let more = more(rows.len().saturating_sub(MAX_TALLY_ROWS));
-    let picture = Picture::Tally { title: TITLE.to_string(), rows, more, under: READING.to_string(), open };
+    let (title, under) = (TITLE.to_string(), READING.to_string());
+    let picture = Picture::Tally { title, rows, more, under, open, in_place: false };
     let tally =
         Note::Drawn { id: FOLD.to_string(), picture, words: Vec::new(), open: false, options: Vec::new(), field: None };
     if !open {

@@ -99,6 +99,21 @@ pub fn pieces(page: &Value, args: &[&str]) -> Vec<Piece> {
     lines.lines().map(|line| Piece(serde_json::from_str(line).expect(line))).collect()
 }
 
+/// The one line a sharper wish is folded to under a question that waits (ADR 0025, decision 12): the kit's
+/// tally with no rows, in its place among the notes, its chevron turned while the wish is `open` under it.
+pub fn fold_line(open: bool) -> sticker_kit::Note {
+    let (title, more, under) = ("your wish, sharper".to_string(), String::new(), String::new());
+    let picture = sticker_kit::Picture::Tally { title, rows: Vec::new(), more, under, open, in_place: true };
+    let (id, words, options) = ("shape-fold".to_string(), Vec::new(), Vec::new());
+    sticker_kit::Note::Drawn { id, picture, words, open: false, options, field: None }
+}
+
+/// The pair of a sharper wish that asks, as a window draws it (`the_sharper_wish_folds.rs`): the question's
+/// note, and the sharper wish folded to its line.
+pub fn fold(pair: Vec<sticker_kit::Note>) -> Vec<sticker_kit::Note> {
+    pair.into_iter().take(1).chain([fold_line(false)]).collect()
+}
+
 /// What a refused run says on stderr: it exits 1 and prints nothing on stdout.
 pub fn refused(text: &str) -> String {
     let out = layout(text, &[]);

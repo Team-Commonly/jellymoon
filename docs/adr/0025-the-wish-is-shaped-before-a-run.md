@@ -93,6 +93,9 @@ the heart of the decision.
    is directly under the question with no "Answer" over it, and the two choices read `Skip the question` and
    `Use my own words`. Where this decision and the two after it say `Go with this` and `Go with what I typed`
    of a wish that asked, those are the taps they mean. With no question the order and every word are as above.
+   Amended 2026-11-25 (decision 12): "shows the sharper wish" is no longer true of the first drawing when
+   there is a question. The window then draws the sharper wish as one line under the question's note, and its
+   rows after a tap on that line. With no question every row is in sight before either tap, as above.
 9. **The answer stays with its wish** (2026-11-25). A wish kept with an answer is made of more than its typed
    words, and the page showed the typed words only. The kept wish now has `answered` beside `said`: the cleaned
    answer, the one that stands in `shaped`, written in the same one write, and only when the wish went on with
@@ -139,7 +142,47 @@ the heart of the decision.
    Rejected: folding the sharper wish away behind a tap while a question stands (words of the model's the
    person goes on with would be out of sight); drawing the quotes with no ground at all (a quote would then
    differ from Jellymoon's own words by its ink alone); and a new, smaller size for the labels (no new size
-   was needed once the outlines were gone).
+   was needed once the outlines were gone). The first of these is taken back by decision 12, which says what
+   is then out of sight and why that was taken.
+12. **The sharper wish folds under a question** (2026-11-25). Looked at in pictures once the question stood
+   first: the page still had two full cards, and the lower and larger one, three marked rows of the model's
+   words, asked nothing of the person. The one thing asked, the answer, shared the page with a restatement
+   of what the person had just typed.
+   - *What is drawn.* While a question waits, the sharper wish is one line under the question's note:
+     `your wish, sharper`, Jellymoon's own words, with a chevron at the line's end. It is the kit's tally with
+     no rows, the shape a read day already folds into (ADR 0030, decision 12), told to stand in its place
+     among the notes (`Picture::Tally::in_place`) and not at the column's top. A tap on it puts the sharper
+     wish's note under it, the note as it was, every row and every word; a second tap folds it again. Whether
+     it is unfolded is the window's own state, held with which notes are open (`drawing::Open`): no call to
+     core, nothing written, and each new reading starts folded. An answer core refuses puts the pair back
+     with the fold as the person left it.
+   - *What is not folded.* The question's note: its quote, its field, which has the keys as before, and the
+     two ways round it. A sharper wish that asks nothing: every row is in sight over `Go with this` and `Go
+     with what I typed`, as it was. A reason of core's for a refusal, which is a note of its own. The note
+     holds nothing but its three rows (`shaping::pair` builds it, with no sentence after them), and the fold
+     is applied only to a note that has none.
+   - *What a person can now go on without having seen.* The three texts of the sharper wish, when they answer
+     the question or tap `Skip the question` without a tap on the line first. Their run is then given a form
+     of the wish whose words they did not read. That is more out of sight than a wish with no question has,
+     where the same rows stand over `Go with this`, and it is said here as it is. What it is not is more
+     than such a wish lets a run be given: the texts are the same three, held to the same check and the same
+     lengths (decision 4), under the same labels, with the person's own words last in the prompt (decision
+     7) and the answer in the person's quote marks; `Use my own words` gives the run none of them and stands
+     in sight; and nothing in sight before either tap of a wish with no question makes a person read the
+     rows. One tap shows every word that was shown before, and the line is on the page for as long as the
+     question is.
+   - *The line starts nothing.* A tap on it unfolds or folds, and that is all the window does with it: it is
+     no option of a note, carries no words to core, and takes no key. No word of the model's is on it.
+     Found by the test of the keys, red: a press anywhere off a field gives the entry the keys, so after a
+     tap on the line the answer's letters went to the entry, where Enter is a new wish in the pair's place
+     (the loss decision 10 closed). A press on a tally in its place now moves no key; it is the kit's rule
+     for that one shape, and every other press is as it was.
+   Rejected: leaving the rows out with no way to read them (a run would be given words the person could
+   never see before it started); folding the question's note, or its two ways round (the one thing asked of
+   the person, and the way to refuse the model's words, would be a tap away); folding the sharper wish that
+   asks nothing (its rows are what `Go with this` goes with, and nothing else on the page competes with them);
+   and a third folded shape of the app's own (the tally's line and the small mark of a tucked wish are the
+   two the kit has; the mark needs a bubble to stand under).
 
 ## Measured
 

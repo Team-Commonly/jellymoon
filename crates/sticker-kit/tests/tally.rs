@@ -17,7 +17,8 @@ fn row(label: &str, marks: &[Mark]) -> TallyRow {
 }
 
 fn tally(rows: Vec<TallyRow>, more: &str, open: bool) -> Note {
-    let picture = Picture::Tally { title: "so far".into(), rows, more: more.into(), under: UNDER.into(), open };
+    let (title, more, under) = ("so far".into(), more.into(), UNDER.into());
+    let picture = Picture::Tally { title, rows, more, under, open, in_place: false };
     Note::Drawn { id: "fold".into(), picture, words: Vec::new(), open: false, options: Vec::new(), field: None }
 }
 
@@ -211,6 +212,47 @@ fn the_big_character_stands_beside_a_closed_tally_and_where_it_was_beside_an_ope
         assert_eq!(hero(&open), top(&open, "note-0"));
         let heroes = |placed: &[Placed]| placed.iter().filter(|piece| piece.piece == PieceKind::Hero).count();
         assert_eq!((heroes(&closed), heroes(&open)), (1, 1));
+    });
+}
+
+// A tally told to stand in its place is a card among the cards, in the scene's order: with no rows it is one
+// line, a title and its chevron. It is not lifted over the column, the big character stands where a scene
+// without it has it, and a tally that counts the column still stands first.
+#[test]
+fn a_tally_in_its_place_is_one_line_among_the_notes_and_a_tally_of_the_column_still_stands_first() {
+    each(|theme, viewport, k| {
+        let line = |open| {
+            let (title, more, under) = ("a line".into(), String::new(), String::new());
+            let picture = Picture::Tally { title, rows: Vec::new(), more, under, open, in_place: true };
+            Note::Drawn { id: "line".into(), picture, words: Vec::new(), open: false, options: Vec::new(), field: None }
+        };
+        let card = |title: &str| Note::Plain { title: title.into(), body: "One line.".into() };
+        let scene = |open, last: Option<Note>| {
+            let notes = [card("first"), line(open), card("second")].into_iter().chain(last).collect();
+            Scene { notes, ..Scene::sample() }
+        };
+        let top = |placed: &[Placed], id: &str| {
+            let own = |piece: &&Placed| piece.piece == PieceKind::Note && piece.id == id;
+            placed.iter().find(own).map(|note| note.rect.y).unwrap_or_else(|| panic!("no card {id}"))
+        };
+        for (open, name) in [(false, "opens"), (true, "closes")] {
+            let placed = place(&scene(open, None), theme, viewport);
+            let (first, own, second) = (top(&placed, "note-0"), top(&placed, "line"), top(&placed, "note-2"));
+            assert!(first < own && own < second, "in the scene's order: {first} {own} {second}");
+            let is = |piece: &&Placed| piece.piece == PieceKind::Picture && piece.id == "line";
+            let picture = placed.iter().find(is).unwrap_or_else(|| panic!("the line's picture"));
+            let names: Vec<&str> = parts(picture).into_iter().map(|(name, _)| name).collect();
+            assert_eq!((names, words(picture, Role::Caption)), (vec![name], vec!["a line"]));
+            assert!(words(picture, Role::Footer).is_empty(), "one line and no other");
+            assert!(picture.rect.h >= SMALLEST * k - 0.01, "a tap target: {:?}", picture.rect);
+            let hero = placed.iter().find(|piece| piece.piece == PieceKind::Hero).map(|hero| hero.rect.y);
+            assert!(hero.is_none_or(|hero| hero == first), "the big character is beside the first card");
+            // With a tally of the column after it, that one stands first, and the line stays between its cards.
+            let both = place(&scene(open, Some(tally(vec![row("alpha", &ALL)], "", false))), theme, viewport);
+            let (fold, first, own, second) =
+                (top(&both, "fold"), top(&both, "note-0"), top(&both, "line"), top(&both, "note-2"));
+            assert!(fold < first && first < own && own < second, "{fold} {first} {own} {second}");
+        }
     });
 }
 

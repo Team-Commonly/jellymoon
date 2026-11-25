@@ -474,6 +474,29 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   beside it loses nothing. Nor does the field of a follow-up. `app/tests/a_question_takes_the_keys.rs` plays
   both cases through the page's window on GPUI's test platform, on the Mac only: the made-up window of
   `support/tapper.rs` has no view, so it cannot say where the keys are.
+- **The sharper wish folds.** While a question waits, a window does not draw the sharper wish's three rows at
+  first (ADR 0025, decision 12). Under the question's note stands one line, the drawn note `shape-fold`: the
+  kit's tally with no rows, in its place among the notes (`Picture::Tally::in_place`), titled `your wish,
+  sharper`, with its chevron. A tap on it puts the note `shape-said` under it, as it was, every row; a second
+  tap folds it again, and the chevron says which. It is one pure pass over the column, `shaping::folded`,
+  applied at the end of `Open::column`: the scene that is kept holds the pair as before, so `layout` prints
+  both notes whole, and what the taps and the field hand core is untouched. Whether it is unfolded is the
+  window's own state, held with which notes are open (`drawing::Open`); a tap on the line is `Open::fold`,
+  the same arm of `Showing::chose` that turns the day's tally: core is asked nothing and nothing is written.
+  Every Enter in the entry folds it again (`Open::reading`, from `Showing::wishing`), so each question starts
+  folded, and an answer core refuses puts the pair back with the fold as the person left it.
+  Never folded: the question's note, its field and its two options; the pair of a wish that asks nothing
+  (the sharper wish over "What you typed" and its two choices), the note while the wish is read, and the
+  reason of a refusal, which is a note of its own. The sharper wish's note holds its rows and nothing else,
+  and the pass leaves alone a note with a sentence after its rows. The line takes no key and is no option:
+  the field keeps the keys through a tap on it (the kit moves no key at a press on a tally in its place; any
+  other press off a field still gives the entry the keys). Folded, the page reads "Only you know", the question as a
+  quote, "Type your answer, then Enter", "Skip the question", "Use my own words" and "your wish, sharper";
+  unfolded, also "Your wish, sharper", "The wish", "Done when", "Not touching" and the three quotes. No word
+  of the model's is on the line. The snapshot example draws the folded page with `--tucked` and the unfolded
+  one with `--sharper`. `app/tests/the_sharper_wish_folds.rs` plays it through the made-up window and, for the
+  keys, the page's own window on GPUI's test platform. Not proved: a real window, a real harness, Windows
+  and Linux.
 - **The pair on show is held, not read back.** The page on show holds the sharper wish the pair was drawn from,
   with the words it was made of and its project (`OnShow::typed`, core's `ShapeSeen`): set when the pair is
   shown, and again when a refused answer brings it back; cleared when the pair goes, at a tap, at Enter in the

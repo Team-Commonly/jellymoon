@@ -49,10 +49,11 @@ pub(super) fn lay(cx: &mut Ctx, scene: &Scene) {
 /// The scene's first note whose picture is a tally, at `top`: it stands over the small characters' rows, wherever
 /// it is among the notes, so what it counts is under it. While it is closed the big character stands beside it,
 /// as beside a first card; open, the big character is where a column with no tally has it. Returns the note's
-/// place, where the column goes on, and how many big characters stand so far.
+/// place, where the column goes on, and how many big characters stand so far. A tally that is told to stand in
+/// its place (`in_place`) is not that note: it is a card among the cards.
 fn tallied(cx: &mut Ctx, scene: &Scene, top: f32) -> (Option<usize>, f32, usize) {
     let open = |note: &Note| match note {
-        Note::Drawn { picture: Picture::Tally { open, .. }, .. } => Some(*open),
+        Note::Drawn { picture: Picture::Tally { open, in_place: false, .. }, .. } => Some(*open),
         _ => None,
     };
     let found = scene.notes.iter().enumerate().find_map(|(index, note)| Some((index, note, open(note)?)));

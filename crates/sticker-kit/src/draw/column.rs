@@ -14,10 +14,10 @@ use crate::scene::{Note, Picture, Scene, speaker};
 use crate::scroll::Scroll;
 use crate::text::{Role, has_visible};
 
-/// Whether the tally of `scene` is open, when it has one.
+/// Whether the tally of `scene` is open, when it has one. A tally that stands in its place is a card as any other.
 fn tally(scene: &Scene) -> Option<bool> {
     scene.notes.iter().find_map(|note| match note {
-        Note::Drawn { picture: Picture::Tally { open, .. }, .. } => Some(*open),
+        Note::Drawn { picture: Picture::Tally { open, in_place: false, .. }, .. } => Some(*open),
         _ => None,
     })
 }
@@ -124,6 +124,16 @@ impl Page {
         }
     }
 
+    /// Whether a press on `piece` leaves the keys where they are: the picture of a tally that stands in its
+    /// place, a line that opens what is under it. The field beside it is still being typed in.
+    pub(super) fn keeps_keys(&self, piece: &Placed) -> bool {
+        let line = |note: &Note| match note {
+            Note::Drawn { id, picture: Picture::Tally { in_place, .. }, .. } => *in_place && *id == piece.id,
+            _ => false,
+        };
+        piece.piece == PieceKind::Picture && self.scene.notes.iter().any(line)
+    }
+
     pub(super) fn tap_target(&self, index: usize, piece: &Placed, pose: Pose, cx: &mut Context<Self>) -> AnyElement {
         let rect = piece.rect.moved(pose.dx, pose.dy);
         div()
@@ -174,8 +184,12 @@ mod tests {
     use crate::scroll::Scroll;
 
     fn tally(open: bool) -> Note {
-        let picture =
-            Picture::Tally { title: "t".into(), rows: Vec::new(), more: String::new(), under: String::new(), open };
+        stood(open, false)
+    }
+
+    fn stood(open: bool, in_place: bool) -> Note {
+        let (title, more, under) = ("t".into(), String::new(), String::new());
+        let picture = Picture::Tally { title, rows: Vec::new(), more, under, open, in_place };
         Note::Drawn { id: "day".into(), picture, words: Vec::new(), open: false, options: Vec::new(), field: None }
     }
 
@@ -198,6 +212,17 @@ mod tests {
         assert_eq!(opens_at(&scene(vec![tally(false)])), 0.0, "the tally stands at the top");
         assert_eq!(opens_at(&scene(vec![said("m-1"), tally(false)])), 300.0, "what they said may wait at the end");
         assert_eq!(opens_at(&scene(vec![said("m-1")])), 300.0, "as a page with no tally always did");
+    }
+
+    #[test]
+    fn a_tally_in_its_place_neither_opens_the_page_at_its_top_nor_holds_the_view_when_it_turns() {
+        let line = |open| scene(vec![stood(open, true)]);
+        assert_eq!(opens_at(&line(false)), 300.0, "it is a card of the column, wherever that is");
+        assert_eq!(turn(&line(false), &line(true), false), Turn::Stay, "turned, the view keeps its rules");
+        assert_eq!(turn(&scene(Vec::new()), &line(false), false), Turn::Stay, "and when it comes");
+        // The tally of the column is still seen behind one in its place.
+        let (closed, open) = (vec![stood(true, true), tally(false)], vec![stood(true, true), tally(true)]);
+        assert_eq!(turn(&scene(closed), &scene(open), false), Turn::Hold);
     }
 
     #[test]

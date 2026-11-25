@@ -10,10 +10,11 @@
 //! person's answer, and the two choices come after as the ways round the question ([`SKIP`], [`OWN`]). The typed
 //! words are held by the page on show, with the sharper wish itself (`OnShow::typed`), and never read back from a
 //! note: core keeps a wish only from the shape the page showed. The model's reason is
-//! core's to read and is not drawn.
+//! core's to read and is not drawn. Under a question a window draws the sharper wish folded to one line, and its
+//! rows after a tap on it ([`folded`]): the scene that is kept holds the pair as above.
 
 use jellymoon_core::{MADE_SAID_MAX, Shape, ShapeGo, ShapeOutcome, ShapeSeen};
-use sticker_kit::{Field, Note, Scene, ToldRow};
+use sticker_kit::{Field, Note, Picture, Scene, ToldRow};
 
 use crate::taps::OnShow;
 use crate::wishing::{Answer, NAMED_MAX, Seen, UNKEPT, Wishing, newest, of};
@@ -40,6 +41,30 @@ pub const OWN: &str = "Use my own words";
 pub const ANSWER_HINT: &str = "Type your answer, then Enter";
 /// The labels of the sharper wish's rows, in order; an empty row is left out.
 pub const LABELS: [&str; 3] = ["The wish", "Done when", "Not touching"];
+
+/// The id of the line a sharper wish is folded to under its question, and the line's words, Jellymoon's own.
+pub const FOLDED: &str = "shape-fold";
+pub const FOLD_LINE: &str = "your wish, sharper";
+
+/// `column`, a scene in its column's order, as a window draws it while a question waits (ADR 0025, decision
+/// 12): the sharper wish is one line under the question's note, the kit's tally with no rows in its place among
+/// the notes, and while `open` the sharper wish's note stands under that line as it was. A tap on the line is
+/// the window's alone (`drawing::Open::fold`). Nothing is folded with no question on the column, and nothing
+/// of a note that holds a sentence after its rows: the question's note and a wish that asks nothing are as
+/// they were.
+pub(crate) fn folded(mut column: Scene, open: bool) -> Scene {
+    let asks = |note: &Note| matches!(note, Note::Text { id, field: Some(_), .. } if id == SHAPE);
+    let rows = |note: &Note| matches!(note, Note::Told { id, end, .. } if id == SAID && end.is_empty());
+    let Some(at) = column.notes.iter().position(rows).filter(|_| column.notes.iter().any(asks)) else {
+        return column;
+    };
+    let (title, more, under) = (FOLD_LINE.to_string(), String::new(), String::new());
+    let picture = Picture::Tally { title, rows: Vec::new(), more, under, open, in_place: true };
+    let (id, words, options) = (FOLDED.to_string(), Vec::new(), Vec::new());
+    let line = Note::Drawn { id, picture, words, open: false, options, field: None };
+    column.notes.splice(at..at + usize::from(!open), [line]);
+    column
+}
 
 /// Whether an id is one of this file's notes.
 pub(crate) fn names(id: &str) -> bool {

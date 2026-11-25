@@ -31,12 +31,16 @@ fn card(n: usize) -> Note {
     }
 }
 
+fn said(id: &str, text: &str, answer: &str) -> Note {
+    Note::Said { id: id.into(), text: text.into(), answer: answer.into() }
+}
+
 /// A day longer than its window: a note of the day, then the words typed for `garden` and `count` cards of it.
 fn long(count: usize) -> Scene {
     let mut scene = Scene::sample();
     scene.characters.truncate(4);
     scene.notes = vec![Note::Plain { title: "Of the day".into(), body: "A note of no wish.".into() }];
-    scene.notes.push(Note::Said { id: "typed-garden".into(), text: "plant the herbs by the door".into() });
+    scene.notes.push(said("typed-garden", "plant the herbs by the door", ""));
     scene.notes.extend((0..count).map(card));
     scene
 }
@@ -184,7 +188,7 @@ fn a_click_on_what_a_person_typed_is_a_tap_on_the_character_it_is_of() {
     let mut scene = long(1);
     let Some(Note::Text { quoted, .. }) = scene.notes.last_mut() else { panic!("a text note") };
     *quoted = "words of the run".into();
-    scene.notes.push(Note::Said { id: "typed-nobody".into(), text: "of no character".into() });
+    scene.notes.push(said("typed-nobody", "of no character", ""));
     page.update(cx, |page, cx| page.set_scene(scene, cx));
     cx.run_until_parked();
     wheel(cx, -1e7);
@@ -198,7 +202,7 @@ fn a_click_on_what_a_person_typed_is_a_tap_on_the_character_it_is_of() {
     // In a column moved to its end, the character of the last words typed takes the tap where it is drawn.
     let mut scene = long(8);
     let last = scene.characters[1].id.clone();
-    scene.notes.push(Note::Said { id: format!("typed-{last}"), text: "and water them".into() });
+    scene.notes.push(said(&format!("typed-{last}"), "and water them", ""));
     page.update(cx, |page, cx| page.set_scene(scene, cx));
     cx.run_until_parked();
     wheel(cx, -1e7);
@@ -331,4 +335,28 @@ fn a_card_that_comes_under_the_pointer_where_another_choice_stood_takes_no_tap_u
     at_time(&page, cx, 10.0 + SETTLE.as_secs_f32() + 0.05);
     click(cx, now.center());
     assert_eq!(*taps.borrow(), [no("card-9")]);
+}
+
+#[test]
+fn an_answer_s_line_is_drawn_in_its_bubble_and_a_bubble_with_none_draws_what_it_did() {
+    let mut cx = context();
+    let (page, cx, _) = open(&mut cx, long(0));
+    let bubble = |page: &Entity<Page>, cx: &mut VisualTestContext| {
+        let find = |piece: &&Placed| piece.piece == PieceKind::Quote && piece.id == "typed-garden";
+        page.read_with(cx, |page, _| page.placed().iter().find(find).cloned()).expect("a bubble")
+    };
+    let plain = bubble(&page, cx);
+    assert_eq!((plain.text.len(), plain.sketch.is_none()), (1, true));
+    let words = cx.debug_bounds("Quote:typed-garden:0:0").expect("the typed words are painted");
+    assert!(cx.debug_bounds("Quote:typed-garden:0:1").is_none(), "and no line under them");
+    let mut scene = long(0);
+    scene.notes[1] = said("typed-garden", "plant the herbs by the door", "the kitchen door");
+    show(&page, cx, scene);
+    let both = bubble(&page, cx);
+    assert_eq!((both.text.len(), both.text[0].clone()), (2, plain.text[0].clone()), "the typed words are as they were");
+    assert!(both.sketch.is_some(), "the pencil has its hook to draw");
+    let (typed, answer) = (cx.debug_bounds("Quote:typed-garden:0:0"), cx.debug_bounds("Quote:typed-garden:0:1"));
+    let answer = answer.expect("the answer's line is painted");
+    assert_eq!(typed, Some(words), "the typed words are painted where they were");
+    assert!(answer.origin.y >= words.origin.y + words.size.height && answer.origin.x > words.origin.x);
 }

@@ -66,6 +66,10 @@ pub struct Wish {
     /// at most 300 characters. It is data to draw as text. Left out of every wish whose run does not ask.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
+    /// The answer a made wish went on with (`run/shape.rs`): the person's own words to the sharper wish's
+    /// question, as cleaning left them, at most 200 characters. Left out of every wish that went on with none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answered: Option<String>,
 }
 
 /// How a wish stands.

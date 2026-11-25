@@ -78,6 +78,10 @@ pub struct MadeWish {
     /// The run's prompt of a wish kept from a shape (F91, `run/shape.rs`): one line, at most 1300 characters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shaped: Option<String>,
+    /// The answer that prompt was built with (ADR 0025): the person's own words, cleaned as a wish's are. Only
+    /// a wish kept with an answer to its shape's question has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answered: Option<String>,
 }
 
 /// The made wishes of one day, `pages/<day>.wishes.json`.
@@ -164,7 +168,8 @@ pub fn wish_offered(read: &DayOptions, typed: &str, project: &str) -> Result<Wis
     offered_with(read, typed, project, None)
 }
 
-/// [`wish_offered`], with the run's prompt of a sharper wish (`run/shape.rs`) kept in the same write.
+/// [`wish_offered`], with the run's prompt of a sharper wish (`run/shape.rs`), and the answer it was built
+/// with when there was one, kept in the same write.
 pub(crate) fn offered_with(read: &DayOptions, typed: &str, project: &str, shaped: Shaped) -> Result<Wished, Error> {
     let (Some(home), Some(day)) = (&read.home, &read.date) else { return Err(Error::Home) };
     if wishable(read, &[project.to_string()]).is_empty() {
@@ -191,7 +196,8 @@ fn own(at: usize, wish: MadeWish) -> Option<MadeWish> {
         })
         && wish.answer.as_deref().is_none_or(|answer| run::kept_answer(answer) && wish.run.is_some())
         && wish.after.as_deref().is_none_or(|after| (1..=at).any(|before| after == format!("m{before}")))
-        && wish.shaped.as_deref().is_none_or(run::kept_shaped);
+        && wish.shaped.as_deref().is_none_or(run::kept_shaped)
+        && wish.answered.as_deref().is_none_or(|a| wish.shaped.as_deref().is_some_and(|s| run::answered_in(s, a)));
     own.then_some(MadeWish { said, ..wish })
 }
 
@@ -216,7 +222,7 @@ pub fn wish(home: &Path, day: Option<&str>, typed: &str, project: &str) -> Resul
     wish_with(home, &day_of(day)?, typed, project, None)
 }
 
-type Shaped = Option<String>;
+type Shaped = Option<(String, Option<String>)>;
 pub(crate) fn wish_with(home: &Path, day: &str, typed: &str, project: &str, shaped: Shaped) -> Result<Wished, Error> {
     let said = words(typed)?;
     // A name with something unseen comes in only as the name of a project the list holds already; when the list
@@ -262,7 +268,8 @@ pub(crate) fn keep(
     let mut wishes = room()?;
     let (id, state, stars) = (format!("m{}", wishes.len() + 1), WishState::Working, Vec::new());
     let (run, why, question, answer) = (None, None, None, None);
-    let wish = MadeWish { id, said, project, state, stars, run, why, question, answer, after, shaped };
+    let (shaped, answered) = shaped.map_or((None, None), |(shaped, answered)| (Some(shaped), answered));
+    let wish = MadeWish { id, said, project, state, stars, run, why, question, answer, after, shaped, answered };
     wishes.push(wish.clone());
     write(home, day, wishes)?;
     Ok(Wished { wish, run: None, why: WHY.to_string() })
@@ -347,17 +354,8 @@ fn made_said(home: &Path, day: &str) -> (Vec<Wish>, Vec<String>) {
     // What a `jellymoon run` that was killed left with no wish to name it is taken back (`run/left.rs`).
     let said = run::tidy(home, &kept);
     let drawn = |wish: MadeWish| {
-        let wish = run::bury(home, day, wish);
-        let (label, question) = (line(&wish.said, LABEL_MAX), wish.question);
-        Wish {
-            label,
-            state: wish.state,
-            id: wish.id,
-            said: wish.said,
-            project: wish.project,
-            stars: wish.stars,
-            question,
-        }
+        let MadeWish { id, said, project, state, stars, question, answered, .. } = run::bury(home, day, wish);
+        Wish { label: line(&said, LABEL_MAX), id, said, project, state, stars, question, answered }
     };
     (kept.into_iter().map(drawn).collect(), said)
 }
@@ -381,11 +379,13 @@ pub fn with_made(home: &Path, page: PageData) -> PageData {
 
 /// [`with_made`], and what this look has to say that is no part of a page: a line for each copy a killed command
 /// left that was given up, and may have left a branch in its repo (`copy/back.rs`). A question the page was
-/// given with a wish stays only when it is what the door leaves of one: no reading writes one.
+/// given with a wish stays only when it is what the door leaves of one: no reading writes one. So with an
+/// answer a wish went on with.
 pub fn with_made_said(home: &Path, mut page: PageData) -> (PageData, Vec<String>) {
     let (made, said) = made_said(home, &page.day);
     for wish in &mut page.wishes {
         wish.question.take_if(|question| !run::kept_question(question));
+        wish.answered.take_if(|answer| !run::answer_kept(answer));
     }
     for wish in made {
         if page.wishes.iter().all(|on| on.id != wish.id) {

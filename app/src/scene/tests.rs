@@ -14,6 +14,7 @@ fn wish(id: &str, state: WishState, stars: &[&str]) -> Wish {
         state,
         stars: stars.iter().map(|star| star.to_string()).collect(),
         question: None,
+        answered: None,
     }
 }
 
@@ -245,4 +246,28 @@ fn a_day_that_is_not_a_date_and_an_id_with_odd_characters_stay_text() {
     let scene = scene(&odd);
     assert_eq!(scene.date_label, "someday");
     assert_eq!(scene.characters[0].id, "w1 <b>");
+}
+
+// The typed words alone do not say what a wish's run was asked: the answer it went on with is on its row, under
+// them, and on no other wish's. A wish of the reading has no row, and so shows none.
+#[test]
+fn a_made_wish_s_row_holds_the_answer_it_went_on_with_and_a_row_with_none_is_its_typed_words() {
+    let made = |id: &str, answer: Option<&str>| Wish {
+        answered: answer.map(str::to_string),
+        ..wish(id, WishState::Done, &[])
+    };
+    let rows = |scene: Scene| {
+        let made = |note: Note| match note {
+            Note::Whole { title, rows } if title == MADE => Some(rows.into_iter().map(|row| row.1).collect()),
+            _ => None,
+        };
+        scene.notes.into_iter().find_map(made).unwrap_or_else(Vec::new)
+    };
+    let day = page(vec![made("m1", None), made("m2", Some("only seven")), made("m3", None)], vec![]);
+    assert_eq!(rows(ruled(&day, &[], 3)), ["please do m1", "please do m2\nonly seven", "please do m3"]);
+    let read = ruled(&page(vec![made("w1", Some("only seven"))], vec![]), &[], 0);
+    assert!(!format!("{read:?}").contains("only seven"), "{read:?}");
+    // A row is two lines at most: a file's line break in either text is a space.
+    let odd = Wish { said: "one\ntwo".to_string(), ..made("m1", Some("three\nfour")) };
+    assert_eq!(rows(ruled(&page(vec![odd], vec![]), &[], 1)), ["one two\nthree four"]);
 }

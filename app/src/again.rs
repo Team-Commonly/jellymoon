@@ -1,8 +1,9 @@
 //! `Make it again`, carried (ADR 0030, decision 10). Core offers the choice under a keep it refused because the
 //! change no longer fits the folder, and under work that waits because it did not fit when its run ended, where
 //! `Keep it` would be (`working::waiting`); to a tap on either core says which words and which project
-//! (`WorkDone::Again`). Here the wish is made as the entry makes a typed one, by the same calls
-//! (`jellymoon_core::wish_offered`, `Today::asking`), so every check and limit of a typed wish holds. Only once
+//! (`WorkDone::Again`). Here the wish is made again as it was made (`jellymoon_core::wish_again`: its words,
+//! and the sharper wish and the answer it went on with when it had them), and its run asked for as the entry
+//! asks for one (`Today::asking`), so every check and limit of a typed wish holds. Only once
 //! core kept the new wish is the work that does not fit tossed, by the call a tap on `Toss it` is carried by; a
 //! wish core refuses tosses nothing, and neither does a tap with no installed command to run it. The run is started last: a toss asks git where every copy of the repo
 //! stands, and core refuses it while a new run's copy is being made. Every word is core's or a typed wish's.
@@ -90,8 +91,8 @@ impl Today {
     /// was tossed ([`Since`]): core keeps the old wish as let go, which a toss writes last, when all of it was
     /// done. No sentence of the answer is read for it.
     pub(crate) fn asked(&self, wish: &str, tap: WorkTap, ask: &impl Ask) -> (WorkDone, Since) {
-        let (said, project) = match ask(self, wish, tap) {
-            WorkDone::Again(said, project) => (said, project),
+        let said = match ask(self, wish, tap) {
+            WorkDone::Again(said, _) => said,
             done => return (done, None),
         };
         let unmade =
@@ -100,7 +101,7 @@ impl Today {
         if let Err(refused) = jellymoon_core::installed_command(&self.bin.clone().unwrap_or_default()) {
             return unmade(refused);
         }
-        let made = match jellymoon_core::wish_offered(&self.read(), &said, &project) {
+        let made = match jellymoon_core::wish_again(&self.read(), wish) {
             Ok(made) => made.wish,
             Err(refused) => return unmade(refused),
         };

@@ -121,3 +121,18 @@ fn a_name_with_a_character_nobody_sees_is_kept_as_it_was_read_and_does_not_come_
     assert_eq!(offered(&read), ["alpha"]);
     assert!(wish(&dir.path().join("jm"), Some("2026-03-10"), "ship the changelog", old).is_err());
 }
+
+// So with the answer a made wish went on with: a page's is drawn only as cleaning leaves an answer.
+#[test]
+fn a_page_s_answer_that_cleaning_would_change_is_dropped_and_one_it_leaves_stays() {
+    let home = tempfile::tempdir().unwrap();
+    let merged = |answer: &str| {
+        let mut page: PageData = serde_json::from_str(include_str!("../../tests/fixtures/page-asks.json")).unwrap();
+        page.wishes[0].answered = Some(answer.to_string());
+        with_made(home.path(), page).wishes[0].answered.clone()
+    };
+    assert_eq!(merged("two seconds").as_deref(), Some("two seconds"));
+    for odd in ["", " two", "two\nseconds", "two\u{1b}[31m", &"a ".repeat(101)] {
+        assert_eq!(merged(odd), None, "{odd:?}");
+    }
+}

@@ -55,11 +55,16 @@ keeps, compares and prints is as it was. From the top:
 | the header | the date's tape, the title, and the footer as quiet lines under it |
 | a row a wish of the reading | its small character, its label, what it says; the ones let go last |
 | the day's own notes | every note of no made wish, in the scene's order: what was left out, what came true of the reading's wishes, the clashes, the plain notes, an opened wish of the reading |
-| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end; then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `kept-`, `file-`, `sure-`, `busy-`, `wish-`, `said-`. `steps-` and the note of work that waits are drawn notes (pictures, below), and `told-` is not on the page while that wish's drawn `work-` is closed. Every made wish has its notes at once: a track while its run goes, its result when it has ended (ADR 0030, "Every wish keeps its place", below). A settled wish that is tucked away has its bubble and its character and no note under them |
+| each made wish, the oldest first | what the person typed, a bubble at the column's right (`typed-<wish>`, the kit's `Note::Said`) with the wish's small character at its end, and in the same bubble, under the typed words, the answer the wish went on with when it went on with one (ADR 0025, decision 9: set in behind a small drawn hook, with no label); then the wish's notes in one fixed order of what their ids begin with (`column::ORDER`): `steps-`, `stop-`, `told-`, `work-`, `kept-`, `file-`, `sure-`, `busy-`, `wish-`, `said-`. `steps-` and the note of work that waits are drawn notes (pictures, below), and `told-` is not on the page while that wish's drawn `work-` is closed. Every made wish has its notes at once: a track while its run goes, its result when it has ended (ADR 0030, "Every wish keeps its place", below). A settled wish that is tucked away has its bubble and its character and no note under them |
 | a wish that is not made yet | the notes of `shaping.rs` (`shaping`, or `shape-said` and `shape`): the newest thing on the page, so the column's last, over the entry the words were typed in |
 | a newer build installed | one plain note, once a look found one ("A newer build is installed", below): under everything, the wish that is not made yet too, just over the entry |
 
 The list "wished here today" that `scene::ruled` builds is not drawn: its rows are the words the bubbles carry.
+A row is the wish's typed words, and for a wish that went on with an answer a line break and the answer after
+them (`scene::typed`); `column.rs` gives the bubble the two apart, as `text` and `answer`. A wish that is
+tucked away keeps its bubble, so its answer shows there too. An opened wish's note shows no typed words and no
+answer. `Make it again` makes the wish with the prompt and the answer it was made with
+(`jellymoon_core::wish_again`).
 A tap on a bubble or on its character is the tap on that wish's character. The big character stands left of the
 first card after each bubble. `layout` prints a piece's place in the column, `y` from the column's top, and the
 entry's pieces where they are in the window.
@@ -821,10 +826,11 @@ that fit and counts the rest in a last line, `+N more`.
      read; else core's refusal is the answer and nothing is made; with no installed command to start a run
      with (`jellymoon_core::installed_command`), a typed wish's "That wish was not kept." with core's reason
      is the answer, and nothing is made or tossed;
-  2. the wish is made by the call an Enter in the entry makes for a typed wish (`jellymoon_core::wish_offered`
-     with the day as the page reads it). The words are not read again by the person's Claude Code first
-     (`shaping.rs`), and a sharper wish the old one was made with is not carried over: the new wish is the
-     words alone;
+  2. the wish is made again as it was made (`jellymoon_core::wish_again` with the day as the page reads it),
+     by the checks an Enter in the entry meets for a typed wish. The words are not read again by the person's
+     Claude Code first (`shaping.rs`). A sharper wish the old one was made with, and the answer it went on
+     with, are carried over: the new wish has the old one's `shaped` and `answered` (ADR 0025, decision 9;
+     until 2026-11-25 it was the words alone);
   3. only when core kept the wish is core asked for the toss, by the call a tap on `Toss it` is carried by;
   4. the new wish's run is started as a typed wish's is (`Today::asking`). `said-<wish>` then says what the
      toss says, done or refused, and after it "Your wish was made again, and it is being worked on."; the new

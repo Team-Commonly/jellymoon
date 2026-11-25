@@ -82,7 +82,7 @@ pub fn ruled(page: &Page, standing: &[Standing], made: usize) -> Scene {
         standing => choice(index, &data.clashes[index], standing),
     }));
     if !made.is_empty() {
-        let rows = made.iter().map(|wish| (mark(wish.state), wish.said.clone())).collect();
+        let rows = made.iter().map(|wish| (mark(wish.state), typed(wish))).collect();
         notes.push(Note::Whole { title: MADE.to_string(), rows });
     }
     notes.extend(page.unknown.iter().map(|one| Note::Plain { title: one.title.clone(), body: one.body.clone() }));
@@ -166,6 +166,17 @@ fn going(made: &[Wish]) -> Vec<Note> {
         crate::live::note(&drawn_id(&wish.id), None, (GOING, &body))
     };
     made.iter().filter(|wish| wish.state == WishState::Working).map(track).collect()
+}
+
+/// A made wish's row of the list: its typed words, and under them, after a line break, the answer it went on
+/// with when it went on with one (`column.rs` gives each to the wish's bubble). The typed words say what was
+/// asked for only with it. A row with no answer is the typed words and nothing else, as it always was.
+fn typed(wish: &Wish) -> String {
+    let line = |text: &str| text.replace('\n', " ");
+    match wish.answered.as_deref() {
+        Some(answer) => format!("{}\n{}", line(&wish.said), line(answer)),
+        None => line(&wish.said),
+    }
 }
 
 /// The mark of a wish's state, on its row of the made wishes.

@@ -111,7 +111,16 @@ fn keep(day: &ReaderDay, reading: Reading, page: &mut PageData) {
             .collect();
         let id = format!("w{}", page.wishes.len() + 1);
         ids.insert(wish.id, id.clone());
-        page.wishes.push(Wish { id, label, said, project: wish.project, state: wish.state, stars, question: None });
+        page.wishes.push(Wish {
+            id,
+            label,
+            said,
+            project: wish.project,
+            state: wish.state,
+            stars,
+            question: None,
+            answered: None,
+        });
     }
     for clash in reading.clashes.into_iter().take(SEEN_MAX) {
         if page.clashes.len() == CLASHES_MAX {
@@ -178,7 +187,7 @@ mod tests {
     fn wish(n: usize, said: String) -> Wish {
         let (id, project) = (format!("m{n}"), "project-0".to_string());
         let (state, stars) = (WishState::Working, Vec::new());
-        Wish { id, label: "a thing".into(), said, project, state, stars, question: None }
+        Wish { id, label: "a thing".into(), said, project, state, stars, question: None, answered: None }
     }
 
     fn kept(day: &ReaderDay, reading: Reading) -> PageData {

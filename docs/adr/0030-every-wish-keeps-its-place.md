@@ -92,9 +92,10 @@ answer and two bare bubbles, and could not tell that the other two had finished.
        and was read from its repo. Nothing is changed. The installed command a run is started with is looked
        for next: with none, the page says so in the words a typed wish is refused in, and nothing is made or
        tossed.
-    2. A new made wish of that project is made with those words, by the call an Enter in the entry makes for a
-       typed wish. Every check and limit of a typed wish holds: the day's eight, a project that is offered no
-       more.
+    2. A new made wish of that project is made with those words, by the checks an Enter in the entry meets
+       for a typed wish. Every check and limit of a typed wish holds: the day's eight, a project that is
+       offered no more. Amended 2026-11-25 (ADR 0025, decision 9): it is made as the old one was made, with
+       the prompt and the answer that one was kept with, when it had them.
     3. Only then the work that does not fit is tossed, by the call a tap on `Toss it` is carried by, with its
        own checks. A toss that is refused is said as `Toss it` says it, and the new wish is run all the same.
     4. The new wish's run is started as a typed wish's is.

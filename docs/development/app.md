@@ -139,8 +139,11 @@ the kit's `Picture::Tally`), and the page opens at its top. `drawing::Open::day`
   scene. A wish's project and its count of stars from the page data that scene was drawn from, by the wish's
   id. Where a little one of the reading is no wish of that data, the column is left as it is, with no tally.
 - **Words.** Three sentences are Jellymoon's: the title "today so far", "and N more projects" past the fifth
-  row, and the footer's "This is the model's reading, unedited." (`scene::READING`), which the footer under the
-  title still says too. No label, star or quote is in the tally.
+  row, and the footer's "This is the model's reading, unedited." (`scene::READING`). The footer under the title
+  says that one right over the tally, so the kit draws it once: in the tally only where the footer was cut
+  short of it. No label, star or quote is in the tally.
+- **Colours.** A star is filled with the theme's star colour and a `?` has the accent of a little one's badge
+  (the kit's README has the rule and its floor); the mark at work and the cross are pencil and quiet.
 - **The tap.** The kit reports a tap on the tally as `fold` at `PICTURE_PLACE`; `Showing::chose` turns the
   window's own flag (`drawing::Open`) and answers with the scene on show. Core is not asked and nothing is
   written. A new window starts folded; a page read again stays as it was left.

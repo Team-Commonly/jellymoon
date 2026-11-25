@@ -326,8 +326,13 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
   `TallyRow { label, marks }`, five at most (`MAX_TALLY_ROWS`): the label in the hand, cleaned and cut in its
   middle to one width, then its marks in the order given, twelve at most (`MAX_TALLY_MARKS`) and then `+N`,
   so a row is always one line. A mark is a whole list's `Mark`, drawn small in pencil: a star, a ring with
-  three dots (`Busy`), a `?` in a ring (`NeedsYou`), a cross in the quiet ink (`Dimmed`). Past five rows one
-  quiet line, `more` (or `+N more` when it is empty), and under everything `under`, quiet too. The kit knows
+  three dots (`Busy`), a `?` in a ring (`NeedsYou`), a cross in the quiet ink (`Dimmed`). A star is filled with
+  `palette.star` (`Ink::Star`) under its pencil outline. The ring of a `?` is filled with `palette.accent`
+  (`Ink::Asks`) where `palette.pencil` on it has a contrast of 3; where not, the ring alone is in the accent if
+  that has 3 on `palette.note_list`, and else it is pencil. Past five rows one
+  quiet line, `more` (or `+N more` when it is empty), and under everything `under`, quiet too; `under` is left
+  out where the footer placed over the tally says it whole, and the picture then ends under its last row's
+  words. The kit knows
   no meaning of a row or a mark. The first tally of a scene stands first in the column, under the header,
   wherever it is among the notes, so a scene with one has every other piece where it was, further down; the
   big character stands beside it while it is closed.
@@ -339,7 +344,8 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
 - **Taps.** An option is a text note's: `Tap::Option` with the note's id, the option's place and its words. A
   tap on the picture or the `?` is `Tap::Option` with the note's id, `PICTURE_PLACE`, the place of no option, and
   no words. Both wait until the piece has settled ("A tap means what was seen", above).
-- **Inks.** `palette.pencil`, `palette.added`, `palette.taken`. A theme file that sets none gets the sticker
+- **Inks.** `palette.pencil`, `palette.added`, `palette.taken`; a tally's marks also `palette.quiet`, `palette.star`
+  and `palette.accent`. A theme file that sets none gets the sticker
   theme's; they are held to no floor.
 - **Reading one without a window.** The `Picture` piece carries its `sketch`: the strokes, and its parts by name
   (`tally`, `sheet made`, `folder dashed`, `bar added`, ...). `print(placed)` writes a line a piece, such as

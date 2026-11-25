@@ -21,6 +21,8 @@ const ROW: f32 = 28.0;
 const LABEL: f32 = 190.0;
 const PITCH: f32 = 24.0;
 const REACH: f32 = 7.0;
+/// The least contrast ([`crate::Color::contrast`]) a mark's colour is drawn at: what WCAG 2 asks of a line.
+const FLOOR: f32 = 3.0;
 
 pub(super) fn draw(
     draft: &mut Draft,
@@ -55,11 +57,17 @@ pub(super) fn draw(
     }
     let past = rows.len().saturating_sub(MAX_TALLY_ROWS);
     let counted = if more.is_empty() { format!("+{past} more") } else { more.to_string() };
+    let rows_end = y;
     for line in [(past > 0).then_some(counted.as_str()), Some(under)].into_iter().flatten() {
         let high = line_height(draft.cx.size(Role::Footer));
         if say(draft, line, Role::Footer, (left, y + 3.0 * u + high / 2.0), wide) {
             y += high + 3.0 * u;
         }
+    }
+    if y == rows_end && !rows.is_empty() {
+        // With no line under the rows the picture ends where the last row's words end, as a picture that ends in
+        // a caption does, and not at the foot of the row's room.
+        draft.low = y - (ROW * u - line_height(draft.cx.size(Role::Caption))).max(0.0) / 2.0;
     }
     format!("tally rows={} {}", rows.len(), if open { "open" } else { "closed" })
 }
@@ -91,16 +99,7 @@ fn chevron(draft: &mut Draft, (x, mid): Point, open: bool) {
 fn sign(draft: &mut Draft, mark: Mark, centre: Point) {
     let (u, reach) = (draft.u(1.0), draft.u(REACH));
     let name = match mark {
-        Mark::Star => {
-            // The star of the kit's art: ten points, every other one half as far out.
-            let point = |n: usize| {
-                let (turn, far) =
-                    (-PI / 2.0 + n as f32 * PI / 5.0, if n.is_multiple_of(2) { reach } else { reach / 2.0 });
-                (centre.0 + far * turn.cos(), centre.1 + far * turn.sin())
-            };
-            draft.pencil.path(&(0..=10).map(point).collect::<Vec<Point>>());
-            "star"
-        }
+        Mark::Star => star(draft, centre, reach),
         Mark::Busy => {
             draft.pencil.circle(centre, reach);
             for dot in [-3.0, 0.0, 3.0] {
@@ -108,13 +107,7 @@ fn sign(draft: &mut Draft, mark: Mark, centre: Point) {
             }
             "busy"
         }
-        Mark::NeedsYou => {
-            draft.pencil.circle(centre, reach);
-            let size = draft.cx.size(Role::Caption) * 0.8;
-            let width = draft.cx.measure.width("?", Role::Caption, size);
-            draft.runs.push(run("?".to_string(), Role::Caption, centre.0 - width / 2.0, centre.1, width, size));
-            "asks"
-        }
+        Mark::NeedsYou => asks(draft, centre, reach),
         Mark::Dimmed => {
             draft.pencil.ink(Ink::Quiet);
             draft.pencil.cross(Rect::new(centre.0 - reach * 0.7, centre.1 - reach * 0.7, reach * 1.4, reach * 1.4));
@@ -123,4 +116,49 @@ fn sign(draft: &mut Draft, mark: Mark, centre: Point) {
         }
     };
     draft.part(name, Rect::new(centre.0 - reach, centre.1 - reach, 2.0 * reach, 2.0 * reach));
+}
+
+/// The star of the kit's art, ten points with every other one half as far out: filled with the theme's star
+/// colour, as a star of the page is, and outlined by the pencil, which is what tells it from the note's ground
+/// whatever the star colour is.
+fn star(draft: &mut Draft, centre: Point, reach: f32) -> &'static str {
+    let at = |n: usize, far: f32| {
+        let turn = -PI / 2.0 + n as f32 * PI / 5.0;
+        (centre.0 + far * turn.cos(), centre.1 + far * turn.sin())
+    };
+    draft.pencil.ink(Ink::Star);
+    // The middle, out to the star's inner corners, then an arm to each tip.
+    draft.pencil.fill(&(0..=5).map(|n| at(2 * n, reach * 0.25)).collect::<Vec<Point>>(), reach * 0.5);
+    (0..5).for_each(|n| draft.pencil.fill(&[centre, at(2 * n, reach * 0.72)], reach * 0.3));
+    draft.pencil.ink(Ink::Pencil);
+    let point = |n: usize| at(n, if n.is_multiple_of(2) { reach } else { reach / 2.0 });
+    draft.pencil.path(&(0..=10).map(point).collect::<Vec<Point>>());
+    "star"
+}
+
+/// The mark of a thing that asks for the person: a `?` in a ring. The ring is filled with the theme's accent, the
+/// colour of the badge a little one that asks has, where the pencil's `?` on it meets [`FLOOR`]. Where it does
+/// not, the ring alone is in the accent if that meets the floor on the note's ground, and else all is pencil.
+fn asks(draft: &mut Draft, centre: Point, reach: f32) -> &'static str {
+    let palette = &draft.cx.theme.palette;
+    let filled = palette.pencil.contrast(palette.accent) >= FLOOR;
+    let ringed = palette.accent.contrast(palette.note_list) >= FLOOR;
+    if filled {
+        // Six strokes across the middle: a wide stroke round a ring this small folds over itself.
+        let end = |n: usize, far: f32| {
+            let turn = (n as f32 * 30.0).to_radians();
+            (centre.0 + far * turn.cos(), centre.1 + far * turn.sin())
+        };
+        draft.pencil.ink(Ink::Asks);
+        (0..6).for_each(|n| draft.pencil.fill(&[end(n, -reach * 0.7), end(n, reach * 0.7)], reach * 0.45));
+        draft.pencil.ink(Ink::Pencil);
+    } else if ringed {
+        draft.pencil.ink(Ink::Asks);
+    }
+    draft.pencil.circle(centre, reach);
+    draft.pencil.ink(Ink::Pencil);
+    let size = draft.cx.size(Role::Caption) * 0.8;
+    let width = draft.cx.measure.width("?", Role::Caption, size);
+    draft.runs.push(run("?".to_string(), Role::Caption, centre.0 - width / 2.0, centre.1, width, size));
+    "asks"
 }

@@ -126,6 +126,15 @@ fn a_read_day_opens_folded_a_tap_opens_it_piece_for_piece_and_a_second_tap_folds
     let kinds = |pieces: &[Value], kind: &str| pieces.iter().filter(|piece| piece["kind"] == kind).count();
     assert_eq!((kinds(&folded, "character"), kinds(&folded, "star"), kinds(&folded, "picture")), (0, 0, 1));
     assert!(folded.iter().any(|piece| piece["kind"] == "option" && piece["id"] == "clash-1"), "it can be tapped");
+    // The sentence that this is the model's reading stands once, under the title, and not in the tally too.
+    let said = |pieces: &[Value]| {
+        let whole = |piece: &&Value| {
+            let runs = piece["text"].as_array().unwrap().iter().map(|run| run["text"].as_str().unwrap());
+            runs.collect::<Vec<&str>>().join(" ").contains("This is the model's reading, unedited.")
+        };
+        pieces.iter().filter(whole).map(|piece| piece["kind"].as_str().unwrap().to_string()).collect::<Vec<String>>()
+    };
+    assert_eq!(said(&folded), ["footer"]);
     // Opened: the tally stays, turned, and under it is every piece of the page as it was.
     assert_eq!(tally(&open), Some((rows, true)));
     let states: Vec<State> = open.characters.iter().map(|who| who.state).collect();

@@ -3,8 +3,8 @@
 //! without it has it, further down. No GPUI.
 
 use sticker_kit::{
-    FixedAdvance, MAX_TALLY_MARKS, MAX_TALLY_ROWS, Mark, Note, Picture, PieceKind, Placed, Rect, Role, Scene, TallyRow,
-    TextRun, Theme, Viewport, layout,
+    FixedAdvance, Ink, MAX_TALLY_MARKS, MAX_TALLY_ROWS, Mark, Note, Picture, PieceKind, Placed, Rect, Role, Scene,
+    TallyRow, TextRun, Theme, Viewport, layout,
 };
 
 const SIZES: [Viewport; 2] = [Viewport { w: 1440.0, h: 900.0 }, Viewport { w: 960.0, h: 640.0 }];
@@ -218,4 +218,65 @@ fn the_big_character_stands_beside_a_closed_tally_and_where_it_was_beside_an_ope
 fn a_scene_with_no_tally_has_no_piece_of_one() {
     let placed = place(&day(None), &Theme::sticker(), SIZES[0]);
     assert!(!placed.iter().any(|piece| piece.piece == PieceKind::Picture || piece.id == "fold"));
+}
+
+// A row of hollow stars reads as an empty rating: a star is filled with the ink of the theme's star, as a star
+// of the page is, under the pencil's outline. What asks for the person has the accent its badge has: the ring
+// filled where the pencil's `?` can be read on it, the ring alone in the accent where it cannot, and the two
+// built-in themes are one of each. A mark at work and one let go have neither ink.
+#[test]
+fn a_star_is_filled_with_the_star_s_ink_and_what_asks_has_the_accent_where_it_can_be_read() {
+    each(|theme, viewport, _| {
+        // What fills is wider than the pencil's line, which the chevron, the first stroke, is drawn with.
+        let inks = |marks: &[Mark]| {
+            let placed = place(&day(Some(tally(vec![row("alpha", marks)], "", false))), theme, viewport);
+            let strokes = &picture(&placed).sketch.as_ref().unwrap_or_else(|| panic!("a sketch")).strokes;
+            let line = strokes[0].width;
+            let of = |ink: Ink| {
+                let all = strokes.iter().skip(1).filter(|one| one.ink == ink);
+                (all.clone().filter(|one| one.width > line).count(), all.filter(|one| one.width <= line).count())
+            };
+            [of(Ink::Star), of(Ink::Asks), of(Ink::Pencil)]
+        };
+        assert_eq!(inks(&[Mark::Star]), [(6, 0), (0, 0), (0, 1)], "filled, and outlined by the pencil");
+        assert_eq!(inks(&[Mark::Busy, Mark::Dimmed])[..2], [(0, 0), (0, 0)]);
+        let palette = &theme.palette;
+        let filled = palette.pencil.contrast(palette.accent) >= 3.0;
+        let ringed = palette.accent.contrast(palette.note_list) >= 3.0;
+        let want = match (filled, ringed) {
+            (true, _) => [(0, 0), (6, 0), (0, 1)],
+            (false, true) => [(0, 0), (0, 1), (0, 0)],
+            (false, false) => [(0, 0), (0, 0), (0, 1)],
+        };
+        assert_eq!(inks(&[Mark::NeedsYou]), want, "{}", theme.name);
+    });
+    let fills = |theme: Theme| theme.palette.pencil.contrast(theme.palette.accent) >= 3.0;
+    assert_eq!((fills(Theme::sticker()), fills(Theme::plain())), (true, false), "one theme of each kind");
+}
+
+// One sentence stands once: the line at the tally's foot is not drawn where the footer over it says it already,
+// whole, and the picture then ends under its last row's words. Where the footer says something else, says
+// nothing, or was cut short of it, the tally keeps its own line.
+#[test]
+fn the_line_at_the_foot_is_left_out_where_the_footer_says_it_whole_and_kept_where_it_does_not() {
+    each(|theme, viewport, _| {
+        let foot = |footer: String| {
+            let scene = Scene { footer, ..day(Some(tally(vec![row("alpha", &ALL)], "", false))) };
+            let placed = place(&scene, theme, viewport);
+            let says = |piece: &&Placed| {
+                piece.text.iter().map(|run| run.text.as_str()).collect::<Vec<&str>>().join(" ").contains(UNDER)
+            };
+            let own = picture(&placed);
+            let line = own.text.iter().find(|run| run.text == UNDER).map_or(0.0, |run| run.rect.h);
+            (placed.iter().filter(says).count(), line, own.rect.h)
+        };
+        let (times, line, short) = foot(format!("Read from three things. {UNDER}"));
+        assert_eq!((times, line), (1, 0.0), "the footer says it: once, and not in the tally");
+        for footer in ["Read from three things.".to_string(), String::new(), format!("{}{UNDER}", "word ".repeat(600))]
+        {
+            let (times, line, high) = foot(footer.clone());
+            assert!(times == 1 && line > 0.0, "the tally says it: {}", &footer[..footer.len().min(30)]);
+            assert!(high - short > line, "with no line the picture ends higher by more than the line: {high} {short}");
+        }
+    });
 }

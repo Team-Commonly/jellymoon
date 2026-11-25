@@ -57,12 +57,26 @@ fn tallied(cx: &mut Ctx, scene: &Scene, top: f32) -> (Option<usize>, f32, usize)
     };
     let found = scene.notes.iter().enumerate().find_map(|(index, note)| Some((index, note, open(note)?)));
     let Some((index, note, open)) = found else { return (None, top, 0) };
-    let Some((sheet, id, tilt)) = fill(cx, note, index, top) else { return (None, top, 0) };
+    let Some((sheet, id, tilt)) = fill(cx, &once(cx, note), index, top) else { return (None, top, 0) };
     let mut bottom = stick(cx, sheet, (&id, index), tilt);
     if !open {
         bottom = bottom.max(hero(cx, scene, 0, top));
     }
     (Some(index), bottom + cx.px(GAP), usize::from(!open))
+}
+
+/// The tally `note` with no line at its foot where the footer placed over it says that line already, whole: one
+/// sentence stands once. Where the footer was cut short of it, or says something else, the tally keeps its own.
+fn once(cx: &Ctx, note: &Note) -> Note {
+    let footer = cx.out.iter().filter(|piece| piece.piece == PieceKind::Footer).flat_map(|piece| &piece.text);
+    let said = footer.map(|run| run.text.as_str()).collect::<Vec<&str>>().join(" ");
+    let mut note = note.clone();
+    if let Note::Drawn { picture: Picture::Tally { under, .. }, .. } = &mut note
+        && said.contains(cx.clean(under).as_str())
+    {
+        under.clear();
+    }
+    note
 }
 
 /// Whether a `Said` of the scene is of the character `id`.

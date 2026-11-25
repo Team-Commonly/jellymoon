@@ -245,10 +245,20 @@ answer and two bare bubbles, and could not tell that the other two had finished.
       each row of what came true; a cross in the quiet ink for a little one that was let go. They are the
       marks of a whole list's rows, which is what the page already means by them. A row is one line: past
       twelve marks the rest are a count (`+9`). Past five rows one quiet line of Jellymoon's counts the
-      projects left ("and 3 more projects"). Its title is Jellymoon's, "today so far", and its last line
-      is the footer's own sentence, "This is the model's reading, unedited.", so the folded page says with
-      no tap whose counts these are. The footer under the page's title is as it was, so that sentence is
-      on a read day twice.
+      projects left ("and 3 more projects"). Its title is Jellymoon's, "today so far".
+    - *The marks have the page's colours.* A row of hollow stars read as an empty rating, so a star is
+      filled with the theme's star colour, the one a star of the open day has, under the pencil's outline;
+      the outline is what tells it from the note's ground, so no theme's star colour is refused. The `?`
+      is the one mark that asks for the person: its ring is filled with the theme's accent, the colour of
+      the badge on a little one that asks, where the pencil's `?` on that accent has a contrast of 3 to 1.
+      Where it has not (the plain theme), the ring alone is in the accent if the accent has 3 to 1 on
+      the note's ground, and else the mark is all pencil. The mark at work and the cross stay pencil and
+      quiet. No colour is new.
+    - *Whose reading, said once.* The footer under the page's title ends in "This is the model's reading,
+      unedited.", right over the tally, with no tap. The app gives the tally that sentence as its last
+      line too, and the kit leaves the line out where the footer it placed says it whole. So it stands
+      once; and where the footer was cut at its four lines before the sentence (a day of many projects
+      with long names), the tally says it.
     - *No word of the model's.* The tally draws no label, no star's text and no quote. A project's name
       is a folder's name from the session logs, which core holds a read wish to (`read.projects`).
     - *A tap opens it, and a second folds it.* A small chevron at the end of the title's line says so, and

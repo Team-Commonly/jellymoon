@@ -101,7 +101,9 @@ pub(super) fn draw(cx: &Ctx, id: &str, picture: &Picture, at: Rect) -> Placed {
             sheets::draw(&mut draft, [*made, *changed, *removed], *state)
         }
         Picture::Bars { rows, more } => bars::draw(&mut draft, rows, *more),
-        Picture::Tally { title, rows, more, under, open } => tally::draw(&mut draft, title, rows, (more, under), *open),
+        Picture::Tally { title, rows, more, under, open, .. } => {
+            tally::draw(&mut draft, title, rows, (more, under), *open)
+        }
         Picture::Strip { panels } => strip::draw(&mut draft, panels),
     };
     let rect = Rect::new(at.x, at.y, at.w, draft.low - at.y + cx.px(4.0));

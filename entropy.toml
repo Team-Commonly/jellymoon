@@ -924,7 +924,12 @@ max_file_lines = 400
 # (`src/draw/column.rs`, of which 6 are a test).
 # The strip of how a wish goes raised it by 404: its tests are 266 (`tests/strip.rs`, 211, and `tests/strip_draw.rs`,
 # 55), the picture is 84 (`src/layout/pictures/strip.rs`), and the other 54 are its scene data and that it takes no tap.
-"crates/sticker-kit" = 14979
+# A tally that stands in its place among the notes, for the line a sharper wish folds to, raised it by 77: its
+# tests are 59 (`tests/tally.rs`, 42, and `src/draw/column.rs`, 17), and the other 18 are the scene's word for it,
+# the two places that no longer take it for the column's tally, and that a press on it moves no key.
+# The walk's fix raised it by 26 (`src/draw/column.rs`): the view held when such a tally is turned, a press on its
+# card or on the note it opened moving no key, and 4 lines of their test.
+"crates/sticker-kit" = 15082
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1208,7 +1213,13 @@ max_file_lines = 400
 # The reading said once on a folded day raised the next by 9 (`tests/the_day_folds.rs`).
 # The first page as a sketch of how a wish goes raised it by 242: `tests/how_a_wish_goes.rs` is 181, the tests that
 # named the old note are 34 more, and the note itself is 27 (`src/scene.rs`, 23, and where a tap on it is no tap).
-"app" = 21680
+# The sharper wish folding under a question raised it by 395: `tests/the_sharper_wish_folds.rs` is 323, the tests'
+# shared line is 16 (`tests/support/mod.rs`, 15, `tests/shape_first.rs`, 1), the fold and its state are 49
+# (`src/shaping.rs`, 25, `src/drawing.rs`, 22, `src/showing.rs`, 1, `src/drawing/folded.rs`, 1), and the picture
+# example's `--sharper` is 7.
+# The walk's fix raised it by 18 (`tests/the_sharper_wish_folds.rs`): the line stays where it was tapped, and clicks
+# on the rows' card and on the line's card move no key.
+"app" = 22093
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

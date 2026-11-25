@@ -71,6 +71,7 @@ fn scene(line: &Value) -> Scene {
 fn shaping(scene: &Scene) -> Vec<Note> {
     let ours = |note: &&Note| match note {
         Note::Text { id, .. } | Note::Told { id, .. } => [SHAPING, SHARPER_ID, SHAPE].contains(&id.as_str()),
+        Note::Drawn { id, .. } => id == "shape-fold",
         _ => false,
     };
     scene.notes.iter().filter(ours).cloned().collect()
@@ -353,7 +354,7 @@ fn a_sharper_wish_that_waits_and_the_choice_on_it_are_not_under_that_note_either
     says(&w, &sharper());
     let enter = format!("enter:wish@alpha:{SAID}");
     let printed = window(&w, &[enter.as_str(), "answer", "column", "choose:shape:1", "run", "column"]);
-    assert_eq!(shaping(&scene(&printed[2])), pair());
+    assert_eq!(shaping(&scene(&printed[2])), support::fold(pair()));
     assert!(!says_nothing(&printed[2]), "{}", printed[2]);
     // The tap takes both notes away at once, and the wish is kept only after it: the scene shown at once.
     assert!(shaping(&scene(&printed[3])).is_empty() && !says_nothing(&printed[3]), "{}", printed[3]);
@@ -394,6 +395,6 @@ fn an_enter_remembered_is_not_given_over_a_sharper_wish_that_asks_and_its_words_
     says(&w, &sharper());
     let printed = two_entered(&w, &["column"]);
     assert_eq!((&printed[2]["again"], &printed[2]["entry"]), (&Value::Null, &json!(NEXT)), "{}", printed[2]);
-    assert_eq!((shaping(&scene(&printed[2]["scene"])), shaping(&scene(&printed[3]))), (pair(), pair()));
+    assert_eq!((shaping(&scene(&printed[2]["scene"])), shaping(&scene(&printed[3]))), (pair(), support::fold(pair())));
     assert!(!wishes(&w).exists() && w.starts() == 0, "no wish is kept until the person chooses, and none is run");
 }

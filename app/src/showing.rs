@@ -138,8 +138,9 @@ impl Showing {
         scene
     }
 
-    /// Enter in the entry, as work for another thread.
+    /// Enter in the entry, as work for another thread. A sharper wish it brings starts folded under its question.
     pub fn wishing(&self, typed: &str, project: Option<&str>) -> Option<Wishing> {
+        self.3.reading();
         self.with(|on| on.shaping(typed, project))
     }
 

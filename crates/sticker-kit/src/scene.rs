@@ -216,6 +216,10 @@ pub enum Picture {
         under: String,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         open: bool,
+        /// The tally stands where it is among the scene's notes, as any card does, and not at the column's
+        /// top: with no rows it is one line, a title and its chevron, over what a tap on it opens.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        in_place: bool,
     },
     /// A strip: the first [`MAX_STRIP_PANELS`] panels in one row, left to right, each a small sketch with its
     /// caption under it, and an arrow from each to the next. It is a picture and nothing else: no part of it

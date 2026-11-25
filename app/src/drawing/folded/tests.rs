@@ -55,7 +55,7 @@ fn column(page: &Page, made: usize) -> Scene {
 
 fn tally(scene: &Scene) -> (&str, &[TallyRow], &str, &str, bool) {
     match scene.notes.last() {
-        Some(Note::Drawn { id, picture: Picture::Tally { title, rows, more, under, open }, .. }) if id == FOLD => {
+        Some(Note::Drawn { id, picture: Picture::Tally { title, rows, more, under, open, .. }, .. }) if id == FOLD => {
             (title, rows, more, under, *open)
         }
         other => panic!("no tally at the scene's end: {other:?}"),

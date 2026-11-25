@@ -14,12 +14,32 @@ use crate::scene::{Note, Picture, Scene, speaker};
 use crate::scroll::Scroll;
 use crate::text::{Role, has_visible};
 
-/// Whether the tally of `scene` is open, when it has one.
+/// Whether the tally of `scene` is open, when it has one. A tally that stands in its place is a card as any other.
 fn tally(scene: &Scene) -> Option<bool> {
     scene.notes.iter().find_map(|note| match note {
-        Note::Drawn { picture: Picture::Tally { open, .. }, .. } => Some(*open),
+        Note::Drawn { picture: Picture::Tally { open, in_place: false, .. }, .. } => Some(*open),
         _ => None,
     })
+}
+
+/// The tallies of `scene` that stand in their place, each by its note's id and whether it is open.
+fn lines(scene: &Scene) -> impl Iterator<Item = (&str, bool)> {
+    scene.notes.iter().filter_map(|note| match note {
+        Note::Drawn { id, picture: Picture::Tally { open, in_place: true, .. }, .. } => Some((id.as_str(), *open)),
+        _ => None,
+    })
+}
+
+/// The id of a note of a kind that has one: its pieces carry it.
+fn named(note: &Note) -> Option<&str> {
+    match note {
+        Note::Choice { id, .. }
+        | Note::Text { id, .. }
+        | Note::Told { id, .. }
+        | Note::Said { id, .. }
+        | Note::Drawn { id, .. } => Some(id),
+        _ => None,
+    }
 }
 
 /// How many things a person said `scene` holds.
@@ -42,8 +62,8 @@ pub(super) fn opening(scene: &Scene) -> Scroll {
 pub(super) enum Turn {
     /// The rules of the scroll as they are.
     Stay,
-    /// The view stays where it is (`Scroll::hold`): the tally was opened or closed under the pointer, or it
-    /// came to a page that holds nothing a person said.
+    /// The view stays where it is (`Scroll::hold`): the tally, or a tally in its place, was opened or closed
+    /// under the pointer, or the tally came to a page that holds nothing a person said.
     Hold,
     /// A view no wheel moved goes to the column's end (`Scroll::entered`): the scene holds one more thing a
     /// person said, wherever it was said (the entry, a note's field, an option, another program).
@@ -54,9 +74,11 @@ pub(super) enum Turn {
 /// by itself, so nothing is followed then.
 pub(super) fn turn(shown: &Scene, scene: &Scene, typing: bool) -> Turn {
     let (was, is) = (tally(shown), tally(scene));
+    // A line that was tapped stays under the pointer, so a second tap in the same place closes it again.
+    let turned = lines(shown).any(|(id, open)| lines(scene).any(|(now, opens)| now == id && opens != open));
     if said(scene) > said(shown) && !typing {
         Turn::Follow
-    } else if is.is_some() && (was.is_some() && was != is || was.is_none() && said(scene) == 0) {
+    } else if turned || is.is_some() && (was.is_some() && was != is || was.is_none() && said(scene) == 0) {
         Turn::Hold
     } else {
         Turn::Stay
@@ -124,6 +146,21 @@ impl Page {
         }
     }
 
+    /// Whether a press on `piece` leaves the keys where they are: any part of the card of a tally that stands in
+    /// its place, a line that opens what is under it, and while it is open any part of the note under it but an
+    /// option. The field beside them is still being typed in, and what the line opened is there to be read: a
+    /// press on it while reading is no wish to type somewhere else.
+    pub(super) fn keeps_keys(&self, piece: &Placed) -> bool {
+        let opened = |pair: &[Note]| match pair {
+            [Note::Drawn { picture: Picture::Tally { open: true, in_place: true, .. }, .. }, under] => {
+                named(under) == Some(piece.id.as_str())
+            }
+            _ => false,
+        };
+        lines(&self.scene).any(|(id, _)| id == piece.id)
+            || piece.piece != PieceKind::Option && self.scene.notes.windows(2).any(opened)
+    }
+
     pub(super) fn tap_target(&self, index: usize, piece: &Placed, pose: Pose, cx: &mut Context<Self>) -> AnyElement {
         let rect = piece.rect.moved(pose.dx, pose.dy);
         div()
@@ -174,8 +211,12 @@ mod tests {
     use crate::scroll::Scroll;
 
     fn tally(open: bool) -> Note {
-        let picture =
-            Picture::Tally { title: "t".into(), rows: Vec::new(), more: String::new(), under: String::new(), open };
+        stood(open, false)
+    }
+
+    fn stood(open: bool, in_place: bool) -> Note {
+        let (title, more, under) = ("t".into(), String::new(), String::new());
+        let picture = Picture::Tally { title, rows: Vec::new(), more, under, open, in_place };
         Note::Drawn { id: "day".into(), picture, words: Vec::new(), open: false, options: Vec::new(), field: None }
     }
 
@@ -198,6 +239,20 @@ mod tests {
         assert_eq!(opens_at(&scene(vec![tally(false)])), 0.0, "the tally stands at the top");
         assert_eq!(opens_at(&scene(vec![said("m-1"), tally(false)])), 300.0, "what they said may wait at the end");
         assert_eq!(opens_at(&scene(vec![said("m-1")])), 300.0, "as a page with no tally always did");
+    }
+
+    #[test]
+    fn a_tally_in_its_place_does_not_open_the_page_at_its_top_and_holds_the_view_only_when_it_is_turned() {
+        let line = |open| scene(vec![stood(open, true)]);
+        assert_eq!(opens_at(&line(false)), 300.0, "it is a card of the column, wherever that is");
+        // Turned, it stays under the pointer: a second tap in the same place turns it back.
+        assert_eq!(turn(&line(false), &line(true), false), Turn::Hold);
+        assert_eq!(turn(&line(true), &line(false), true), Turn::Hold, "and with an answer half typed beside it");
+        assert_eq!(turn(&scene(Vec::new()), &line(false), false), Turn::Stay, "when it comes the rules are kept");
+        assert_eq!(turn(&line(true), &line(true), false), Turn::Stay, "and while it is as it was");
+        // The tally of the column is still seen behind one in its place.
+        let (closed, open) = (vec![stood(true, true), tally(false)], vec![stood(true, true), tally(true)]);
+        assert_eq!(turn(&scene(closed), &scene(open), false), Turn::Hold);
     }
 
     #[test]

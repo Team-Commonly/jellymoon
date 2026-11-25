@@ -12,7 +12,9 @@
 //! told note; a second folds them away. A choice means what it meant: its words and its place are core's.
 //!
 //! The same pass leaves out the notes of the made wishes that are tucked away (`drawing/tucked.rs`, ADR 0030,
-//! decision 11): which those are is held with what is open, and `layout` tucks none away.
+//! decision 11): which those are is held with what is open, and `layout` tucks none away. And a window's
+//! column has the sharper wish folded to one line while its question waits (`shaping::folded`, ADR 0025,
+//! decision 12): whether a tap unfolded it is held here too, and `layout` folds nothing.
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
@@ -122,6 +124,14 @@ pub fn first(scene: &Scene) -> Scene {
     Open::opening(scene).column(scene)
 }
 
+/// [`first`] after a tap on the line a sharper wish is folded to under its question (`shaping::folded`): the
+/// sharper wish's note is under the line. For a picture, which has no window.
+pub fn unfolded(scene: &Scene) -> Scene {
+    let open = Open::opening(scene);
+    open.fold(crate::shaping::FOLDED);
+    open.column(scene)
+}
+
 /// `column`, a scene [`first`] or [`column`] gave, with the day of the page data it was made from folded, or
 /// `open` under its tally (`drawing/folded.rs`). For a picture, which has no window.
 pub fn fold(column: Scene, data: &PageData, open: bool) -> Scene {
@@ -131,9 +141,17 @@ pub fn fold(column: Scene, data: &PageData, open: bool) -> Scene {
 /// The drawn notes a person opened in one window, by their ids, the made wish they tapped last, and the made
 /// wishes that are tucked away. An id that leaves the page leaves the set. And core's answers that a wish was
 /// made again, each with the wish it speaks of (`again.rs`). And whether the
-/// day is open under its tally: a window starts with it folded (`drawing/folded.rs`).
+/// day is open under its tally: a window starts with it folded (`drawing/folded.rs`). And whether the sharper
+/// wish is open under its line while a question waits: each reading starts with it folded (`shaping::folded`).
 #[derive(Clone, Default)]
-pub struct Open(Rc<RefCell<BTreeSet<String>>>, Rc<RefCell<Option<String>>>, Tucked, Again, Rc<Cell<bool>>);
+pub struct Open(
+    Rc<RefCell<BTreeSet<String>>>,
+    Rc<RefCell<Option<String>>>,
+    Tucked,
+    Again,
+    Rc<Cell<bool>>,
+    Rc<Cell<bool>>,
+);
 
 impl Open {
     /// What a window that opens on `scene` starts with: no note open, and every settled made wish tucked away
@@ -164,7 +182,7 @@ impl Open {
         let on: Vec<&str> = drawn_ids(scene).filter(|id| !hidden(id)).collect();
         open.retain(|id| on.contains(&id.as_str()));
         let column = crate::column::column(&passed(scene, &open, self.1.borrow().as_deref(), &away));
-        ended::marked(column, scene, &away)
+        crate::shaping::folded(ended::marked(column, scene, &away), self.5.get())
     }
 
     /// [`Open::column`] of the page made from `data`, with what the reading put on it folded into its tally, or
@@ -175,12 +193,16 @@ impl Open {
     }
 
     /// A tap on the picture of the note `note`: when that is the tally, the day opens, or folds when it was
-    /// open. Whether it was the tally.
+    /// open; when it is the line of a sharper wish, that wish does. Whether it was either: the tap then does
+    /// nothing else, asks core nothing and writes nothing.
     pub(crate) fn fold(&self, note: &str) -> bool {
-        if note == FOLD {
-            self.4.set(!self.4.get());
-        }
-        note == FOLD
+        let turned = [(FOLD, &self.4), (crate::shaping::FOLDED, &self.5)].into_iter().find(|(id, _)| *id == note);
+        turned.inspect(|(_, open)| open.set(!open.get())).is_some()
+    }
+
+    /// A wish is being read: the sharper wish that may come of it starts folded under its question.
+    pub(crate) fn reading(&self) {
+        self.5.set(false);
     }
 
     /// Core answered a tap on a choice of the made wish `wish` that a wish was made again and is being worked

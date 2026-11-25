@@ -18,7 +18,9 @@
 //! `--tucked` draws the page as a window that opens on it does: every settled made wish but the newest is tucked
 //! away, with the mark of how it ended (`drawing::first`); `--open` is then not read. `--folded` draws the day
 //! folded into its tally, as a window opens on it, and `--unfolded` open under the tally, as after a tap on it
-//! (`drawing::fold`); with neither the page has no tally, as `layout` prints it.
+//! (`drawing::fold`); with neither the page has no tally, as `layout` prints it. `--tucked` also draws a sharper
+//! wish folded to its line under a question that waits, and `--sharper` is `--tucked` after a tap on that line
+//! (`drawing::unfolded`).
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -77,6 +79,7 @@ fn asked(args: &mut Vec<String>) -> Result<Asked, String> {
 
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let sharper = args.iter().position(|arg| arg == "--sharper").map(|at| args.remove(at)).is_some();
     let (notes, made, doing, (open, tucked, fold), since) = match asked(&mut args) {
         Ok(asked) => asked,
         Err(why) => {
@@ -87,7 +90,7 @@ fn main() -> ExitCode {
     let [file, folder, name, more @ ..] = args.as_slice() else {
         eprintln!(
             "usage: snapshot [--work <waiting file> [--told <shown file>]] [--made <n> [--steps <steps file>]] \
-             [--notes <notes file>] [--open] [--tucked] [--folded | --unfolded] [--since <more words>] <page file> <folder> <name> [width \
+             [--notes <notes file>] [--open] [--tucked | --sharper] [--folded | --unfolded] [--since <more words>] <page file> <folder> <name> [width \
              height [words [option [theme file]]]]"
         );
         return ExitCode::from(2);
@@ -131,7 +134,11 @@ fn main() -> ExitCode {
         let out = PathBuf::from(folder).join(format!("{name}-{}.png", file_part(&theme.name)));
         let opened = if open { drawing::every(&shown) } else { Default::default() };
         let typing = entry.clone().map(|entry| Typing { entry, typed: typed.clone(), since: since.clone() });
-        let scene = if tucked { drawing::first(&shown) } else { drawing::column(&shown, &opened) };
+        let scene = match (sharper, tucked) {
+            (true, _) => drawing::unfolded(&shown),
+            (false, true) => drawing::first(&shown),
+            (false, false) => drawing::column(&shown, &opened),
+        };
         let scene = fold.map_or_else(|| scene.clone(), |open| drawing::fold(scene.clone(), &page.data, open));
         if let Err(error) = snapshot_typing(scene, theme, typing, side(0, 1440.0), side(1, 900.0), &out) {
             eprintln!("snapshot: could not render {}: {error}", out.display());

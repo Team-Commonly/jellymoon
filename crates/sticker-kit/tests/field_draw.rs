@@ -14,14 +14,18 @@ use sticker_kit::{Entry, Field, Kept, Note, Picture, PieceKind, Placed, Scene, T
 type Seen<T> = Rc<RefCell<Vec<T>>>;
 
 fn note(id: &str, quoted: &str, offer: &str) -> Note {
-    let field = Some(Field { offer: offer.into(), hint: "Type here".into(), most: 12, key: String::new() });
+    let field = Some(Field { offer: offer.into(), hint: "Type here".into(), most: 12, ..Field::default() });
     let (title, body) = ("A row".into(), vec!["what the note says".into()]);
     Note::Text { id: id.into(), title, body, options: Vec::new(), quoted: quoted.into(), field }
 }
 
+fn more(key: &str) -> Option<Field> {
+    Some(Field { offer: "More of it".into(), hint: "Type here".into(), most: 12, key: key.into(), wants_keys: false })
+}
+
 /// A note whose field has a key, and one with no field at all.
 fn keyed(id: &str, key: &str) -> Note {
-    let field = Some(Field { offer: "More of it".into(), hint: "Type here".into(), most: 12, key: key.into() });
+    let field = more(key);
     Note::Text { id: id.into(), title: "A row".into(), body: vec![], options: vec![], quoted: String::new(), field }
 }
 
@@ -365,7 +369,7 @@ fn a_drawn_note_s_field_is_typed_in_and_entered_as_a_text_note_s_is() {
         words: vec!["Your folder is not changed yet.".into()],
         open,
         options: vec!["Keep it".into()],
-        field: Some(Field { offer: "More of it".into(), hint: "Type here".into(), most: 12, key: "more".into() }),
+        field: more("more"),
     };
     show(&page, cx, vec![drawn(false)]);
     assert_eq!(field(&page, cx, "work"), has(""));

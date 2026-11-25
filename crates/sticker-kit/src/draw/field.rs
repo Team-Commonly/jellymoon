@@ -3,7 +3,7 @@
 //! the id of the note it is under now. What was typed stays while a note of the scene has the field, whatever
 //! else of the scene changes. A field is the same field while its key, or with no key its note's id, and its
 //! offer are the same: an offer that changes is another field, and the words typed for the first are not
-//! words for it.
+//! words for it. A field that asks for the keys takes them once, when it first stands ([`Page::keys_asked`]).
 //!
 //! A field no note has any more goes, with two exceptions that are kept apart, not drawn and with no keys: one
 //! that waits for its answer, so a refusal has the words to leave when the note has its field again, and one
@@ -14,6 +14,7 @@ use gpui::{Context, Window};
 use super::Page;
 use super::entry::EntryView;
 use crate::entry::EntryState;
+use crate::layout::{PieceKind, Placed};
 use crate::scene::{Entry, Field, Note, Scene};
 
 /// Which of a page's lines is meant: the entry, or the field of a note by its place among the fields.
@@ -45,8 +46,11 @@ pub(super) fn fit(scene: &Scene, mut was: Vec<EntryView>) -> (Vec<EntryView>, Ve
             loud: false,
         };
         let at = was.iter().position(|view| same(view, id, field));
+        // Only a field that was not there asks for the keys: one that stood, or was kept apart, has had its turn.
+        let new = at.is_none() && field.wants_keys;
         let mut view = at.map(|at| was.remove(at)).unwrap_or_default();
         view.state.fit(&entry);
+        view.wants |= new;
         (view.what, view.key, view.offer) = (Some(entry), field.key.clone(), field.offer.clone());
         held.push(view);
     }
@@ -60,6 +64,23 @@ impl Page {
     /// Which line has the keys: the field of a note, and else the entry.
     pub(super) fn keyed(&self, window: &Window) -> Which {
         self.fields.iter().position(|view| view.focused(window))
+    }
+
+    /// A field that asks for the keys ([`Field::wants_keys`]) takes them at the first drawing that places it, and
+    /// at no later one: a click or Escape then moves them as ever. It takes them out of nobody's hands: not while
+    /// the entry holds words or is owed an answer, nor while the line that has the keys does.
+    pub(super) fn keys_asked(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let mut held = self.entry.state.holds() || self.view(self.keyed(window)).state.holds();
+        for at in 0..self.fields.len() {
+            let stands = |piece: &Placed| piece.piece == PieceKind::Field && self.fields[at].names(&piece.id);
+            if !self.fields[at].wants || !self.placed.iter().any(stands) {
+                continue;
+            }
+            self.fields[at].wants = false;
+            if !std::mem::replace(&mut held, true) {
+                self.focus_view(Some(at), window, cx);
+            }
+        }
     }
 
     pub(super) fn view(&self, which: Which) -> &EntryView {

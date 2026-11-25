@@ -151,7 +151,8 @@ Page::new(scene, theme)
   page holds them: when the window opens, when the entry arrives, after a press
   anywhere off the fields, and after Escape, which in a note's field gives them
   to the entry. A click on a note's field or its offer gives that field the
-  keys. What is typed is never lost for want of a holder. Text goes in at the caret. Backspace,
+  keys, and a field that asks for them takes them once, when it first stands
+  ("A text note's quoted words, field and offer"). What is typed is never lost for want of a holder. Text goes in at the caret. Backspace,
   Delete, Left, Right, Home and End (or Left and Right with the platform's
   command key) edit, the command key with V pastes, Tab and Shift-Tab choose the
   next and the previous option, Enter enters. There is a caret and no selection.
@@ -255,6 +256,15 @@ options (`layout/typed.rs`, `draw/field.rs`).
 - **A field lives with its note.** `set_scene` keeps what is typed in a field
   whose note still has one, by the note's id, and drops the field of a note
   that is gone or has none.
+- **A field that asks for the keys** (`Field::wants_keys`, false unless a
+  scene says so) takes them at the first drawing that places it: what is
+  typed then is in the field, with no click. Once only: after a click
+  elsewhere or Escape it does not take them back at a later drawing. Never
+  out of typed words: while the entry holds words or is owed an answer, or
+  the field that has the keys holds words, the keys stay where they are, and
+  the asking field has had its turn. When its note goes the keys are the
+  entry's again, by the rule under "Keys". A field that comes again after its
+  note was gone is a new field, and asks again (`tests/field_keys.rs`).
 
 A drawn note (`Note::Drawn`) can hold a `field` too. It is a text note's:
 placed under the options, whether the note is open or closed, and drawn,

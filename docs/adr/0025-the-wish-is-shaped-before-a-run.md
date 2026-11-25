@@ -101,6 +101,18 @@ the heart of the decision.
    the pencil draws, with the answer set in behind it, tells the two apart. No word or label does. A wish with
    no answer is drawn as it was. `Make it again` makes the wish as it was made: the new wish has the old one's
    `shaped` and `answered`, so its run is given the same prompt.
+10. **A question takes the keys** (2026-11-25). Walked in a real window: a person read the question and typed
+   the answer, the letters went to the entry, and Enter made them a new wish in the pair's place; the first
+   wish and its sharper form were gone. Answering needed a click on the small field first, and nothing said so.
+   The field of the answer now has the keys when the pair first stands, so what is typed then is the answer.
+   Three bounds. It takes them once: after a click on the entry or Escape they stay where the person put them.
+   It never takes them out of typed words: with words in the entry when the pair comes, the keys stay there.
+   And only this field asks: the field under a made wish's question and the field of a follow-up stand at
+   times the person did not choose, and an Enter beside them loses nothing. Rejected: asking in the entry
+   whether the words are an answer or a new wish (one more question), and making Enter in the entry the answer
+   while a pair waits (an Enter in sight of the pair is a new wish, by decision 8's rule, and a person can mean
+   it). The kit owns the keys and knows no wish: a field of its scene says it asks (`Field::wants_keys`), and
+   the app sets that on this one field.
 
 ## Measured
 
@@ -136,7 +148,8 @@ Not measured: Windows, Linux, an older Claude Code, and a link inside the projec
 - A wish refused after a tap (the day has its eight wishes; the project is no longer on offer) leaves a note with
   the start of the typed words, not the whole of them in the entry.
 - Enter while a sharper wish stands reads the new words in its place; the first words are gone with no note.
-  That is an Enter pressed in sight of the pair. One pressed before the pair stood is never given over it
+  That is an Enter pressed in sight of the pair. Since decision 10 the letters typed when a question comes are
+  in its field, so this is an Enter after a click on the entry, or on words that were in the entry already. One pressed before the pair stood is never given over it
   (`docs/development/app.md`, "An Enter pressed while core is asked is not lost").
 - A sharper wish that stands when the app is quit is not shown at the next open: its shape waits in its file, and
   neither it nor the typed words are on the page (found on a walk of the one-column page).

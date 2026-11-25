@@ -302,7 +302,8 @@ what core keeps.
   opens with them in the entry (on a first page, in the field that takes a name), and they are the entry's again
   after a tap on a note's option or on a character, a click anywhere off the fields, and Escape, which in a note's
   field gives them to the entry and in the entry keeps them there. A click on a note's field, or on its offer,
-  gives that field the keys. Tab chooses the next project and Shift-Tab the one before; a click on a chip chooses
+  gives that field the keys, and the field of a sharper wish's question takes them by itself when it first
+  stands ("The question has the keys", below). Tab chooses the next project and Shift-Tab the one before; a click on a chip chooses
   it. Enter enters the text. While an input method is composing, Enter confirms the composition and enters
   nothing. A bare `t` is always a letter: the theme is switched with the command key and T (Ctrl and T off the
   Mac), which no field takes (`app/tests/entry_keys.rs`). The window says one line on stderr for an entry, the
@@ -408,6 +409,20 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   it with words is `OnShow::answering_shape` (`OnShow::typing` hands it the note `shape`): both notes go at
   once, as at a tap, and the work asks core's `wish_of_shape` to keep the wish with the shape and the answer
   (`ShapeGo::Answer`), then the run is asked for as after any Enter.
+- **The question has the keys.** A person who reads a question types its answer, and until now the letters went
+  to the entry, where Enter made them a new wish in the pair's place and the first wish was gone. The answer's
+  field now asks the kit for the keys (`Field::wants_keys`, set in `shaping::pair` and nowhere else): when the
+  pair first stands the letters are in the field, with no click, and Enter there is the answer. It asks once.
+  A click on the entry, or Escape, gives the entry the keys as ever, and the field does not take them back at
+  a later drawing. It takes them out of nobody's hands: with words already typed in the entry when the pair
+  comes (a next wish begun while the first was read, or one whose remembered Enter was not given over the pair),
+  the keys stay in the entry and the letters join those words; the field is then a click away, as it was. When
+  the pair goes (an answer, a tap, another wish read) the keys are the entry's again by the kit's own rule.
+  The field under a made wish's question (`answering::with_question`) does not ask: it stands when a look or a
+  tap draws it, not as the answer to the person's own Enter, a page can hold several, and an Enter in the entry
+  beside it loses nothing. Nor does the field of a follow-up. `app/tests/a_question_takes_the_keys.rs` plays
+  both cases through the page's window on GPUI's test platform, on the Mac only: the made-up window of
+  `support/tapper.rs` has no view, so it cannot say where the keys are.
 - **The pair on show is held, not read back.** The page on show holds the sharper wish the pair was drawn from,
   with the words it was made of and its project (`OnShow::typed`, core's `ShapeSeen`): set when the pair is
   shown, and again when a refused answer brings it back; cleared when the pair goes, at a tap, at Enter in the
@@ -539,8 +554,9 @@ wait for: no Enter can go unanswered for want of one.
 What stays in `window.rs`, and is run by no test: opening the window on a screen and its options (a unit test
 holds what is asked), the one-second timer, the order of the reading's steps, which call a tap is carried to, the
 `defer` that lets the view finish a tap before it takes a new scene. The keys (who has them, and the command key
-and T) are played through the window on GPUI's test platform (`app/tests/entry_keys.rs`); which view a real
-window gives the keys to is still owed a person's walk.
+and T) are played through the window on GPUI's test platform (`app/tests/entry_keys.rs`, and
+`app/tests/a_question_takes_the_keys.rs` for the field of a question); which view a real window gives the keys
+to is still owed a person's walk.
 
 Not covered: a wish for a project past the sixth, or for one neither typed in today nor listed, is made with
 `jellymoon wish`. A made wish's question is drawn on its wish's note ("A question answered, and more like

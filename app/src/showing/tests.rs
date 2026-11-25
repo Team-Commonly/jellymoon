@@ -141,7 +141,7 @@ fn a_look_in_flight_when_the_person_taps_an_option_is_dropped_whole_and_what_it_
 #[test]
 fn an_act_on_a_wish_s_note_holds_that_wish_and_gives_it_the_offer_and_a_tap_on_a_clash_holds_none() {
     let home = tempfile::tempdir().unwrap();
-    let field = sticker_kit::Field { offer: String::new(), hint: String::new(), most: 0, key: String::new() };
+    let field = sticker_kit::Field::default();
     let Note::Text { id, title, body, options, quoted, .. } = text("wish-m1", &[]) else { unreachable!() };
     let asks = Note::Text { id, title, body, options, quoted, field: Some(field) };
     let (id, options) = ("clash-1".to_string(), vec!["not a side".to_string()]);

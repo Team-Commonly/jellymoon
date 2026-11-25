@@ -896,7 +896,10 @@ max_file_lines = 400
 # entry taken away): 43 (`src/entry.rs`, 13; `draw/entry.rs`, -2; `tests/entry_waits.rs`, 31; `tests/entry_draw.rs`, 1).
 # An answer in the bubble of what a person typed raised it by 104: the field, its lines and its hook
 # (`src/scene.rs`, 5; `src/layout/column.rs`, 30), and the tests (`tests/typed.rs`, 41; `tests/column_draw.rs`, 28).
-"crates/sticker-kit" = 13126
+# A field that asks for the keys raised it by 184 (190 added, 6 removed): the field's word and the view's turn
+# (`src/scene.rs`, 5; `draw/field.rs`, 21; `draw/entry.rs`, 3; `draw/headless.rs`, 3), and the tests
+# (`tests/field_keys.rs`, 147; `tests/field_draw.rs`, 4; `tests/pencil.rs`, 1).
+"crates/sticker-kit" = 13310
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1163,7 +1166,9 @@ max_file_lines = 400
 # After the walk, the same slice raised it by 46 (72 added, 26 removed): the wishes owed the tuck are counted
 # from core's answer (`src/wishing.rs`, 6; `src/drawing/tucked.rs`, 5; `src/drawing.rs`, 1), and the walk's order
 # at the made-up window (`tests/finished_wishes_tuck_away.rs`, 34).
-"app" = 20451
+# A question takes the keys raised the app by 106 (114 added, 8 removed): the one field that asks
+# (`src/shaping.rs`, 2), and the tests (`tests/a_question_takes_the_keys.rs`, 103; `tests/go_on_from_an_answer.rs`, 1).
+"app" = 20557
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

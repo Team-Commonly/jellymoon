@@ -86,7 +86,7 @@ fn text(id: &str, title: &str, quoted: &str, options: &[&str]) -> Note {
 /// not on it. With no question it is titled for the typed words, which are its quote.
 fn choice(said: &str, asks: bool) -> Note {
     let most = jellymoon_core::MADE_SAID_MAX;
-    let field = Field { offer: ANSWER.into(), hint: ANSWER_HINT.into(), most, key: String::new() };
+    let field = Field { offer: ANSWER.into(), hint: ANSWER_HINT.into(), most, key: String::new(), wants_keys: true };
     let options = [GO, GO_TYPED].map(str::to_string).to_vec();
     let (title, quoted) = if asks { ("Only you know", ASK) } else { (TYPED, said) };
     let (id, title, quoted) = (SHAPE.into(), title.into(), quoted.into());

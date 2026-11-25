@@ -68,10 +68,26 @@ Each run against `the_sharper_wish_folds` alone.
 The test of the keys failed in every one of those runs for its own reason (the kit's rule came after), so it is
 not counted as a killer.
 
+## After the first walk in a real window
+
+The first head passed its gate and failed its walk. With a real harness's question on the page: a tap on the
+line unfolded it and the view followed the column's new end, so the line was no longer under the pointer; the
+second tap in the same place landed on the rows' card, which gave the entry the keys; the rest of the answer
+went into the entry, and Enter there read a new wish in the pair's place. The answer half typed was gone.
+The gate had named both halves as notes (the press beside the line's words, and the view that follows the end).
+
+- **The view is held when a tally in its place is turned** (`draw/column.rs`, `turn`), as for the day's tally.
+  The line stays where it was tapped.
+- **A press on the line's card, or on the note it opened, moves no key** (`Page::keeps_keys`): any piece of
+  the line's note, and any piece but an option of the note under an open line.
+- Held by the kit's `a_tally_in_its_place_does_not_open_the_page_at_its_top_and_holds_the_view_only_when_it_is_turned`
+  and by the app's test of the keys, which now clicks the rows' card and the line's card beside its words.
+
 ## Open
 
-- **Nobody has seen it in a real window**, and no real harness answered. The pictures are the windowless
-  example's. Windows and Linux were not run.
+- Windows and Linux were not run.
+- A press on the question's own card, off its field, still gives the entry the keys (ADR 0025's rule for
+  every press off a field): letters typed after it go to the entry.
 - The kit's rule that a press on a tally in its place moves no key is held by the app's test of the keys only;
   the kit has no test of its own for it.
 - Unfolded, the line `your wish, sharper` stands over a card titled "Your wish, sharper": the same words twice.

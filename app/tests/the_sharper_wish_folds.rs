@@ -284,7 +284,7 @@ mod window {
     use crate::support::windowed::{context, opened};
 
     #[test]
-    fn letters_typed_with_no_click_on_the_field_are_the_answer_folded_and_after_a_click_on_the_line() {
+    fn letters_typed_with_no_click_on_the_field_are_the_answer_folded_and_after_a_click_on_the_line_or_its_rows() {
         // The world of `a_question_takes_the_keys.rs`: `alpha` added, its chip on the page that was read and kept.
         let w = crate::support::wished::quiet();
         w.jellymoon(&["project", "add", "--repo", w.at("work").join("alpha").to_str().unwrap()]);
@@ -316,8 +316,26 @@ mod window {
         cx.run_until_parked();
         keys(cx, "space s e c");
         assert_eq!(read(cx), (String::new(), Some("two sec".into()), true), "unfolded, they still are");
+        // Unfolded, the line is where it was tapped, so a second tap in the same place would fold it.
+        let still = page.read_with(cx, |page, _| page.placed().iter().find(line).map(|piece| page.shown_at(piece)));
+        assert_eq!(still, at, "the view is held when the line turns");
+        // A click on the rows a person is reading, and one on the line's card beside its words, move no key.
+        let card =
+            |id: &'static str| move |piece: &&sticker_kit::Placed| piece.piece == PieceKind::Note && piece.id == id;
+        // The rows' card at its top, which is in the window under the line; the line's card under its words.
+        for (id, low, typed, whole) in [(SHARPER_ID, false, "o", "two seco"), (super::FOLD, true, "n d", "two second")]
+        {
+            let at =
+                page.read_with(cx, |page, _| page.placed().iter().find(card(id)).map(|piece| page.shown_at(piece)));
+            let at = at.expect("the card is placed");
+            let y = if low { at.y + at.h - 4.0 } else { at.y + 6.0 };
+            cx.simulate_click(point(px(at.x + 6.0), px(y)), Modifiers::default());
+            cx.run_until_parked();
+            keys(cx, typed);
+            assert_eq!(read(cx), (String::new(), Some(whole.into()), true), "after a click on the card of {id}");
+        }
         keys(cx, "enter");
         let kept = w.kept();
-        assert_eq!((kept["said"].as_str(), kept["answered"].as_str()), (Some("tidy it"), Some("two sec")), "{kept}");
+        assert_eq!((kept["said"].as_str(), kept["answered"].as_str()), (Some("tidy it"), Some("two second")), "{kept}");
     }
 }

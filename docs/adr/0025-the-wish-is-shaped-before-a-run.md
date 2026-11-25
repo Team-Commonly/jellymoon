@@ -177,6 +177,14 @@ the heart of the decision.
      tap on the line the answer's letters went to the entry, where Enter is a new wish in the pair's place
      (the loss decision 10 closed). A press on a tally in its place now moves no key; it is the kit's rule
      for that one shape, and every other press is as it was.
+   - *The line stays where it was tapped, and reading the rows moves no key.* Found in a real window on the
+     first head of this change: unfolded at the column's end, the view followed the new end, so the line slid
+     up from under the pointer and a second tap in the same place landed on the rows' card. That press gave
+     the entry the keys, the rest of the answer was typed into the entry, and Enter there was a new wish in
+     the pair's place: the answer half typed was gone. Now the view is held when the line turns, as it is for
+     the day's tally, and a press anywhere on the line's card, or on the note it opened, moves no key (an
+     option of that note is still an option). A press on the question's own card off its field gives the
+     entry the keys as it always did.
    Rejected: leaving the rows out with no way to read them (a run would be given words the person could
    never see before it started); folding the question's note, or its two ways round (the one thing asked of
    the person, and the way to refuse the model's words, would be a tap away); folding the sharper wish that

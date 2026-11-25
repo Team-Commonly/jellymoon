@@ -337,7 +337,7 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
   wherever it is among the notes, so a scene with one has every other piece where it was, further down; the
   big character stands beside it while it is closed. A tally with `in_place` set is not that one: it is a
   card among the cards, in the scene's order, and with no rows and no `under` it is one line, a title and its
-  chevron, for something a tap opens under it. It is never the tally of the column, whatever stands after it, and a press on it leaves the keys where they
+  chevron, for something a tap opens under it. It is never the tally of the column, whatever stands after it, and a press anywhere on its card, or while it is open on the note under it (an option of that note apart), leaves the keys where they
   are: a field beside it is still being typed in.
   `Strip { panels }`, how a thing goes in up to three steps (`MAX_STRIP_PANELS`; a panel past the third is not
   drawn): each `Panel { shows, caption }` has a third of the picture's width, a small sketch in its middle and
@@ -556,7 +556,7 @@ the column grows, while one a reader has moved stays where it was. The view pain
 at the band's top and the entry in a second layer over it, so no card is drawn or tapped under the entry.
 `page.shown_at(piece)` says where a piece is in the window now. A page whose scene has a tally and nothing a
 person said (`Note::Said`) opens held at its top instead (`Scroll::hold`), and a view is held where it is when its
-tally opens or closes (a tally `in_place` is no tally here: it moves and holds nothing); a held view that reaches its column's end follows it again. Enter in the entry, and any
+tally opens or closes (a tally `in_place` is no tally here: it opens no page at its top, and the view is held only when it is turned, so it stays under the pointer); a held view that reaches its column's end follows it again. Enter in the entry, and any
 scene that holds one more thing a person said than the one on show, takes a held view no wheel moved to the end
 (`Scroll::entered`; `draw/column.rs`, `turn`), but not while a field of a note holds typed words: the page does
 not leave them by itself.

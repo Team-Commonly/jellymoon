@@ -489,8 +489,10 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   (the sharper wish over "What you typed" and its two choices), the note while the wish is read, and the
   reason of a refusal, which is a note of its own. The sharper wish's note holds its rows and nothing else,
   and the pass leaves alone a note with a sentence after its rows. The line takes no key and is no option:
-  the field keeps the keys through a tap on it (the kit moves no key at a press on a tally in its place; any
-  other press off a field still gives the entry the keys). Folded, the page reads "Only you know", the question as a
+  the field keeps the keys through a tap on it, and through a press anywhere on its card or on the rows it
+  opened (the kit moves no key at a press on a tally in its place or on the note it opened; any other press
+  off a field still gives the entry the keys). The view is held when the line turns, so it stays where it was
+  tapped and a second tap there folds it. Folded, the page reads "Only you know", the question as a
   quote, "Type your answer, then Enter", "Skip the question", "Use my own words" and "your wish, sharper";
   unfolded, also "Your wish, sharper", "The wish", "Done when", "Not touching" and the three quotes. No word
   of the model's is on the line. The snapshot example draws the folded page with `--tucked` and the unfolded

@@ -268,7 +268,7 @@ impl Page {
     }
 
     /// A press anywhere off the fields gives the entry the keys: a tap on a note's option or a character too.
-    /// A press on a tally that stands in its place moves no key (`Page::keeps_keys`).
+    /// A press on a tally that stands in its place, or on what it opened, moves no key (`Page::keeps_keys`).
     pub(super) fn entry_left(&mut self, event: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
         let (x, y) = (f32::from(event.position.x), f32::from(event.position.y));
         let on = |piece: &Placed| {

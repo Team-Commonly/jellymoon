@@ -225,7 +225,8 @@ own words. The kept page itself never holds a made wish. A made wish's `question
   counted (`+N more`). `layout` prints the note's lines and one `mark` piece a wish drawn.
 - **A made wish never moves or shrinks what a person rules on.** The clashes and the delivery note are placed as
   on the same page with no made wish, at the same size, and the note takes the room they leave. One page is not
-  so: a page whose reading holds a clash and no wish says "Nothing wished for yet today." above the clash, and a
+  so: a page whose reading holds a clash and no wish shows how a wish goes above the clash (the strip of
+  `docs/development/app.md`, "The empty page shows how a wish goes"), and a
   made wish is a wish, so that note goes and the clash stands where it was, higher, at the same size. On a full page
   the room left is little. Beside the list "came true today", the delivery note and one clash, with one made wish of 200
   characters and the rest short:

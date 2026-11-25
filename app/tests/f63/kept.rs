@@ -102,7 +102,11 @@ fn a_kept_page_that_says_no_logs_were_found_is_not_drawn_first_while_the_day_is_
     w.placed();
     assert_eq!(fs::read_to_string(kept(&w.day)).unwrap(), EMPTY);
     let on = w.on_show();
-    assert_eq!((first_title(&on.scene), on.page.is_some()), (super::NOTHING, true));
+    let strip = |note: &sticker_kit::Note| match note {
+        sticker_kit::Note::Drawn { id, words, .. } => id == jellymoon_app::scene::HOW && words[..] == [super::TYPE_ONE],
+        _ => false,
+    };
+    assert!(matches!(&on.scene.notes[..], [first] if strip(first)) && on.page.is_some(), "{:?}", on.scene.notes);
     assert_eq!(on.scene.footer, "", "nothing read and no wish: no footer");
 }
 

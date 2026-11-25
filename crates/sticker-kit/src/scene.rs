@@ -154,6 +154,7 @@ pub enum Note {
     /// false none of them is drawn and a small `?` stands at the picture's top right when there are any; with
     /// `open` each is drawn under the picture, on a line of its own, to its last word. A tap on the picture or
     /// on the `?` is the note's `id` at [`PICTURE_PLACE`]. The scene carries `open`; the kit keeps no state for it.
+    /// A picture that takes no tap ([`Picture::taps`]) has no `?` either.
     /// `field` is a text note's: one line a person types in, under the options, open or closed.
     Drawn {
         id: String,
@@ -216,6 +217,40 @@ pub enum Picture {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         open: bool,
     },
+    /// A strip: the first [`MAX_STRIP_PANELS`] panels in one row, left to right, each a small sketch with its
+    /// caption under it, and an arrow from each to the next. It is a picture and nothing else: no part of it
+    /// takes a tap, and its note has no `?` ([`Picture::taps`]). A note's words under it are drawn while the
+    /// scene says the note is open, as under any picture.
+    Strip { panels: Vec<Panel> },
+}
+
+impl Picture {
+    /// Whether a tap on the picture is given to the page's handler. A strip takes none.
+    pub fn taps(&self) -> bool {
+        !matches!(self, Picture::Strip { .. })
+    }
+}
+
+/// The most panels a [`Picture::Strip`] draws. The ones past them are not drawn.
+pub const MAX_STRIP_PANELS: usize = 3;
+
+/// One panel of a [`Picture::Strip`]: what its sketch shows, and a caption of a few words in the hand, cleaned
+/// as every caption is and wrapped under the sketch in two lines at most.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Panel {
+    pub shows: Shows,
+    pub caption: String,
+}
+
+/// What the sketch of a [`Panel`] shows: a speech bubble with writing in it; a sheet with a pencil on it, the
+/// tool at rest; a folder with a tick in it and a small cross beside it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Shows {
+    #[default]
+    Speech,
+    Sheet,
+    Folder,
 }
 
 /// The most rows a [`Picture::Tally`] draws, and the most marks of one row: the marks past them are a count.

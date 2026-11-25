@@ -336,6 +336,16 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
   no meaning of a row or a mark. The first tally of a scene stands first in the column, under the header,
   wherever it is among the notes, so a scene with one has every other piece where it was, further down; the
   big character stands beside it while it is closed.
+  `Strip { panels }`, how a thing goes in up to three steps (`MAX_STRIP_PANELS`; a panel past the third is not
+  drawn): each `Panel { shows, caption }` has a third of the picture's width, a small sketch in its middle and
+  its caption under it, centred, cleaned as every caption is and wrapped in two lines at most, the rest ending
+  in the ellipsis. `Shows` says the sketch: `Speech`, a speech bubble with two lines of writing; `Sheet`, the
+  sheet and pencil of a track that is making, the pencil at rest; `Folder`, the folder and tick of sheets that
+  are in, with a small cross in the taken ink beside it. An arrow runs from each sketch to the next and is
+  drawn before the sketch it points at, so a strip draws itself in the order it is read. Every length is the
+  column's design unit: a narrow window draws the same row smaller, never a second row. A strip takes no tap
+  (`Picture::taps` is false for it alone): the view makes no tap target of it, and its note has no `?`, so
+  whoever builds the scene sets `open` when its words are to be read. Nothing of it rocks.
 - **Words.** A caption is the kit's own or a number, in the theme's handwriting (`Role::Caption`). A file's name
   is someone else's word: it is drawn by the rule a told row's `name` is (no blank, unseen or control character,
   whole on one line), else left out of a track and written "a file" in a bar's row. The note's `words` are not
@@ -343,7 +353,8 @@ note would say it in sentences (ADR 0027). The kit draws it with a pencil (`src/
   there are any. With `open` each is drawn under the picture to its last word. The kit keeps no state for it.
 - **Taps.** An option is a text note's: `Tap::Option` with the note's id, the option's place and its words. A
   tap on the picture or the `?` is `Tap::Option` with the note's id, `PICTURE_PLACE`, the place of no option, and
-  no words. Both wait until the piece has settled ("A tap means what was seen", above).
+  no words. Both wait until the piece has settled ("A tap means what was seen", above). A click on a strip is
+  no tap at all.
 - **Inks.** `palette.pencil`, `palette.added`, `palette.taken`; a tally's marks also `palette.quiet`, `palette.star`
   and `palette.accent`. A theme file that sets none gets the sticker
   theme's; they are held to no floor.

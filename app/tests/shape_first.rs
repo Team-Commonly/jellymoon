@@ -306,9 +306,9 @@ fn window(w: &World, acts: &[&str]) -> Vec<Value> {
     lines.iter().map(|line| serde_json::from_str(line).expect(line)).collect()
 }
 
-/// Whether the scene of a line says that nothing was wished for today.
+/// Whether the scene of a line has the note of a day with no wish: the strip that shows how a wish goes.
 fn says_nothing(line: &Value) -> bool {
-    let nothing = |note: &Note| matches!(note, Note::Plain { title, .. } if title == "Nothing wished for yet today.");
+    let nothing = |note: &Note| matches!(note, Note::Drawn { id, .. } if id == jellymoon_app::scene::HOW);
     scene(line).notes.iter().any(nothing)
 }
 

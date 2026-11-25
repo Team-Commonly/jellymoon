@@ -118,9 +118,12 @@ fn the_came_true_note_lists_each_star_with_its_wish() {
 fn a_page_with_no_wishes_says_so() {
     let placed = pieces(&page(vec![], vec![]), &[]);
     assert_eq!(placed.iter().filter(|piece| piece.kind() == "character").count(), 0);
-    assert!(
-        placed.iter().any(|piece| piece.kind() == "note" && piece.said().contains("Nothing wished for yet today."))
-    );
+    let said = |kind: &str| {
+        let own = placed.iter().filter(|piece| piece.kind() == kind && piece.id() == "how");
+        own.map(|piece| piece.said()).collect::<Vec<String>>()
+    };
+    assert_eq!(said("picture"), ["say a wish it gets made keep or toss"], "how a wish goes, in three sketches");
+    assert_eq!(said("note"), ["Type a wish in the field at the bottom."]);
     // Nothing read and no wish: no line about a reading.
     assert!(placed.iter().all(|piece| piece.kind() != "footer"), "{placed:?}");
 }

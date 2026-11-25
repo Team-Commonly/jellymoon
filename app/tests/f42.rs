@@ -253,7 +253,8 @@ fn a_look_takes_away_a_note_of_the_page_s_own_that_no_longer_holds() {
     answer(&quiet, &result(r#"{"wishes":[],"clashes":[]}"#), 0);
     shown(&quiet, &[]);
     let mut empty = on_show(&quiet);
-    assert_eq!(titles(&empty.scene), [Some("Nothing wished for yet today.".to_string())]);
+    assert_eq!(titles(&empty.scene), [Some("Type a wish in the field at the bottom.".to_string())]);
+    assert!(matches!(&empty.scene.notes[..], [Note::Drawn { id, .. }] if id == jellymoon_app::scene::HOW));
     jellymoon_core::wish(&quiet.home, Some(DAY), SAID, "alpha").unwrap();
     let going = Some("Your wish is being worked on.".to_string());
     assert_eq!(titles(&looked(&mut empty)), [going, None], "the sentence that it is worked on, and the made wishes");

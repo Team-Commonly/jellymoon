@@ -7,7 +7,7 @@ use std::fs;
 use serde_json::Value;
 use sticker_kit::{Scene, State};
 
-use super::{EVERY, HINT, Logs, NOTHING, list, nothing_typed, of, values, words};
+use super::{EVERY, HINT, Logs, how, list, nothing_typed, of, values, words};
 use crate::support::day::{DAY, called, notes};
 use crate::support::wished::{SAID, World, showed, wait_until, world};
 use crate::support::{Piece, open_above};
@@ -74,7 +74,7 @@ fn the_made_wishes_of_such_a_day_are_placed_in_their_states_as_a_typed_day_place
         // The made wishes and nothing else: no wish, clash or reading is made up for the day.
         assert_eq!(of(&placed, "character").len(), 3, "{logs:?}");
         let said = notes(&placed);
-        assert!(said.iter().all(|note| !note.contains("clash") && !note.contains(NOTHING)), "{logs:?}: {said:?}");
+        assert!(said.iter().all(|note| !note.contains("clash")) && !how(&placed), "{logs:?}: {said:?}");
         assert_eq!(words(&placed, "entry"), [HINT], "{logs:?}");
         assert_eq!(words(&placed, "chip"), ["alpha"], "{logs:?}");
         assert_eq!(values(&w.placed()), values(&placed), "{logs:?}: the same day again");

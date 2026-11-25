@@ -102,7 +102,8 @@ fn passed(scene: &Scene, open: &BTreeSet<String>, tapped: Option<&str>, away: &B
     let mut notes: Vec<Note> = tucked::shown(scene, away).filter(|note| !unsaid(note)).cloned().collect();
     for note in &mut notes {
         if let Note::Drawn { id, open: is, .. } = note {
-            *is = open.contains(id);
+            // The strip of an empty page takes no tap, so nothing opens it: its one line is always drawn.
+            *is = open.contains(id) || id == crate::scene::HOW;
         }
     }
     let mut drawn = Scene { notes, ..scene.clone() };
@@ -221,9 +222,10 @@ impl Open {
     }
 
     /// A tap on the picture of the note `note`, or on its `?`: open, it is closed, and closed, it is opened.
-    /// Whether `scene` holds that drawn note; of any other id nothing changes.
+    /// Whether `scene` holds that drawn note; of any other id nothing changes, and nothing of the strip of an
+    /// empty page (`scene::HOW`), which takes no tap.
     pub(crate) fn tapped(&self, scene: &Scene, note: &str) -> bool {
-        let on = drawn_ids(scene).any(|id| id == note);
+        let on = note != crate::scene::HOW && drawn_ids(scene).any(|id| id == note);
         let mut open = self.0.borrow_mut();
         if on && !open.remove(note) {
             open.insert(note.to_string());

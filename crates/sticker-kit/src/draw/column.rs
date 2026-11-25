@@ -108,8 +108,13 @@ impl Page {
     pub(super) fn taps(&self, piece: &Placed) -> bool {
         match piece.piece {
             PieceKind::Hero | PieceKind::Character | PieceKind::Option | PieceKind::Action => true,
-            // The mark of a picture is inside it: the picture's own target takes a tap on the mark, once.
-            PieceKind::Picture => true,
+            // The mark of a picture is inside it: the picture's own target takes a tap on the mark, once. A
+            // picture that takes none (`Picture::taps`) is no target at all.
+            PieceKind::Picture => !self
+                .scene
+                .notes
+                .iter()
+                .any(|note| matches!(note, Note::Drawn { id, picture, .. } if *id == piece.id && !picture.taps())),
             PieceKind::Quote | PieceKind::Small => {
                 let said = |note: &Note| matches!(note, Note::Said { id, .. } if *id == piece.id);
                 self.scene.notes.iter().any(said)

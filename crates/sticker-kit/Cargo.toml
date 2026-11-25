@@ -61,3 +61,7 @@ required-features = ["headless"]
 [[test]]
 name = "field_keys"
 required-features = ["headless"]
+
+[[test]]
+name = "strip_draw"
+required-features = ["headless"]

@@ -189,7 +189,9 @@ A home that is not an absolute path counts as none, and a `JELLYMOON_HOME` that 
   each of which may give the next page to show
   (`today::Next`): the count of the day's turns, then the reading call. While a kept page is read again it stays on
   show under one note, "Reading your day again…", and never gives way to the waiting page. `layout --waiting` prints
-  the waiting page; `layout` alone runs the same steps and prints what the window ends on.
+  the waiting page; `layout` alone runs the same steps and prints what the window ends on. A page with no wish,
+  a first day's among them, is not the waiting page: it shows how a wish goes, in three sketches ("The empty
+  page shows how a wish goes", below).
 - **When the day is read again.** Each time the app opens it reads the session logs (no model) and compares the day's
   count of turns with `read.turns` of the kept page. The same count: the kept page stays and no call is made. Any
   other count, no kept page, or `--fresh`: one reading call, and the new page is kept. The count is the whole test,
@@ -531,10 +533,17 @@ ADR 0020, decisions 3 and 4. The rules are core's, proved at `jellymoon project 
 - **Nothing typed is lost.** The kit keeps what is typed when the entry changes (`Page::set_entry`): words typed
   for a wish stay through a drop, and a half-typed name stays in the wish's field. A name core takes empties the
   field; a name it refuses stays.
-- **The empty page says what to do here.** The note of a page with no wish is "Nothing wished for yet today.",
-  with "Type what you want done in the field at the bottom." when a project is on offer, and with none (no project
-  read on the page and none listed) "Choose the folder you want to work in, or type a name for a new project in
-  the field at the bottom." (`Today::draw`). A day with no session logs says "You can start here: choose the folder
+- **The empty page shows how a wish goes.** The note of a page with no wish is one drawn note, `how`: a strip of
+  three pencil sketches with an arrow between neighbours, each with its caption in the hand: a speech bubble,
+  "say a wish"; a sheet with a pencil, "it gets made"; a folder with a tick and a small cross, "keep or toss"
+  (`scene::how`; the kit's `Picture::Strip`, ADR 0027, decision 10). It draws itself stroke by stroke as every
+  picture does, and is whole at once with motion reduced. Under it is one line, always drawn: "Type a wish in
+  the field at the bottom." when a project is on offer, and with none (no project read on the page and none
+  listed) "First choose a folder to work in, or name a new project." (`Today::draw`). The line says only what
+  the entry's hint and chips do not. The strip takes no tap: it has no `?`, the kit's view makes no target of
+  it, and the window opens nothing for its id (`Open::tapped`). In the narrowest window it is the same row,
+  smaller. Every word of it is Jellymoon's own. It stands where the note of words it took the place of stood
+  ("Nothing wished for yet today."), at the same moments (`app/tests/how_a_wish_goes.rs`). A day with no session logs says "You can start here: choose the folder
   you want to work in, or drop it on this window. Or type a name for a new project in the field." Words entered
   in the entry of a day with no project are a new project's name and never a wish (`starting::named`). The note
   is not drawn from the moment an Enter in the entry was taken for a wish: while "Reading your wish…" or a
@@ -1288,7 +1297,7 @@ and Cmd-Q are the system's and are not run by a test.
 | the day's made wishes | a character each, like any wish, and, in the scene, one whole list note, "wished here today", after the clashes: each made wish's own words after the mark of its state. The column draws each as a bubble of its own instead, whole (`column.rs`). The footer adds "N made wishes are in your own words."; on a day not read yet that is all the footer says |
 | a made wish whose run goes, on a page with no clash | a drawn note of its own, `steps-<wish>`, among the first notes (after "not everything is drawn"): a track ("A wish's work, drawn", above). Its first words are "Your wish is being worked on." and "“<the start of its words>”. What it did will show here when it is done." Each working wish has one, and each speaks of one wish: no note says "wishes" or counts the others (ADR 0030). The wish is named as every note of a wish names it, by its first 40 characters as core cleans them. No time is promised. It goes with its wish's run, and a look never carries it over as the app's own. A page with a clash has none: it is planned before the made wishes' list, so it would move or shrink what a person rules on, which a made wish never does (F37); a working wish has its pill there |
 | a made wish whose run goes, with steps (live work, `app/src/live.rs`) | its little one says on a small pill over it the stage its run is at, from the tool of its last step, in fixed words: "looking around" (`Read`, `Glob`, `Grep`), "making the change" (`Edit`, `Write`); "thinking" before the first step. Its track has core's count of its own steps at that stage. Its words, on the page after a tap on the picture, are the two sentences above, then the stage as a sentence, "Looking around your project." or "Making the change.", and "1 step so far." or "N steps so far.". No file's name is drawn, on the pill, in the note or on an opened wish: a person who asked for something wants to know how far along it is, not which file is open. Core keeps the names (`runs/<id>/steps.json`); the page does not draw them. A pill is drawn only where the room over the little one holds one line and it has no star (stars stand there). A step is a tool use the run asked for, as its stream says, not proof that it happened. Only the picture can be tapped, for its words, and once the run has ended none of it is drawn: the wish has the notes of an ended wish |
-| no wish, and nothing set aside | one plain note: "Nothing wished for yet today." It is not drawn while a wish is being read or a sharper wish waits ("The empty page says what to do here", above) |
+| no wish, and nothing set aside | one drawn note, `how`: a strip of three sketches, "say a wish", "it gets made", "keep or toss", and one line under it. It takes no tap. It is not drawn while a wish is being read or a sharper wish waits ("The empty page shows how a wish goes", above) |
 | more than the app draws | the first note, "not everything is drawn", with the counts (next section) |
 
 **What the app has no piece for becomes a plain note** (`app/src/read.rs`). A wish whose `state` is a word this app

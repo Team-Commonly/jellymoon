@@ -92,7 +92,9 @@ fn with_no_project_the_page_says_to_choose_a_folder_first_and_the_field_is_the_m
         for size in SIZES {
             let placed = w.placed_with(&["--size", size]);
             let said = notes(&placed).join(" ").to_lowercase();
-            let (folder, name) = (said.find(FOLDER), said.find(NAME));
+            // A day with no logs has the note that it has no page; one whose logs were read, the strip's line.
+            let own = if logs { ("choose a folder to work in", "name a new project") } else { (FOLDER, NAME) };
+            let (folder, name) = (said.find(own.0), said.find(own.1));
             assert!(folder.is_some() && folder < name, "logs {logs} at {size}: the folder first: {said}");
             assert!(!said.contains("type what you want done"), "logs {logs} at {size}: no wish is asked for: {said}");
             assert_eq!(words(&placed, "entry"), [NEW_HINT], "logs {logs} at {size}: the field takes a name");
@@ -120,7 +122,8 @@ fn with_two_projects_the_hint_says_what_the_chips_are_and_start_is_beside_the_fi
         assert!(of(&placed, "chip").iter().all(|chip| chip.rect()[1] > field[1] + field[3]), "the chips are below");
         the_field_comes_first(&placed, size);
         let said = notes(&placed).join(" ");
-        assert!(said.contains("Type what you want done") && !said.to_lowercase().contains(FOLDER), "{said}");
+        let typed = said.contains("Type a wish in the field at the bottom.");
+        assert!(typed && !said.to_lowercase().contains("folder"), "{said}");
     }
 }
 

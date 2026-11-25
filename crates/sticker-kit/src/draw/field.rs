@@ -76,9 +76,35 @@ impl Page {
         self.fields.iter().find(|view| view.names(id)).map(|view| &view.state)
     }
 
+    /// The answer to what Enter gave: kept, and the words kept aside are forgotten; not kept, and they come back
+    /// in front of what was typed since ([`EntryState::answer`]). Kept, an Enter pressed while the answer was
+    /// owed is given now as one pressed now is, to the same handler ([`EntryState::answer_and_enter`]), unless
+    /// [`Page::forget_enter`] was called first.
+    pub fn answer_entry(&mut self, kept: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(made) = self.entry.state.answer_and_enter(kept) {
+            self.entry_made(None, made, window, cx);
+        }
+        self.entry_changed(window, cx);
+    }
+
+    /// Forgets the Enter the entry remembered while its answer is owed: for a handler whose answer leaves the
+    /// page where an Enter nobody is pressing now should not act. The words typed since stay.
+    pub fn forget_enter(&mut self) {
+        self.entry.state.forget_enter();
+    }
+
+    /// As [`Page::answer_entry`], for a page whose window was closed since Enter: there is no text input of the
+    /// platform's to tell, and the page that is shown again does not wait. An Enter the entry remembered is
+    /// forgotten: a handler is called in a window.
+    pub fn answer_entry_closed(&mut self, kept: bool, cx: &mut Context<Self>) {
+        self.entry.state.answer(kept);
+        self.entry_settled(cx);
+    }
+
     /// The answer to what Enter gave with the note's id `id`, as [`Page::answer_entry`] is the entry's, by the
     /// same rule for kept and not kept. The field is found by that id wherever it is now: under its note, under a
-    /// note that took its place, or kept apart. Nothing when none waits so.
+    /// note that took its place, or kept apart. Nothing when none waits so. A field is given no Enter it
+    /// remembered: one pressed while its answer was owed is forgotten here, as it always was.
     pub fn answer_field(&mut self, id: &str, kept: bool, window: &Window, cx: &mut Context<Self>) {
         self.field_answered(id, kept);
         self.entry_changed(window, cx);

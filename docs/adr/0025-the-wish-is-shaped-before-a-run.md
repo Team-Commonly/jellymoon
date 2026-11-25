@@ -117,10 +117,15 @@ Not measured: Windows, Linux, an older Claude Code, and a link inside the projec
   `shaping/call-…` folder is left. At the limit only the child itself is ended, not what it started.
 - The entry took no key from Enter until the reading's answer, 20 seconds at most. Amended 2026-11-24: it takes
   every key now, and what is typed meanwhile is the next words (the kit's `README.md`, "The entry is then owed an
-  answer"). Enter gives nothing until the answer has come.
+  answer"). Enter gives nothing until the answer has come. Amended 2026-11-25: one Enter pressed meanwhile is
+  remembered and given when the answer has come and kept the first words, so a second wish entered while the
+  first is read is read next. It is not given over a sharper wish that waits (the next point but one), nor when
+  the first words were refused: the words stay in the entry and Enter is the person's to press.
 - A wish refused after a tap (the day has its eight wishes; the project is no longer on offer) leaves a note with
   the start of the typed words, not the whole of them in the entry.
 - Enter while a sharper wish stands reads the new words in its place; the first words are gone with no note.
+  That is an Enter pressed in sight of the pair. One pressed before the pair stood is never given over it
+  (`docs/development/app.md`, "An Enter pressed while core is asked is not lost").
 - A sharper wish that stands when the app is quit is not shown at the next open: its shape waits in its file, and
   neither it nor the typed words are on the page (found on a walk of the one-column page).
 - A shape made by the command for the same words on the same day, while a pair stands in the window, was the one

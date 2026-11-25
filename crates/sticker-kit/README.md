@@ -170,6 +170,16 @@ Page::new(scene, theme)
     stays true, and every range the input method is told is of the typed text, never of the words kept aside),
     the editing keys, the caret, Tab, a click on a chip, Escape. Only Enter gives nothing while the answer is
     owed, and what was typed since stays. No key is dropped.
+  - *One Enter is remembered.* An Enter pressed while the answer is owed, with words typed since and no
+    composition, is remembered: once, however often it is pressed. Nothing is sent then and the words stay
+    editable. When the answer is *kept*, `answer_entry` gives that Enter as one pressed at that moment is, to
+    the same `on_entry` handler: the words as they stand then, the option chosen then, and nothing when they
+    hold no words by then or a composition has the keys. It is given once, and the entry is then owed the
+    answer to those words. When the answer is *not kept* the Enter is forgotten: the owed words are back in
+    front of the later ones, and an Enter would send both as one. A handler that does not want it calls
+    `page.forget_enter()` before it answers, and the words stay as they are. `answer_entry_closed` forgets it
+    too (a handler is called in a window), and so does a note's field: `EntryState::answer` is the plain
+    answer, `EntryState::answer_and_enter` the one that gives the Enter (`tests/entry_waits.rs`).
   - *Drawn:* while nothing was typed since, the field shows the words kept aside in the hint's grey, with the
     caret where an entry that shows its hint has it. With the first key the typed text is drawn in ink in their
     place. `go` is not lit while the answer is owed.
@@ -236,7 +246,8 @@ options (`layout/typed.rs`, `draw/field.rs`).
 - **Enter** calls the `on_entry` handler with the note's id as `made.id`,
   the words, and no option. The field is then owed its answer as the entry is,
   `page.answer_field(id, kept, window, cx)`, and takes every key meanwhile: kept, what was typed since stays;
-  not kept, the words come back in front of it. `page.answer_field_closed(id, kept, cx)` is the same for a page whose window was closed since
+  not kept, the words come back in front of it. An Enter pressed in a field meanwhile gives nothing, then or at
+  the answer: only the entry is given the one it remembered. `page.answer_field_closed(id, kept, cx)` is the same for a page whose window was closed since
   Enter, as `answer_entry_closed` is the entry's. `page.field(id)` is what is typed in it now.
 - **A field lives with its note.** `set_scene` keeps what is typed in a field
   whose note still has one, by the note's id, and drops the field of a note

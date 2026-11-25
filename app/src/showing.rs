@@ -162,6 +162,13 @@ impl Showing {
         Entered { kept, scene, asking }
     }
 
+    /// Whether the entry may give the Enter it remembered while its answer was owed (the kit's
+    /// `Page::answer_entry`), asked once that answer is on show: not over a sharper wish that waits for the
+    /// person's choice (`shaping::waits`). The window has the entry forget it then, and its words stay typed.
+    pub fn takes_enter(&self) -> bool {
+        !self.with(|on| crate::shaping::waits(&on.scene)).unwrap_or(false)
+    }
+
     /// `Start` tapped while the entry `id` held no words: the scene to show.
     pub fn unready(&self, id: &str) -> Option<Scene> {
         self.with(|on| on.unready(id))

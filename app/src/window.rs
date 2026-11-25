@@ -122,7 +122,8 @@ pub(crate) async fn looks(shown: Showing, page: WeakEntity<Page>, cx: &mut gpui:
 
 /// Enter in the entry, or in a note's field. It keeps the words aside while core is asked off the window's
 /// thread; then it is answered and the page shown. Then the asking for the wish's run is run, off the window's
-/// thread too, and what it has to say is shown when it ends.
+/// thread too, and what it has to say is shown when it ends. An Enter pressed in the entry meanwhile comes here
+/// from the kit when the entry is answered, as one pressed then, unless `Showing::takes_enter` says no.
 fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut App) {
     say(&entry_line(&made.id, &made.text));
     if let Some(name) = named(&made.id, &made.text) {
@@ -155,6 +156,7 @@ fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut A
         let Entered { kept, scene, asking } = shown.answered(answer);
         let answered = page.clone();
         let scene = scene.map(|scene| shown.column(&scene));
+        let kept = (kept, shown.takes_enter());
         cx.update(|cx| answer_entry(&answered, field.as_deref(), kept, scene, cx));
         let Some(asking) = asking else { return };
         let said = cx.background_executor().spawn(async move { asking() }).await;
@@ -166,9 +168,13 @@ fn entered(made: &EntryMade, shown: &Showing, page: WeakEntity<Page>, cx: &mut A
 
 /// The entry, or the field of the note `field` (F54), is answered in the page's window, which the platform's
 /// text input is told in; with the window closed since Enter it is answered all the same, so the page shown
-/// again does not wait for ever. `scene` is in its column's order already.
-fn answer_entry(page: &WeakEntity<Page>, field: Option<&str>, kept: bool, scene: Option<Scene>, cx: &mut App) {
-    let Some(page) = page.upgrade() else { return };
+/// again does not wait for ever. `scene` is in its column's order already. `kept` is whether the words were
+/// kept, and whether the entry may give an Enter it remembered meanwhile: when not, it forgets it first.
+fn answer_entry(page: &WeakEntity<Page>, field: Option<&str>, kept: (bool, bool), scene: Option<Scene>, cx: &mut App) {
+    let (Some(page), (kept, again)) = (page.upgrade(), kept) else { return };
+    if !again && field.is_none() {
+        page.update(cx, |page, _| page.forget_enter());
+    }
     match (page_window(cx), field) {
         (Some(open), Some(note)) => {
             let _ = open.update(cx, |page, window, cx| page.answer_field(note, kept, window, cx));
@@ -216,7 +222,7 @@ fn listing(work: Option<Listing>, named: bool, shown: Showing, page: WeakEntity<
         cx.update(|cx| {
             let kept = now.as_ref().is_some_and(|now| now.name.is_some());
             if named {
-                answer_entry(&page, None, kept, None, cx);
+                answer_entry(&page, None, (kept, shown.takes_enter()), None, cx);
             }
             let (Some(Shown { scene, entry, name }), Some(view)) = (now, page.upgrade()) else { return };
             shown.wait_for(name);

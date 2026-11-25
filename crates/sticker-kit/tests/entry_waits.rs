@@ -45,9 +45,8 @@ fn every_key_is_taken_while_an_answer_is_owed_and_only_enter_gives_nothing() {
     state.previous_option();
     state.choose(0);
     assert_eq!(held(&state), ("feed the cat", 4, Some(0), true));
-    let owed = state.clone();
     assert_eq!(state.enter(), None, "a second Enter gave words while an answer was owed");
-    assert_eq!(state, owed, "a second Enter lost what was typed since");
+    assert_eq!(held(&state), ("feed the cat", 4, Some(0), true), "a second Enter lost what was typed since");
 
     // Kept: what was typed since is whole, with its caret, and is the next words Enter gives.
     state.answer(true);
@@ -132,4 +131,71 @@ fn the_cap_holds_when_the_words_not_kept_and_the_words_typed_since_are_joined() 
     state.fit(&Entry { most: 5, ..Entry::default() });
     state.answer(false);
     assert_eq!(held(&state), ("water", 5, None, false));
+}
+
+#[test]
+fn one_enter_while_an_answer_is_owed_is_remembered_and_given_once_when_the_words_are_kept() {
+    // No words typed since when Enter was pressed: nothing is remembered, whatever is typed after it.
+    let mut state = typed("water the basil");
+    assert_eq!(state.enter(), made("water the basil", Some(0)));
+    assert_eq!(state.enter(), None);
+    state.replace(None, "tea");
+    assert_eq!(state.answer_and_enter(true), None, "an Enter with no words typed since was remembered");
+    // Words, Enter twice, more words and another option: one Enter, given with the words as they stand at the
+    // answer, and it is an Enter like any: its words are owed an answer.
+    assert_eq!(state.enter(), made("tea", Some(0)));
+    state.replace(None, "feed");
+    assert_eq!((state.enter(), state.enter()), (None, None), "an Enter was given before the answer");
+    assert_eq!(held(&state), ("feed", 4, Some(0), true));
+    state.replace(None, " the cat ");
+    state.choose(2);
+    assert_eq!(state.answer_and_enter(true), made("feed the cat", Some(2)));
+    assert_eq!((held(&state), state.owed()), (("", 0, Some(2), true), Some("feed the cat ")));
+    // Given once: the next answer finds no Enter, and an Enter with no answer owed is as it ever was.
+    state.replace(None, "again");
+    assert_eq!(state.answer_and_enter(true), None, "two Enters were two, or one was given twice");
+    assert_eq!(held(&state), ("again", 5, Some(2), false));
+    assert_eq!(state.enter(), made("again", Some(2)));
+}
+
+#[test]
+fn a_remembered_enter_is_not_given_for_words_not_kept_nor_once_forgotten_nor_for_no_words() {
+    // Not kept: the owed words and the later ones both stand, and the Enter is gone for good.
+    let mut state = typed("water");
+    assert_eq!(state.enter(), made("water", Some(0)));
+    state.replace(None, "tea");
+    assert_eq!(state.enter(), None);
+    assert_eq!(state.answer_and_enter(false), None, "an Enter was given over words that were not kept");
+    assert_eq!(held(&state), ("water tea", 9, Some(0), false));
+    assert_eq!(state.enter(), made("water tea", Some(0)));
+    state.replace(None, "x");
+    assert_eq!(state.answer_and_enter(true), None, "the Enter of an answer before this one was given");
+    // Forgotten by whoever answers, and the plain answer (a field's, a closed window's): the words stay.
+    for forget in [true, false] {
+        assert_eq!((state.enter(), state.text()), (made("x", Some(0)), ""));
+        state.replace(None, "x");
+        assert_eq!(state.enter(), None);
+        if forget {
+            state.forget_enter();
+        } else {
+            state.answer(true);
+        }
+        assert_eq!(state.answer_and_enter(true), None, "forgotten: {forget}");
+        assert_eq!(held(&state), ("x", 1, Some(0), false));
+    }
+    // The words went before the answer, or a composition has the keys: the Enter given then gives nothing.
+    for composing in [false, true] {
+        assert_eq!(state.enter(), made("x", Some(0)));
+        state.replace(None, "y");
+        assert_eq!(state.enter(), None);
+        state.backspace();
+        if composing {
+            state.mark(None, "ni", None);
+        } else {
+            state.replace(None, " ");
+        }
+        assert_eq!(state.answer_and_enter(true), None, "composing: {composing}");
+        assert!(!state.waiting());
+        state.replace(None, "x");
+    }
 }

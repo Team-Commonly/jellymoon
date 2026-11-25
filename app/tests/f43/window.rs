@@ -77,6 +77,28 @@ fn what_is_typed_before_core_has_answered_is_all_in_the_entry_and_the_wish_is_ma
     assert_eq!(said, [SAID, FIRST], "the wish was made with other words than its own");
 }
 
+// Entered ahead: the next wish is typed and its Enter pressed before core has answered the first. The kit's entry
+// remembers that Enter, and the window's answer gives it to the window's own handler.
+#[test]
+fn an_enter_pressed_before_core_has_answered_is_not_lost_and_both_wishes_are_made_in_their_order() {
+    const FIRST: &str = "tidy the uploader";
+    let (world, on) = wished_alone();
+    let shown = Showing::of(Some(on));
+    let wish = shown.offering().unwrap()().expect("alpha was typed in today");
+    let mut cx = context();
+    let (page, cx) = opened(&mut cx, shown, wish);
+    let field = page.read_with(cx, |page, _| page.placed().iter().find(|p| p.piece == PieceKind::Entry).cloned());
+    let (x, y) = field.expect("the entry is placed").rect.center();
+    cx.simulate_click(point(px(x), px(y)), Modifiers::default());
+    cx.write_to_clipboard(ClipboardItem::new_string(FIRST.into()));
+    "cmd-v enter n e x t enter space o n e".split(' ').for_each(|one| key(cx, one));
+    let held = page.read_with(cx, |page, _| (page.entry().text().to_string(), page.entry().waiting()));
+    assert_eq!(held, ("next one".to_string(), true), "the second Enter was given before core had answered");
+    assert_eq!(entry(&page, cx), (String::new(), false), "both were kept, and the entry is answered for both");
+    let said: Vec<String> = jellymoon_core::made(&world.home, DAY).into_iter().map(|wish| wish.said).collect();
+    assert_eq!(said, [SAID, FIRST, "next one"], "the second wish has the words as they stood at the answer");
+}
+
 #[test]
 fn the_window_answers_an_enter_on_a_page_with_no_day_and_the_words_stay() {
     let mut cx = context();

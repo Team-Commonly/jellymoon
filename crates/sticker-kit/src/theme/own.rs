@@ -102,6 +102,14 @@ impl Palette {
         self.paper.over(self.desk.over(Color::rgb(0xFFFFFF)))
     }
 
+    /// The ground of someone else's words under a note: a soft wash of the pencil's colour on the bubble, so it
+    /// is a ground of its own with no line round it. The bubble itself, as the theme has it, when the `quoted`
+    /// ink would be under its floor on the wash: the ink is only ever settled on the bubble.
+    pub fn quote_ground(&self) -> Color {
+        let wash = Color { a: 26, ..self.pencil }.over(self.bubble.over(Color::rgb(0xFFFFFF)));
+        if self.quoted.contrast(wash) >= QUOTED_FLOOR { wash } else { self.bubble }
+    }
+
     /// Settles the entry's colours for a theme file whose `[palette]` is `set`. A key the file lacks takes the
     /// file's own colour when the file sets that and the pair reads with it: the field is its `option` under its
     /// `ink`, the caret its `accent_dark` and the hint its `quiet` on the field, the ring its caret's on the

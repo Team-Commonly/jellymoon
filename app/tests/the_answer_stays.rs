@@ -73,7 +73,7 @@ fn a_wish_that_went_on_with_an_answer_has_it_on_its_row_and_in_its_bubble_under_
 
 #[test]
 fn a_wish_that_went_on_with_no_answer_has_the_row_and_the_bubble_it_always_had() {
-    // `Go with this`, then `Go with what I typed`: a question that was not answered leaves nothing.
+    // `Skip the question`, then `Use my own words`: a question that was not answered leaves nothing.
     for choice in 0..2 {
         let w = asked();
         let printed = acted(&w, &[&format!("choose:shape:{choice}"), "run", "column"]);

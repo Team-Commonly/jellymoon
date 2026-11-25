@@ -88,12 +88,22 @@ fn written(
     // Under the body: the quoted words, the options, and the field. The quoted words and the field stay when
     // the options do not.
     typed::quoted(cx, &mut sheet, id, quoted);
-    for (index, option) in options.iter().take(MAX_OPTIONS).enumerate() {
-        choice_option(cx, &mut sheet, (id, index), option, Role::Option, OPTION_LINES);
-    }
-    if let Some(field) = field {
-        typed::field(cx, &mut sheet, id, field);
-    }
+    under(cx, &mut sheet, id, (&options[..options.len().min(MAX_OPTIONS)], field));
     let whole = titled(cx, &sheet, title) && drawn == body.len() && near.iter().all(|(_, cut)| !cut);
     (close(cx, sheet, 20.0), whole)
+}
+
+/// The options and the field, under the quoted words: the options, then the field. A field that is first is the
+/// note's answer, and stands before the options, which are then the quiet ways round it.
+fn under(cx: &Ctx, sheet: &mut Sheet, id: &str, (options, field): (&[String], Option<&Field>)) {
+    if let Some(field) = field.filter(|field| field.first) {
+        typed::field(cx, sheet, id, field);
+        return typed::quiet(cx, sheet, id, options);
+    }
+    for (index, option) in options.iter().enumerate() {
+        choice_option(cx, sheet, (id, index), option, Role::Option, OPTION_LINES);
+    }
+    if let Some(field) = field {
+        typed::field(cx, sheet, id, field);
+    }
 }

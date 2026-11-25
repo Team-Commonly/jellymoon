@@ -125,16 +125,22 @@ impl Brush<'_> {
             // A note's field is drawn as the entry's is, and someone else's words on a ground no other text has.
             PieceKind::Field if self.keyed == Some(piece.id.as_str()) => self.pill(rect, p.entry, p.entry_ring),
             PieceKind::Field => self.pill(rect, p.entry, p.entry_edge),
-            PieceKind::Quote => Shape::Slab {
-                rect,
-                radius: (10.0 * self.k).min(rect.h / 2.0),
-                fill: p.bubble,
-                edge: Some((p.bubble_ring, self.k)),
-                shadow: None,
-                grid: None,
-            },
+            // What a person typed is a bubble with its ring. A note's quote has no line round it: a line round
+            // a ground is a field's, and a quote is never a place to type.
+            PieceKind::Quote => {
+                let said = self.scene.notes.iter().any(|n| matches!(n, Note::Said { id, .. } if *id == piece.id));
+                let (corner, fill) = if said { (10.0, p.bubble) } else { (4.0, p.quote_ground()) };
+                let edge = said.then_some((p.bubble_ring, self.k));
+                Shape::Slab { rect, radius: (corner * self.k).min(rect.h / 2.0), fill, edge, shadow: None, grid: None }
+            }
             _ => return None,
         })
+    }
+
+    /// Whether `piece` is of a text note whose field is first: its options are the quiet ways round the field.
+    fn quiet(&self, piece: &Placed) -> bool {
+        let first = |n: &Note| matches!(n, Note::Text { id, field: Some(field), .. } if field.first && *id == piece.id);
+        self.scene.notes.iter().any(first)
     }
 
     /// The colour a piece's text is painted in.
@@ -163,6 +169,9 @@ impl Brush<'_> {
 
     fn option(&self, piece: &Placed, rect: Rect) -> Shape {
         let p = &self.theme.palette;
+        if self.quiet(piece) {
+            return self.pill(rect, p.chip, p.chip);
+        }
         let struck = matches!(
             self.scene.notes.iter().find(|n| matches!(n, Note::Choice { id, .. } if *id == piece.id)),
             Some(Note::Choice { struck_first: true, .. })
@@ -204,8 +213,8 @@ mod tests {
     use super::*;
     use crate::draw::stage::REST;
     use crate::geom::Viewport;
-    use crate::layout::layout_entry;
-    use crate::scene::Entry;
+    use crate::layout::{layout, layout_entry};
+    use crate::scene::{Entry, Field, ToldRow};
     use crate::text::FixedAdvance;
 
     /// The fill and the edge of each of the entry's shapes, and the colour of its text, for an entry with three
@@ -246,5 +255,48 @@ mod tests {
         theme.palette.chip_chosen_ink = Color::rgb(0x1F2328);
         let p = &theme.palette;
         assert_eq!(painted(&theme, true)[2], (p.chip_chosen, p.chip_chosen_ink, p.chip_chosen_ink));
+    }
+
+    fn text(id: &str, quoted: &str, field: Option<Field>) -> Note {
+        let (title, options) = ("A row".into(), vec!["Yes".into()]);
+        Note::Text { id: id.into(), title, body: Vec::new(), options, quoted: quoted.into(), field }
+    }
+
+    // A person types where there is an outline, and nowhere else: someone else's words under a note have none.
+    #[test]
+    fn a_note_s_quote_has_no_line_round_it_as_a_field_has_and_a_quiet_option_is_drawn_as_an_offer_is() {
+        for theme in [Theme::sticker(), Theme::plain()] {
+            let p = &theme.palette;
+            let field = Field { offer: "More".into(), hint: "Type".into(), first: true, ..Field::default() };
+            let row = ToldRow { label: "Decided".into(), quotes: vec!["kept".into()], ..ToldRow::default() };
+            let told = Note::Told { id: "told".into(), title: "Said".into(), rows: vec![row], end: Vec::new() };
+            let said = Note::Said { id: "typed-x".into(), text: "my words".into(), answer: String::new() };
+            let notes = vec![text("asks", "Which?", Some(field)), text("plain", "", None), told, said];
+            let scene = Scene { notes, ..Scene::default() };
+            let placed = layout(&scene, &theme, Viewport { w: 1440.0, h: 900.0 }, &FixedAdvance(0.5));
+            let (theme, scene, chosen) = (&theme, &scene, None);
+            let brush = Brush { theme, scene, k: 1.0, chosen, lit: false, keyed: None, loud: false, ready: false };
+            // The fill of a piece's one slab, the colour of the line round it, and whether it is a pill.
+            let slab = |kind: PieceKind, id: &str| {
+                let piece = placed.iter().find(|piece| piece.piece == kind && piece.id == id).expect(id);
+                let mut out = Vec::new();
+                brush.add(piece, REST, &mut out);
+                let [Shape::Slab { rect, radius, fill, edge, .. }] = out[..] else { panic!("one slab: {out:?}") };
+                (fill, edge.map(|(colour, _)| colour), radius >= rect.h / 2.0)
+            };
+            assert_eq!(slab(PieceKind::Field, "asks"), (p.entry, Some(p.entry_edge), true));
+            for id in ["asks", "told"] {
+                let (fill, edge, pill) = slab(PieceKind::Quote, id);
+                assert_eq!((edge, pill), (None, false), "{id}: no outline, and no pill");
+                assert!(fill == p.quote_ground() && fill != p.entry && fill != p.bubble, "{id}: a wash: {fill:?}");
+                assert!(p.quoted.contrast(fill) >= crate::theme::QUOTED_FLOOR, "{id}: the quote's ink reads on it");
+            }
+            // What a person typed is a bubble still, and an option beside no first field is the wide one.
+            assert_eq!(slab(PieceKind::Quote, "typed-x"), (p.bubble, Some(p.bubble_ring), false));
+            assert_eq!(slab(PieceKind::Option, "asks"), slab(PieceKind::Offer, "asks"));
+            assert_eq!(slab(PieceKind::Offer, "asks"), (p.chip, Some(p.chip), true));
+            let (fill, edge, _) = slab(PieceKind::Option, "plain");
+            assert_eq!((fill, edge), (p.option, None));
+        }
     }
 }

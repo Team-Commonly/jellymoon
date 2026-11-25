@@ -12,7 +12,7 @@ use std::ffi::OsString;
 use std::fs;
 
 use jellymoon_app::shaping::{
-    ANSWER, ANSWER_HINT, GO, GO_TYPED, LABELS, READING, SAID as SHARPER_ID, SHAPE, SHAPING, SHARPER, TYPED,
+    ANSWER_HINT, GO, GO_TYPED, LABELS, READING, SAID as SHARPER_ID, SHAPE, SHAPING, SHARPER, TYPED,
 };
 use jellymoon_app::wishing::{UNKEPT, UNSTARTED};
 use serde_json::{Value, json};
@@ -82,25 +82,26 @@ fn text(id: &str, title: &str, quoted: &str, options: &[&str]) -> Note {
 }
 
 /// The note of the two choices. When the sharper wish `asks`, it is the question's: titled as Jellymoon names a
-/// question, the question its quote, and the field it is answered in under the choices; the words `said` are
-/// not on it. With no question it is titled for the typed words, which are its quote.
+/// question, the question its quote, the field it is answered in first, under no offer, and the two ways round
+/// the question worded as what they do; `said` is not on it. With no question the typed words are its quote.
 fn choice(said: &str, asks: bool) -> Note {
-    let most = jellymoon_core::MADE_SAID_MAX;
-    let field = Field { offer: ANSWER.into(), hint: ANSWER_HINT.into(), most, key: String::new(), wants_keys: true };
-    let options = [GO, GO_TYPED].map(str::to_string).to_vec();
+    let (most, hint) = (jellymoon_core::MADE_SAID_MAX, ANSWER_HINT.into());
+    let field = Field { hint, most, wants_keys: true, first: true, ..Field::default() };
+    let options = if asks { ["Skip the question", "Use my own words"] } else { [GO, GO_TYPED] };
     let (title, quoted) = if asks { ("Only you know", ASK) } else { (TYPED, said) };
     let (id, title, quoted) = (SHAPE.into(), title.into(), quoted.into());
+    let options = options.map(str::to_string).to_vec();
     Note::Text { id, title, body: Vec::new(), options, quoted, field: asks.then_some(field) }
 }
 
 /// The two notes of the sharper wish that asks, whatever words it was made of: every word of the model's is a
-/// quote, and its reason is not among them. The question stands on the note it is answered in.
+/// quote, and its reason is not among them. The question's note stands first: it is what the person is asked.
 fn pair() -> Vec<Note> {
     let rows = LABELS.iter().zip([WISH, DONE, LEFT]);
     let rows =
         rows.map(|(label, text)| ToldRow { label: label.to_string(), quotes: vec![text.into()], ..ToldRow::default() });
     let sharper = Note::Told { id: SHARPER_ID.into(), title: SHARPER.into(), rows: rows.collect(), end: Vec::new() };
-    vec![sharper, choice("", true)]
+    vec![choice("", true), sharper]
 }
 
 fn wishes(w: &World) -> std::path::PathBuf {
@@ -165,18 +166,15 @@ fn a_question_is_the_quote_of_the_note_it_is_answered_in_and_the_typed_words_are
     let w = ready();
     says(&w, &sharper());
     let shown = scene(&acted(&w, &[SAID], &[], &[])[1]["scene"]);
-    let [Note::Told { rows, .. }, Note::Text { id, title, quoted, options, field: Some(field), .. }] =
-        &shown.notes[..2]
-    else {
+    let [Note::Text { id, title, quoted, options, field: Some(field), .. }, told] = &shown.notes[..2] else {
         panic!("{:?}", shown.notes)
     };
-    assert_eq!(
-        rows.iter().map(|row| row.label.as_str()).collect::<Vec<_>>(),
-        ["The wish", "Done when", "Not touching"]
-    );
+    let Note::Told { rows, .. } = told else { panic!("the sharper wish is under the question: {told:?}") };
+    let rows: Vec<_> = rows.iter().map(|row| (row.label.as_str(), row.quotes.join("|"))).collect();
+    assert_eq!(rows, [("The wish", WISH.to_string()), ("Done when", DONE.into()), ("Not touching", LEFT.into())]);
     assert_eq!((id.as_str(), title.as_str(), quoted.as_str()), (SHAPE, "Only you know", ASK));
-    assert_eq!((options[..].to_vec(), field.offer.as_str()), (vec![GO.to_string(), GO_TYPED.to_string()], "Answer"));
-    assert_eq!((field.hint.as_str(), ANSWER, ANSWER_HINT), ("Type your answer, then Enter", "Answer", &*field.hint));
+    assert_eq!((options.join("|").as_str(), field.offer.as_str()), ("Skip the question|Use my own words", ""));
+    assert_eq!((field.hint.as_str(), ANSWER_HINT, field.first), ("Type your answer, then Enter", &*field.hint, true));
     assert!(!format!("{:?}", &shown.notes[..2]).contains(SAID), "{:?}", shown.notes);
 }
 
@@ -196,7 +194,7 @@ fn enter_in_the_field_keeps_the_wish_with_the_answer_and_starts_its_run_on_both(
     says(&w, &sharper());
     let typed = format!("type:shape:{ANSWERED}");
     let printed = acted(&w, &[SAID], &["placed", "type:shape:  ", &typed, "start"], &[]);
-    assert_eq!(acted_on(&printed[2]), ["option", "option", "offer", "field"], "the field is under the choices");
+    assert_eq!(acted_on(&printed[2]), ["field", "option", "option"], "the field stands before the ways round it");
     // An empty field gives nothing, and the pair stands: the Enter after it finds the field placed still.
     assert!(printed[3].is_null(), "{}", printed[3]);
     let (at_once, after) = (scene(&printed[4]["at_once"]), scene(&printed[4]["scene"]));
@@ -230,11 +228,13 @@ fn an_answer_core_refuses_keeps_nothing_and_leaves_the_pair_with_core_s_reason()
 }
 
 #[test]
-fn a_tap_on_either_choice_keeps_the_wish_and_starts_its_run_on_the_shape_or_on_the_typed_words() {
-    for (index, shaped, given_to_the_run) in [(0, json!(SHAPED), SHAPED), (1, Value::Null, SAID)] {
+fn skip_the_question_goes_on_with_the_shape_and_use_my_own_words_with_the_typed_words_and_each_starts_its_run() {
+    let ways = [("0:Skip the question", json!(SHAPED), SHAPED), ("1:Use my own words", Value::Null, SAID)];
+    for (way, shaped, given_to_the_run) in ways {
         let w = ready();
         says(&w, &sharper());
-        let printed = acted(&w, &[SAID], &[&format!("choose:shape:{index}"), "run"], &[]);
+        // The tap carries the words seen at its place: with other words there it is no tap, and nothing runs.
+        let printed = acted(&w, &[SAID], &[&format!("choose:shape:{way}"), "run"], &[]);
         assert_eq!(shaping(&scene(&printed[2])), [], "both notes go at once");
         let after = scene(&printed[3]);
         let failed =

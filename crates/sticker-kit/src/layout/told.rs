@@ -4,7 +4,7 @@
 //! its own sentences, which are drawn whole after the rows, or the note is left out.
 
 use super::notes::{Sheet, close, heading, open};
-use super::{Ctx, PieceKind, line_height, piece, run};
+use super::{Ctx, PieceKind, line_height, piece, run, typed};
 use crate::geom::Rect;
 use crate::scene::ToldRow;
 use crate::text::{Role, clean, is_blank, is_unseen, wrap};
@@ -103,7 +103,7 @@ fn draw(cx: &Ctx, sheet: &mut Sheet, id: &str, row: &Row, next: &mut usize) {
             let mid = rect.y + pad_y + (i as f32 + 0.5) * height;
             block.text.push(run(line.clone(), Role::Quoted, rect.x + pad_x, mid, *width, quoted));
         }
-        sheet.options.push(block);
+        sheet.options.push(typed::lined(cx, block));
         sheet.cursor = rect.bottom() + gap;
         *next += 1;
     }

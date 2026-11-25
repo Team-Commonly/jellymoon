@@ -89,6 +89,10 @@ the heart of the decision.
    the note is titled "What you typed", quotes the typed words, and has no field. (The same day, after a walk
    with a real harness: the question first stood as a last row of the sharper wish, a whole note and a quote
    of the typed words away from the field it is answered in, under a sentence for an offer.)
+   Amended 2026-11-25 (decision 11): with a question the question's note stands over the sharper wish, its field
+   is directly under the question with no "Answer" over it, and the two choices read `Skip the question` and
+   `Use my own words`. Where this decision and the two after it say `Go with this` and `Go with what I typed`
+   of a wish that asked, those are the taps they mean. With no question the order and every word are as above.
 9. **The answer stays with its wish** (2026-11-25). A wish kept with an answer is made of more than its typed
    words, and the page showed the typed words only. The kept wish now has `answered` beside `said`: the cleaned
    answer, the one that stands in `shaped`, written in the same one write, and only when the wish went on with
@@ -113,6 +117,29 @@ the heart of the decision.
    while a pair waits (an Enter in sight of the pair is a new wish, by decision 8's rule, and a person can mean
    it). The kit owns the keys and knows no wish: a field of its scene says it asks (`Field::wants_keys`), and
    the app sets that on this one field.
+11. **The question comes first, and a quote never looks like a field** (2026-11-25). Looked at in pictures of
+   the page: a wish that asked showed five outlined boxes, four of them alike and one of those the field; the
+   one thing asked of the person, the answer, was at the bottom, under the sharper wish and two wide choices.
+   Three changes, none to what is kept, to what a run is given or to which taps there are.
+   - *The order.* With a question the question's note is the first of the pair and the sharper wish stands
+     under it. In that note the field is directly under the question, and the two ways round the question
+     come after it as small quiet pills on one row, drawn as an offer is. The kit's seam is one word of a
+     field, `Field::first`; a note without it, a result's among them, places and draws as before. The offer
+     "Answer" is gone: the field stands under the question it answers and its hint says what to type.
+   - *The words.* With a question the two ways read `Skip the question` (the sharper wish as it is, what
+     `Go with this` did) and `Use my own words` (the typed words, what `Go with what I typed` did). They say
+     what the tap does to the question in front of the person. With no question nothing is asked, and the
+     note and its two choices are worded as they were.
+   - *The quote.* Someone else's words keep a ground of their own and their own ink, and that ground has no
+     line round it: a soft wash of the pencil's colour with one line of the pencil down its left. Only a
+     field has a line round it, so only a field looks like a place to type. It is the kit's rule for every
+     quote of every note; what a person typed keeps its bubble. The sharper wish's three rows stay, every
+     word, and now read as three marked lines. The ground is as wide as the quote's widest line and no wider:
+     looked at in pictures, a wash as wide as the note still read as a switched-off field.
+   Rejected: folding the sharper wish away behind a tap while a question stands (words of the model's the
+   person goes on with would be out of sight); drawing the quotes with no ground at all (a quote would then
+   differ from Jellymoon's own words by its ink alone); and a new, smaller size for the labels (no new size
+   was needed once the outlines were gone).
 
 ## Measured
 

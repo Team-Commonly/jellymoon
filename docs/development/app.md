@@ -398,14 +398,19 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   end here.
 - **`shaped`.** Nothing is kept. The entry is emptied, and two notes stand where the reading's stood:
   `shape-said`, the kit's told note titled "Your wish, sharper", with a row for each text that is not empty under
-  the labels "The wish", "Done when" and "Not touching"; and under it the text note `shape`, with exactly two
-  options, "Go with this" and "Go with what I typed". With no question `shape` is titled "What you typed" and the
-  typed words are its quote. Every word of the model's is a quote. Every other word is fixed here. The model's
-  reason (`why`) is read and checked by core and is not drawn.
-- **The question can be answered.** When the sharper wish has a question, the note `shape` is the question's:
-  it is titled "Only you know", the question is its quote, and the typed words are on neither note. Under its
-  two options is a field: the offer "Answer" over it, the hint "Type your answer, then Enter" in it, a wish's
-  200 characters at most, and no key, so it goes with its note. With no question there is no field. Enter in
+  the labels "The wish", "Done when" and "Not touching"; and the text note `shape`, with exactly two options.
+  With no question `shape` stands under the sharper wish, is titled "What you typed", has the typed words as
+  its quote, and its options are "Go with this" and "Go with what I typed". Every word of the model's is a
+  quote, on the kit's ground for a quote: a soft wash with a line of the pencil down its left and no line
+  round it, so no quote looks like a field. Every other word is fixed here. The model's reason (`why`) is read
+  and checked by core and is not drawn.
+- **The question comes first.** When the sharper wish has a question, the note `shape` is the question's and
+  is the first of the two, over the sharper wish: it is titled "Only you know", the question is its quote, and
+  the typed words are on neither note. Directly under the question is a field (`Field::first`): no offer over
+  it, the hint "Type your answer, then Enter" in it, a wish's 200 characters at most, and no key, so it goes
+  with its note. After the field the two options are small quiet pills on one row, and they are worded for
+  what they do to the question: "Skip the question" (option 0, the sharper wish as it is: `ShapeGo::Shape`)
+  and "Use my own words" (option 1, the typed words: `ShapeGo::Typed`). With no question there is no field. Enter in
   it with words is `OnShow::answering_shape` (`OnShow::typing` hands it the note `shape`): both notes go at
   once, as at a tap, and the work asks core's `wish_of_shape` to keep the wish with the shape and the answer
   (`ShapeGo::Answer`), then the run is asked for as after any Enter.

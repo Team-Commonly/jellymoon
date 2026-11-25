@@ -134,7 +134,8 @@ the heart of the decision.
      line round it: a soft wash of the pencil's colour with one line of the pencil down its left. Only a
      field has a line round it, so only a field looks like a place to type. It is the kit's rule for every
      quote of every note; what a person typed keeps its bubble. The sharper wish's three rows stay, every
-     word, and now read as three marked lines.
+     word, and now read as three marked lines. The ground is as wide as the quote's widest line and no wider:
+     looked at in pictures, a wash as wide as the note still read as a switched-off field.
    Rejected: folding the sharper wish away behind a tap while a question stands (words of the model's the
    person goes on with would be out of sight); drawing the quotes with no ground at all (a quote would then
    differ from Jellymoon's own words by its ink alone); and a new, smaller size for the labels (no new size

@@ -244,8 +244,11 @@ options (`layout/typed.rs`, `draw/field.rs`).
   round a ground is a field's and the entry's, so only they look like a place
   to type. The wash is used only where the `quoted` ink still reads on it at
   `QUOTED_FLOOR`; under a theme where it would not, the ground is the plain
-  `bubble` the ink was measured on. What a person typed (`Note::Said`) keeps
-  its bubble and its ring.
+  `bubble` the ink was measured on. The ground hugs the words: it is as wide
+  as the quote's widest drawn line and its padding, from the same left, and
+  never wider than the note's text, since a bar as wide as the note reads as a
+  field one cannot type in. What a person typed (`Note::Said`) keeps its
+  bubble and its ring.
 - **`field`: one line to type in** (`Field`: a `hint`, a cap `most`, and an
   `offer`). It is placed under the options (`PieceKind::Field`), with the
   hint in it. An `offer` that has words is a small pill over the field

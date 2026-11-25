@@ -260,3 +260,47 @@ fn a_note_s_quote_has_one_line_of_the_pencil_down_its_left_before_its_words() {
         }
     });
 }
+
+/// The ground of the note's quote `at`, where its words end furthest right, and its padding before them.
+fn ground(placed: &[Placed], at: usize) -> (Rect, f32, f32) {
+    let quote = of(placed, PieceKind::Quote)[at];
+    let widest = quote.text.iter().map(|run| run.rect.right()).fold(0.0, f32::max);
+    (quote.rect, widest, quote.text[0].rect.x - quote.rect.x)
+}
+
+// A bar as wide as the note and as high as a field reads as a field one cannot type in. A quote's ground is as
+// wide as its words and their padding: a short sentence has a short ground, well inside the note.
+#[test]
+fn a_short_quote_s_ground_ends_its_padding_after_its_words_and_is_narrower_than_the_note() {
+    each(|theme, viewport| {
+        let placed = place(note(&[], &[], "Which?", field("")), theme, viewport);
+        let ((rect, widest, pad), inner) = (ground(&placed, 0), of(&placed, PieceKind::Field)[0].rect);
+        assert!((rect.right() - widest - pad).abs() < 0.01, "{rect:?} ends {pad} after {widest}");
+        assert!(rect.x == inner.x && rect.w < inner.w / 2.0, "{rect:?} in {inner:?}");
+    });
+}
+
+#[test]
+fn a_quote_that_wraps_has_a_ground_as_wide_as_its_widest_line_and_never_wider_than_the_note() {
+    each(|theme, viewport| {
+        let long = "Which of the two did you mean, the first or the one after it? ".repeat(4);
+        let placed = place(note(&[], &[], &long, field("")), theme, viewport);
+        let ((rect, widest, pad), inner) = (ground(&placed, 0), of(&placed, PieceKind::Field)[0].rect);
+        assert!(of(&placed, PieceKind::Quote)[0].text.len() > 1, "it wraps");
+        assert!((rect.right() - widest - pad).abs() < 0.01, "{rect:?} ends {pad} after {widest}");
+        assert!(rect.x == inner.x && rect.right() <= inner.right() + 0.01, "{rect:?} in {inner:?}");
+    });
+}
+
+#[test]
+fn two_quotes_of_different_lengths_in_one_note_have_grounds_of_different_widths_from_one_left_edge() {
+    let quotes = vec!["one".into(), "a good deal more than one".into()];
+    let row = ToldRow { label: "Decided".into(), quotes, ..ToldRow::default() };
+    let told = Note::Told { id: ID.into(), title: "Said".into(), rows: vec![row], end: Vec::new() };
+    each(|theme, viewport| {
+        let placed = place(told.clone(), theme, viewport);
+        let ((short, ..), (long, widest, pad)) = (ground(&placed, 0), ground(&placed, 1));
+        assert!(short.x == long.x && short.w < long.w, "{short:?} and {long:?}");
+        assert!((long.right() - widest - pad).abs() < 0.01, "{long:?} ends {pad} after {widest}");
+    });
+}

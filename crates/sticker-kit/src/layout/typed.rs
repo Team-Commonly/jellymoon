@@ -31,7 +31,12 @@ pub(super) fn quoted(cx: &Ctx, sheet: &mut Sheet, id: &str, words: &str) {
 
 /// A note's quote with one line of the pencil down its left, before its words: its sketch, `quoted`, with the
 /// one part `line`. The line is what marks the words as someone else's; no line goes round them, as round a field.
+/// Its ground hugs its words: from the same left, as wide as its widest line and the padding the words have before
+/// them, and never wider than it was given. A ground as wide as the note reads as a field one cannot type in.
 pub(super) fn lined(cx: &Ctx, mut block: Placed) -> Placed {
+    let pad = block.text.first().map_or(0.0, |run| run.rect.x - block.rect.x);
+    let widest = block.text.iter().map(|run| run.rect.right()).fold(block.rect.x, f32::max);
+    block.rect.w = block.rect.w.min(widest + pad - block.rect.x);
     let (x, inset) = (block.rect.x + cx.px(3.0), cx.px(4.0).min(block.rect.h / 4.0));
     let (top, low) = (block.rect.y + inset, block.rect.bottom() - inset);
     let mut pencil = Pencil::new(&format!("{}|{}", block.id, block.index), cx.k);

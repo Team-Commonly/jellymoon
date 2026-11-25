@@ -904,7 +904,9 @@ max_file_lines = 400
 # (`src/scene.rs`, `src/layout/typed.rs`, `src/layout/text_note.rs`, `src/layout/told.rs`, `src/draw/shapes.rs`,
 # `src/theme/own.rs`), and the tests (`tests/typed.rs`, the test in `src/draw/shapes.rs`, a word in
 # `tests/field_draw.rs` and `tests/pencil.rs`).
-"crates/sticker-kit" = 13497
+# A quote's ground as wide as its words raised it by 49 (49 added, 0 removed): the width in
+# `src/layout/typed.rs` and three tests in `tests/typed.rs`.
+"crates/sticker-kit" = 13546
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.

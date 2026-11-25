@@ -717,7 +717,8 @@ that fit and counts the rest in a last line, `+N more`.
     away when a made wish is kept in the window (`Showing::answered` with a run asked for; `Showing::ended`
     when core's answer to a choice made a wish, the wish of that answer staying), and all but the newest when
     the window opens (`Open::opening`). A wish that settles between those moments stays on the page while it
-    is the newest. One that was at work at such a moment, under a later wish, is owed it (`Tucked::tuck`): it
+    is the newest. One that was at work at such a moment, under a later wish, is owed it (`Tucked::tuck`; the
+    wishes before the new one, by `Answer::earlier`, as the scene on show may not hold the new wish yet): it
     is tucked away at the first drawing where its run goes no more, if it is settled then, so two wishes
     entered back to back end as two made one after the other do, whichever run ends first. One that needs
     the person then (a question, work that waits or does not fit, a run that failed) stays, and stays once

@@ -165,6 +165,40 @@ fn an_earlier_wish_that_ends_after_a_later_wish_was_made_tucks_away_whichever_of
     assert_eq!(newest_first, [alone, alone, "m1: m2:kept-m2", "m1:kept-m1[Undo it] m2:kept-m2"]);
 }
 
+// While the later wish is read, the earlier one's run takes a step and a look draws it: the page changed under
+// the answer, so the scene the making gives does not hold the later wish yet. The earlier wish is owed all the
+// same. Its run ends first, and the later one's after it, as a walk in a real window found them.
+#[test]
+fn an_earlier_wish_tucks_away_though_a_look_changed_the_page_while_the_later_wish_was_read() {
+    let (w, repo) = empty(true);
+    let held = ["one", "two", "three"].map(|name| w.at("tmp").join(name));
+    let hold = held.clone().map(|held| format!("hold:{}", held.display()));
+    let read = [TALL, "look", TWO[0], "enter:wish@alpha:say hello", &hold[0], "look", "answer"];
+    let ended = [hold[1].as_str(), "look", "column", &hold[2], "look", "column"];
+    let mut window = w.taps("logs", &[&read[..], &ended[..]].concat());
+    window.printed(3);
+    w.play("steps");
+    let (logs, named) = (w.at("logs"), repo.to_str().unwrap());
+    let args = ["run", "--wish", "m1", "--date", DAY, "--repo", named, "--logs", logs.to_str().unwrap()];
+    let runs = || fs::read_dir(w.at("jm").join("runs")).into_iter().flatten().flatten();
+    let stepped = || runs().any(|run| run.path().join("steps.json").exists());
+    let lines = thread::scope(|scope| {
+        let first = scope.spawn(|| w.jellymoon(&args)["outcome"].as_str().unwrap().to_string());
+        wait_until("the first wish's step", stepped);
+        fs::write(&held[0], "").unwrap();
+        window.printed(5);
+        fs::write(w.at("rec").join("go"), "").unwrap();
+        assert_eq!(first.join().unwrap(), "completed");
+        fs::write(&held[1], "").unwrap();
+        window.printed(7);
+        assert_eq!(ran(&w, &repo, "m2", "hello"), "completed");
+        fs::write(&held[2], "").unwrap();
+        window.ended()
+    });
+    assert_ne!(lines[3], "null", "the look drew the step: {lines:#?}");
+    assert_eq!([&lines[6], &lines[8]].map(|line| page(line)), ["m1: m2:steps-m2", "m1: m2:kept-m2[Undo it]"]);
+}
+
 #[test]
 fn of_three_wishes_entered_back_to_back_only_the_newest_has_its_result_on_the_page() {
     let (w, repo) = empty(true);

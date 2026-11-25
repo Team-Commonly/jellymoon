@@ -153,11 +153,11 @@ impl Showing {
     /// answer that asks for a run is of a new made wish, typed in the entry or as a follow-up: every settled
     /// wish tucks away then (`drawing/tucked.rs`).
     pub fn answered(&self, answer: Option<Answer>) -> Entered {
-        let kept = answer.as_ref().is_some_and(Answer::kept);
+        let (kept, earlier) = answer.as_ref().map_or((false, 0), |answer| (answer.kept(), answer.earlier()));
         let (scene, asking) = answer.and_then(|answer| self.with(|on| on.answered(answer))).unzip();
         let asking: Option<Asking> = asking.flatten();
         if let (Some(scene), Some(_)) = (&scene, &asking) {
-            self.3.made(scene, None);
+            self.3.made(scene, None, earlier);
         }
         Entered { kept, scene, asking }
     }
@@ -273,10 +273,10 @@ impl Showing {
             Ended::Worked(mut worked) => {
                 let wish = worked.wish.clone();
                 self.3.remade(&wish, worked.remade.take());
-                let fresh = made(&worked.seen.now).len() > made(&worked.seen.from).len();
+                let (now, before) = (made(&worked.seen.now).len(), made(&worked.seen.from).len());
                 let scene = self.3.showed(on.worked(worked));
-                if fresh {
-                    self.3.made(&scene, Some(&wish));
+                if now > before {
+                    self.3.made(&scene, Some(&wish), now - 1);
                 }
                 let mut turns = self.2.borrow_mut();
                 turns.owe(&scene);

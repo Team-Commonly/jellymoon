@@ -55,3 +55,27 @@ stays on the page. That was the behaviour this change removes; it now says the w
   after a later one was made.
 - A wish the person stops while it is owed the tuck is tucked away when it is let go.
 - Not seen in a real window, not run with a real harness, not run on Windows or Linux.
+
+## After the walk (second commit)
+A walk in a real window with a real harness still ended with two results open: both wishes in one project, the
+second entered as soon as the first was made, the first run ending first and the second a second later.
+
+- **Cause.** Not the keep. A run's end tells its wish only after its change was kept by itself
+  (`crates/jellymoon-core/src/run/end.rs`, `settle`: `keep_itself` and then `tell`), and the look that finds a
+  run ended makes that wish's notes again in the same scene (`app/src/placing.rs`, `Today::looked`), so no
+  drawing holds a wish that has ended with its change not yet landed. The first wish was never owed the tuck.
+  While the second wish was read, a look drew a step of the first wish's run, so the page had changed when
+  core's answer came, and `OnShow::answered` (`app/src/wishing.rs`) then leaves the new wish to the next look.
+  `Tucked::tuck` took every made wish of that scene but the last as the earlier ones; the last was the first
+  wish itself.
+- **Fix.** The wishes before the new one are counted on the scene core gave the answer (`Answer::earlier`;
+  `Showing::ended` counts its own), and `tuck` owes the first that many of the scene on show.
+- **Red first.** `an_earlier_wish_tucks_away_though_a_look_changed_the_page_while_the_later_wish_was_read`
+  (the made-up window: Enter, a run's step, a look, then core's answer; the first run ends, then the second)
+  failed with `m1:kept-m1[Undo it] m2:steps-m2` and then `m1:kept-m1 m2:kept-m2[Undo it]`, the walk's end.
+- **Mutation.** `tuck` owing every made wish of the scene but the last again: that test fails.
+- **Not proved.** That this is what the walk met: it fits the walk (a second wish entered while the first
+  run's first steps came) and its end state to the note, and the walk was not made again. The walk's other
+  order, which was fine, is this path too only if no look changed the page while its second wish was read.
+- **Reviewer notes taken.** The comment on `Tucked::tuck` says only the newest wish stays when it settles
+  between two makings; ADR 0030, "When", says the owed path tucks a result that may never have been drawn open.

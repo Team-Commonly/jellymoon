@@ -160,7 +160,8 @@ answer and two bare bubbles, and could not tell that the other two had finished.
       stays, so that answer is read). Every wish that is settled then is tucked away, but one that ended
       since the last look and has no note on the scene yet: its result was never drawn, so it stays until
       the wish after. And when the window opens on a day that has made wishes: every settled wish but the
-      newest.
+      newest. A wish that is at work at such a moment, under a later one, is tucked away when it settles
+      (below): that tucks a result that may never have been drawn open.
     - *A remade wish steps aside* (amended 2026-11-24; decision 10). One wish is tucked away at another
       moment: the wish `Make it again` made again, once its old work was tossed and the new wish's run was
       started, at core's answer (`Tucked::aside`, from `Open::remade`). The rule above keeps the wish an
@@ -189,7 +190,11 @@ answer and two bare bubbles, and could not tell that the other two had finished.
       stays once the person has answered or kept it, until the next wish is made. The newest wish is
       never owed it. A wish tucked away so never had its result drawn open; its little one says how it
       ended, and a tap brings the notes back. A wish stopped by the person while it is owed is tucked
-      away when it is let go.
+      away when it is let go. The wishes owed it are the ones that stand before the new wish, counted on
+      the scene core gave the answer (`Answer::earlier`), not every one but the last of the scene on show:
+      when the page changed while core was asked (a look drew a step of the earlier wish's run), the scene
+      on show does not hold the new wish yet, and its last made wish is the earlier one (amended after a
+      walk in a real window, where that left two results open).
     - *What brings it back.* A tap on its little one or its bubble (decision 5's tap, so its notes are also
       made again from core): the notes are back as an ended wish first has them, its drawn note closed, and
       stay until the next wish is made. That tap opens no drawn note; the next one does. A tucked wish

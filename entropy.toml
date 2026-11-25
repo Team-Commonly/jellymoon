@@ -1160,7 +1160,10 @@ max_file_lines = 400
 # An earlier wish tucks when it settles raised the app by 152 (161 added, 9 removed): the wishes at work under a
 # later one, owed the tuck (`src/drawing/tucked.rs`, 11), the rule's own test (19), and its tests at the made-up
 # window (`tests/finished_wishes_tuck_away.rs`, 122).
-"app" = 20405
+# After the walk, the same slice raised it by 46 (72 added, 26 removed): the wishes owed the tuck are counted
+# from core's answer (`src/wishing.rs`, 6; `src/drawing/tucked.rs`, 5; `src/drawing.rs`, 1), and the walk's order
+# at the made-up window (`tests/finished_wishes_tuck_away.rs`, 34).
+"app" = 20451
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

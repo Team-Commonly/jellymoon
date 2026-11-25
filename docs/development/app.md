@@ -118,7 +118,7 @@ its sentences; no file of a step is drawn; nobody has looked at it in a real win
 ## A read day opens folded (`app/src/drawing/folded.rs`, ADR 0030 decision 12)
 
 What the reading put on a day's page is first one drawn note at the column's top, the **tally** (id `fold`,
-the kit's `Picture::Tally`), and the page opens at its top. `drawing::Open::day` makes it, last, on the column
+the kit's `Picture::Tally`), and a page that holds no made wish opens at its top. `drawing::Open::day` makes it, last, on the column
 `drawing::column` left; `Showing::column` is the one place that calls it.
 
 | | Folded (a window opens so) | Open (after a tap on the tally) |
@@ -150,7 +150,8 @@ the kit's `Picture::Tally`), and the page opens at its top. `drawing::Open::day`
 - **The scroll.** A view whose scene has a tally and no made wish opens held at its top (`Scroll::hold`); one
   that holds a made wish opens at its end, as before. The view is held where it is when the tally opens or
   folds. At its column's end it follows the end as before, and a held view no wheel moved goes to the end when
-  the page holds one more made wish than it did, wherever that wish was made (`Scroll::entered`).
+  the page holds one more made wish than it did, wherever that wish was made (`Scroll::entered`), unless a
+  field of a note holds words the person is typing: the page never leaves those by itself.
 - `layout` and the made-up window's `placed` have no tap and print no tally: every piece of the reading. The
   made-up window's `pieces` prints what the window draws, and `tap:fold` is the tap.
 - The snapshot example draws either with `--folded` and `--unfolded`.

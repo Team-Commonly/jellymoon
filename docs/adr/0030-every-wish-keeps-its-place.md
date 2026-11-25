@@ -229,8 +229,8 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     the reading as it was: a read day opened as a row for each of its wishes, each with a label, a list of
     what came true as long as the day was busy, and its clashes, and the window opened at the end of all
     that. The entry, and whatever the person had made, was under a wall of the model's sentences. So what
-    the reading put on a day's page is first one drawn note at the column's top, a **tally**, and the page
-    opens at its top.
+    the reading put on a day's page is first one drawn note at the column's top, a **tally**, and a page
+    with no made wish opens at its top.
 
     - *What is folded.* The reading's pieces and no other: the little ones nobody typed for, with their
       labels and stars; the list of what came true; a change of mind the reading found settled; a clash
@@ -288,8 +288,9 @@ answer and two bare bubbles, and could not tell that the other two had finished.
       is opened or folded the view is held where it is, so the tally stays under the pointer. A view that
       is at the end of its column is at its end again when the column grows; and a held view no wheel has
       moved goes to the end when the page holds one more made wish than before, wherever it was made
-      (the entry, a card's field, `More like this`, `Make it again`, the command), so a new wish is never
-      left under the window's edge.
+      (the entry, a card's field, `More like this`, `Make it again`, the command), so a new wish is not
+      left under the window's edge. One thing stops it: while a field of a note holds words the person is
+      typing, the page does not move by itself, whoever made the wish.
     - *Rejected.* Folding the made wishes too: they are the person's own, and decision 11 already puts
       away the ones that need nothing. A sentence in place of the picture ("8 wishes in 4 projects"): it
       is the wall again, shorter. A row for each wish: that is the page it folds. Keeping the fold in a

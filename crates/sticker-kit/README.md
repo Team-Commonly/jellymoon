@@ -544,7 +544,8 @@ at the band's top and the entry in a second layer over it, so no card is drawn o
 person said (`Note::Said`) opens held at its top instead (`Scroll::hold`), and a view is held where it is when its
 tally opens or closes; a held view that reaches its column's end follows it again. Enter in the entry, and any
 scene that holds one more thing a person said than the one on show, takes a held view no wheel moved to the end
-(`Scroll::entered`; `draw/column.rs`, `turn`).
+(`Scroll::entered`; `draw/column.rs`, `turn`), but not while a field of a note holds typed words: the page does
+not leave them by itself.
 
 **Text breaks at a space, and never inside a character** (`text::wrap`,
 `text::fit`). A word too long for a line of its own, such as an address or

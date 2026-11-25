@@ -12,7 +12,7 @@ use crate::geom::Rect;
 use crate::layout::{PieceKind, Placed, TextRun, page_scale};
 use crate::scene::{Note, Picture, Scene, speaker};
 use crate::scroll::Scroll;
-use crate::text::Role;
+use crate::text::{Role, has_visible};
 
 /// Whether the tally of `scene` is open, when it has one.
 fn tally(scene: &Scene) -> Option<bool> {
@@ -50,9 +50,11 @@ pub(super) enum Turn {
     Follow,
 }
 
-pub(super) fn turn(shown: &Scene, scene: &Scene) -> Turn {
+/// `typing` is whether a field of a note holds words the person is typing: the page never moves away from them
+/// by itself, so nothing is followed then.
+pub(super) fn turn(shown: &Scene, scene: &Scene, typing: bool) -> Turn {
     let (was, is) = (tally(shown), tally(scene));
-    if said(scene) > said(shown) {
+    if said(scene) > said(shown) && !typing {
         Turn::Follow
     } else if is.is_some() && (was.is_some() && was != is || was.is_none() && said(scene) == 0) {
         Turn::Hold
@@ -65,7 +67,8 @@ impl Page {
     /// `scene` is about to be shown in place of the one on show: the view is held, follows the end or is left
     /// to the scroll's rules ([`turn`]).
     pub(super) fn hold_for(&mut self, scene: &Scene) {
-        match turn(&self.scene, scene) {
+        let typing = self.fields.iter().any(|field| has_visible(field.state.text()));
+        match turn(&self.scene, scene, typing) {
             Turn::Hold => self.scroll.hold(),
             Turn::Follow => self.scroll.entered(),
             Turn::Stay => {}
@@ -196,20 +199,29 @@ mod tests {
     fn one_more_thing_said_is_followed_wherever_it_was_said_and_a_turned_tally_holds_the_view() {
         let day = scene(vec![said("m-1"), tally(false)]);
         let more = scene(vec![said("m-1"), said("m-2"), tally(false)]);
-        assert_eq!(turn(&day, &more), Turn::Follow);
-        assert_eq!(turn(&more, &day), Turn::Stay, "one fewer is not followed");
+        assert_eq!(turn(&day, &more, false), Turn::Follow);
+        assert_eq!(turn(&more, &day, false), Turn::Stay, "one fewer is not followed");
         assert_eq!(
-            turn(&day, &scene(vec![said("m-1"), tally(true)])),
+            turn(&day, &scene(vec![said("m-1"), tally(true)]), false),
             Turn::Hold,
             "the tally opened under the pointer"
         );
-        assert_eq!(turn(&scene(Vec::new()), &scene(vec![tally(false)])), Turn::Hold, "a reading came to an empty page");
         assert_eq!(
-            turn(&scene(vec![said("m-1")]), &day),
+            turn(&scene(Vec::new()), &scene(vec![tally(false)]), false),
+            Turn::Hold,
+            "a reading came to an empty page"
+        );
+        assert_eq!(
+            turn(&scene(vec![said("m-1")]), &day, false),
             Turn::Stay,
             "a reading that comes over a made wish moves nothing"
         );
-        assert_eq!(turn(&day, &day), Turn::Stay);
+        assert_eq!(turn(&day, &day, false), Turn::Stay);
+        assert_eq!(turn(&day, &more, true), Turn::Stay, "the page does not leave words that are being typed");
+        let (opened, both) =
+            (scene(vec![said("m-1"), tally(true)]), scene(vec![said("m-1"), said("m-2"), tally(true)]));
+        assert_eq!(turn(&day, &both, true), Turn::Hold, "and a tally turned meanwhile still holds the view");
+        assert_eq!(turn(&day, &opened, true), Turn::Hold);
         // Followed means: a held view no wheel moved is at the end at the next layout.
         let mut scroll = Scroll::default();
         scroll.hold();

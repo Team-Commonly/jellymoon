@@ -246,7 +246,7 @@ fn a_tap_at_the_picture_s_place_opens_and_closes_the_note_on_show() {
         bin: None,
     };
     let scene = page(vec![told("m1", ""), work()]);
-    let shown = Showing::of(Some(OnShow { today, page: None, scene: scene.clone() }));
+    let shown = Showing::of(Some(OnShow { today, page: None, scene: scene.clone(), typed: None }));
     let told_on = |shown: &Showing| seen(&shown.column(&scene), "told-m1").0;
     assert!(!told_on(&shown));
     let tapped = shown.chose("work-m1", PICTURE_PLACE, "");

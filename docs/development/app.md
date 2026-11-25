@@ -371,12 +371,29 @@ thread. With no project chosen nothing is read, and the Enter is a typed wish's.
   end here.
 - **`shaped`.** Nothing is kept. The entry is emptied, and two notes stand where the reading's stood:
   `shape-said`, the kit's told note titled "Your wish, sharper", with a row for each text that is not empty under
-  the labels "The wish", "Done when", "Not touching", "Only you know" and "Why"; and under it the text note
-  `shape`, titled "What you typed", with the typed words as its quote and exactly two options, "Go with this" and
-  "Go with what I typed". Every word of the model's is a quote of a row. Every other word is fixed here.
+  the labels "The wish", "Done when" and "Not touching"; and under it the text note `shape`, with exactly two
+  options, "Go with this" and "Go with what I typed". With no question `shape` is titled "What you typed" and the
+  typed words are its quote. Every word of the model's is a quote. Every other word is fixed here. The model's
+  reason (`why`) is read and checked by core and is not drawn.
+- **The question can be answered.** When the sharper wish has a question, the note `shape` is the question's:
+  it is titled "Only you know", the question is its quote, and the typed words are on neither note. Under its
+  two options is a field: the offer "Answer" over it, the hint "Type your answer, then Enter" in it, a wish's
+  200 characters at most, and no key, so it goes with its note. With no question there is no field. Enter in
+  it with words is `OnShow::answering_shape` (`OnShow::typing` hands it the note `shape`): both notes go at
+  once, as at a tap, and the work asks core's `wish_of_shape` to keep the wish with the shape and the answer
+  (`ShapeGo::Answer`), then the run is asked for as after any Enter.
+- **The pair on show is held, not read back.** The page on show holds the sharper wish the pair was drawn from,
+  with the words it was made of and its project (`OnShow::typed`, core's `ShapeSeen`): set when the pair is
+  shown, and again when a refused answer brings it back; cleared when the pair goes, at a tap, at Enter in the
+  field, and at the next Enter in the entry. Both taps and the field hand core that, with or without a question,
+  and never a note's quote, which with a question is the model's text. Core keeps the wish only while the shape
+  that waits is the one the page showed, text for text: one made since for the same words keeps nothing here.
+  An answer core refuses (too long, nothing left once cleaned, no prompt to build, a shape that waits no more)
+  keeps nothing: the pair stands again under "That wish was not kept." with core's reason, and the field keeps
+  its words. An empty field gives nothing. What the run is given is core's to build (ADR 0025, decision 7).
 - **A tap** on either option is one arm of `stopping::chose` and an ordinary `Chosen::Work`: both notes go at
   once, and the work asks core's `wish_of_shape` to keep the wish, with the shape or as typed, then asks for its
-  run as a typed wish's is asked for. Core keeps it only while that shape still waits for those words; what it
+  run as a typed wish's is asked for. Core keeps it only while the shape that waits is the one on show; what it
   refuses, and a run that was not started, are said in the notes a typed wish has for them.
 - **Enter while they stand** takes the pair away and reads the new words: a page holds one reading or one pair.
   A look leaves them (`working::names`), and so does a tap on a wish's character (`Today::opened`): they hold the

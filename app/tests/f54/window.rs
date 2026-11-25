@@ -43,7 +43,7 @@ fn asking(dir: &Path) -> (Showing, Scene) {
     let (date, model, harness) = (DAY.to_string(), "sonnet".to_string(), Some(dir.join("claude")));
     let today = Today { date, logs, skip: Vec::new(), model, home, harness, fresh: false, settings: None, bin: None };
     let (scene, page) = today.first();
-    let shown = Showing::of(Some(OnShow { today, page, scene }));
+    let shown = Showing::of(Some(OnShow { today, page, scene, typed: None }));
     let look = shown.poked("m1").expect("a tap on the wish's character is a look");
     let scene = look().and_then(|seen| shown.seen(seen)).expect("the wish's note is opened");
     (shown, scene)

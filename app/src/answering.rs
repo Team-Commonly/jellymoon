@@ -196,6 +196,10 @@ impl OnShow {
     /// what core says of a wish at work, with no question and no field, as a tap on a choice of work puts a
     /// note that says what is being done. So the note is true while the run goes on, however long that is.
     pub fn typing(&mut self, note: &str, typed: &str) -> Option<(Option<Scene>, Wishing)> {
+        // The field under a sharper wish's choices is no made wish's: its Enter is `shaping.rs`'s.
+        if note == crate::shaping::SHAPE {
+            return self.answering_shape(typed);
+        }
         let (at, wish, more) = field_of(&self.scene, note)?;
         let (today, page, typed) = (self.today.clone(), self.page.clone(), typed.to_string());
         if more {

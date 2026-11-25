@@ -12,7 +12,7 @@
 //! [`Asking`], [`Look`]); what the window's thread does with an answer ([`OnShow::answered`], [`OnShow::asked`],
 //! [`OnShow::seen`]) opens no file.
 
-use jellymoon_core::{DayOptions, MADE_SAID_MAX, RunOptions, Started};
+use jellymoon_core::{DayOptions, MADE_SAID_MAX, RunOptions, ShapeSeen, Started};
 use sticker_kit::{Entry, Note, Scene};
 
 use crate::answering::{UNANSWERED, UNSETTLED};
@@ -74,8 +74,9 @@ pub struct Answer {
     /// answer was given, and when it was not given and the run is known to wait on that question no more; else
     /// the note it was typed under, with its field.
     opened: Option<(String, Note)>,
-    /// After a wish was read (`shaping.rs`): the notes that stand where the reading's note stood.
-    shape: Option<Vec<Note>>,
+    /// After a wish was read (`shaping.rs`): the notes that stand where the reading's note stood, and the
+    /// typed words a sharper wish among them was made of.
+    shape: Option<(Vec<Note>, Option<ShapeSeen>)>,
 }
 
 impl Answer {
@@ -92,10 +93,11 @@ impl Answer {
     }
 
     /// This answer, to a wish that was read: `notes` stand where the reading's note stood, on the scene the
-    /// answer was made from and on any scene that took its place.
-    pub(crate) fn settling(mut self, notes: Vec<Note>) -> Self {
+    /// answer was made from and on any scene that took its place. `typed` is the sharper wish among them, with
+    /// the words it was made of, for the page on show to hold.
+    pub(crate) fn settling(mut self, notes: Vec<Note>, typed: Option<ShapeSeen>) -> Self {
         crate::shaping::settle(&mut self.seen.now, notes.clone());
-        Answer { shape: Some(notes), ..self }
+        Answer { shape: Some((notes, typed)), ..self }
     }
 
     /// Whether core took what was typed.
@@ -170,11 +172,15 @@ impl OnShow {
     /// to answer in, so the field and the words in it are on show. A note with nothing to answer in is left to
     /// the next tap: a wish the person closed is not opened again.
     pub fn answered(&mut self, answer: Answer) -> (Scene, Option<Asking>) {
+        let shape = answer.shape.map(|(notes, typed)| {
+            self.typed = typed;
+            notes
+        });
         if self.scene == answer.seen.from {
             self.scene = answer.seen.now;
         } else {
             newest(&mut self.scene, answer.said);
-            if let Some(notes) = answer.shape {
+            if let Some(notes) = shape {
                 crate::shaping::settle(&mut self.scene, notes);
             }
             let unplaced = answer.opened.and_then(|(wish, note)| working::reopen(&mut self.scene, &wish, note));

@@ -200,7 +200,7 @@ impl World {
             bin: Some(self.bin()),
         };
         let (scene, page) = today.first();
-        OnShow { today, page, scene }
+        OnShow { today, page, scene, typed: None }
     }
 
     /// Waits for the `jellymoon run` of the first made wish to be gone: a test ends it before its folder goes.

@@ -142,7 +142,7 @@ fn window(options: Options) -> Result<(), Failure> {
         Source::Waiting(date) => (today::waiting(&date), None, false),
         Source::Day { day, named } => {
             let (first, kept) = day.first();
-            let shown = OnShow { today: (*day).clone(), page: kept.clone(), scene: first.clone() };
+            let shown = OnShow { today: (*day).clone(), page: kept.clone(), scene: first.clone(), typed: None };
             (first, Some((shown, day.later(kept))), named)
         }
     };

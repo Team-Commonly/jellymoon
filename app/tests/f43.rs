@@ -158,7 +158,7 @@ fn wished_alone() -> (day::World, OnShow) {
         bin: None,
     };
     let (scene, page) = today.first();
-    (world, OnShow { today, page, scene })
+    (world, OnShow { today, page, scene, typed: None })
 }
 
 /// A choice to stop the run of `wish`, as one left on show.

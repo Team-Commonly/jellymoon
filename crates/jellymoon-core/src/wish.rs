@@ -75,7 +75,7 @@ pub struct MadeWish {
     /// before it. Left out of every wish that follows none, and no page shows it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub after: Option<String>,
-    /// The run's prompt of a wish kept from a shape (F91, `run/shape.rs`): one line, at most 1000 characters.
+    /// The run's prompt of a wish kept from a shape (F91, `run/shape.rs`): one line, at most 1300 characters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shaped: Option<String>,
 }

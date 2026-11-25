@@ -175,12 +175,12 @@ fn wished() -> (day::World, OnShow) {
         bin: None,
     };
     let (scene, page) = today.first();
-    (world, OnShow { today, page, scene })
+    (world, OnShow { today, page, scene, typed: None })
 }
 
 /// The same day in another window.
 fn again(on: &OnShow) -> OnShow {
-    OnShow { today: on.today.clone(), page: on.page.clone(), scene: on.scene.clone() }
+    OnShow { today: on.today.clone(), page: on.page.clone(), scene: on.scene.clone(), typed: None }
 }
 
 #[test]

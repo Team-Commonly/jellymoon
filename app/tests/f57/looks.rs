@@ -231,7 +231,7 @@ fn past_midnight_a_wish_made_on_the_page_is_shown_by_the_jellyfish_when_its_run_
     tick(&mut cx);
     assert_eq!(shown(&opened, &mut cx), floats());
     let (scene, kept) = page.first();
-    let mut on = OnShow { today: page, page: kept, scene };
+    let mut on = OnShow { today: page, page: kept, scene, typed: None };
     // The asking for its run is left alone: the command core starts would inherit this process's variables.
     let (_, asking) = on.wished(SAID, Some("alpha"));
     assert!(asking.is_some(), "core kept the wish");

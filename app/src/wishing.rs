@@ -104,6 +104,12 @@ impl Answer {
     pub fn kept(&self) -> bool {
         self.kept
     }
+
+    /// How many made wishes stand before the one this answer made: the scene core gave it holds that one last.
+    /// The scene on show may not hold it yet, when the page changed while core was asked (`OnShow::answered`).
+    pub(crate) fn earlier(&self) -> usize {
+        crate::placing::made(&self.seen.now).len().saturating_sub(1)
+    }
 }
 
 /// An Enter carried to core: the window runs it off its own thread, so a day that is locked, a slow disk or many

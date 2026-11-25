@@ -716,7 +716,13 @@ that fit and counts the rest in a last line, `+N more`.
     `said-<wish>` has no choice, and no note of it has a field to answer in. The settled wishes are tucked
     away when a made wish is kept in the window (`Showing::answered` with a run asked for; `Showing::ended`
     when core's answer to a choice made a wish, the wish of that answer staying), and all but the newest when
-    the window opens (`Open::opening`). A wish that settles between those moments stays on the page. A tap on
+    the window opens (`Open::opening`). A wish that settles between those moments stays on the page while it
+    is the newest. One that was at work at such a moment, under a later wish, is owed it (`Tucked::tuck`; the
+    wishes before the new one, by `Answer::earlier`, as the scene on show may not hold the new wish yet): it
+    is tucked away at the first drawing where its run goes no more, if it is settled then, so two wishes
+    entered back to back end as two made one after the other do, whichever run ends first. One that needs
+    the person then (a question, work that waits or does not fit, a run that failed) stays, and stays once
+    the person has settled it. A tap on
     a tucked wish's little one or bubble brings its notes back, made again from core, until the next wish is
     made; a tucked wish that is settled no more comes back by itself (`Tucked::away`). It is the window's own
     state, in `drawing::Open`, applied in `drawing::passed`: the scene the app keeps holds every note, core
@@ -727,7 +733,8 @@ that fit and counts the rest in a last line, `+N more`.
   `app/tests/several_wishes.rs` holds these at the made-up window (two at work, two kept by themselves, a keep
   and a toss on two wishes, `Show me` on one of two, the looks that ask nothing, a wish of the reading),
   `app/tests/finished_wishes_tuck_away.rs` the tucking away (a wish made after one landed, a tap, a change that
-  lands after the next wish, a window opened on four wishes), and `app/src/showing/tests.rs`, `placing.rs` and
+  lands after the next wish, a window opened on four wishes; two and three wishes entered back to back, their
+  runs ending in either order; an earlier wish that needs the person when its run ends), and `app/src/showing/tests.rs`, `placing.rs` and
   `drawing/tucked.rs` the rules alone. Not proved: the kit's keeping of the entry's words and keys under a new
   scene, which is the window's (`set_scene`, as every look); a long column in a real window.
 - **What the run says it did** (F86, ADR 0023, `app/src/told.rs`): when core prints a `result` with a piece

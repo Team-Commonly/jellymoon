@@ -41,7 +41,8 @@ pub fn column(scene: &Scene) -> Scene {
     let mut under = Vec::new();
     for (who, (_, said)) in scene.characters[first..].iter().zip(rows) {
         let (text, answer) = said.split_once('\n').unwrap_or((said, ""));
-        under.push(Note::Said { id: format!("{TYPED}{}", who.id), text: text.into(), answer: answer.into() });
+        let (id, small) = (format!("{TYPED}{}", who.id), None);
+        under.push(Note::Said { id, text: text.into(), answer: answer.into(), small });
         for prefix in ORDER {
             for note in &mut left {
                 under.extend(note.take_if(|note| of(note, prefix, &who.id)).cloned());
@@ -152,8 +153,10 @@ mod tests {
     #[test]
     fn the_typed_words_are_the_person_s_and_a_scene_with_no_made_wish_is_as_it_was() {
         let ordered = column(&day(Vec::new()));
-        let said =
-            |id: &str, text: &str, answer: &str| Note::Said { id: id.into(), text: text.into(), answer: answer.into() };
+        let said = |id: &str, text: &str, answer: &str| {
+            let (id, text, answer) = (id.into(), text.into(), answer.into());
+            Note::Said { id, text, answer, small: None }
+        };
         assert_eq!(ordered.notes, [said("typed-m1", "first words", ""), said("typed-m2", "second words", "")]);
         // A row with an answer under its typed words gives its own bubble both, and no other bubble anything.
         let mut answered = day(Vec::new());

@@ -270,7 +270,7 @@ mod tests {
             let field = Field { offer: "More".into(), hint: "Type".into(), first: true, ..Field::default() };
             let row = ToldRow { label: "Decided".into(), quotes: vec!["kept".into()], ..ToldRow::default() };
             let told = Note::Told { id: "told".into(), title: "Said".into(), rows: vec![row], end: Vec::new() };
-            let said = Note::Said { id: "typed-x".into(), text: "my words".into(), answer: String::new() };
+            let said = Note::Said { id: "typed-x".into(), text: "my words".into(), answer: String::new(), small: None };
             let notes = vec![text("asks", "Which?", Some(field)), text("plain", "", None), told, said];
             let scene = Scene { notes, ..Scene::default() };
             let placed = layout(&scene, &theme, Viewport { w: 1440.0, h: 900.0 }, &FixedAdvance(0.5));

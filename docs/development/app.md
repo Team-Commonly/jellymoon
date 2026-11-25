@@ -750,12 +750,25 @@ that fit and counts the rest in a last line, `+N more`.
     is asked nothing, and `layout` prints every wish's notes. One wish is tucked away at another moment: the
     wish `Make it again` made again, once its old work was tossed (`Tucked::aside`; *A change that no longer
     fits*, below).
+  - *A tucked wish says how it ended* (`app/src/drawing/ended.rs`). Under the bubble of a wish that is tucked
+    away stands one small mark, the kit's small form of a picture (`Note::Said`'s `small`), set where the
+    column is made ready (`Open::column`, after `column::column`). `ended` reads the scene and nothing else:
+    a `kept-<wish>` note drawn with its sheets in the folder gives that very picture (a small folder with its
+    tick, the card's count, "in your folder"); a little one core greyed, with a note of the wish on the
+    scene, gives work thrown away with no count (a crossed sheet and "thrown away", quiet); a
+    `told-<wish>` whose first closing sentence is the app's `told::UNCHANGED` gives no file at all (an empty
+    sheet and "nothing changed"). Anything else gives no mark: a change kept by a tap, a kept change the
+    folder no longer shows, a wish with no note on the scene. The app passes a picture and no word, so no
+    sentence of a run and no typed word can be drawn there. A wish whose notes are drawn has no mark, and a
+    tap on the mark is the tap on the bubble. After `Undo it` the work waits again, so that wish is not
+    tucked away and has no mark. The snapshot example draws it with `--tucked` (`drawing::first`).
 
   `app/tests/several_wishes.rs` holds these at the made-up window (two at work, two kept by themselves, a keep
   and a toss on two wishes, `Show me` on one of two, the looks that ask nothing, a wish of the reading),
   `app/tests/finished_wishes_tuck_away.rs` the tucking away (a wish made after one landed, a tap, a change that
   lands after the next wish, a window opened on four wishes; two and three wishes entered back to back, their
-  runs ending in either order; an earlier wish that needs the person when its run ends), and `app/src/showing/tests.rs`, `placing.rs` and
+  runs ending in either order; an earlier wish that needs the person when its run ends; the mark of each
+  tucked wish, a change undone and then tossed, a change kept by a tap), and `app/src/showing/tests.rs`, `placing.rs` and
   `drawing/tucked.rs` the rules alone. Not proved: the kit's keeping of the entry's words and keys under a new
   scene, which is the window's (`set_scene`, as every look); a long column in a real window.
 - **What the run says it did** (F86, ADR 0023, `app/src/told.rs`): when core prints a `result` with a piece

@@ -129,8 +129,8 @@ impl Page {
             PieceKind::Option => Tap::Option { note_id, index: piece.index, words: self.settled.words(piece) },
             PieceKind::Action => Tap::Action { id: note_id },
             PieceKind::Picture => Tap::Option { note_id, index: PICTURE_PLACE, words: String::new() },
-            // A tap on what the person typed is a tap on the character it is of.
-            PieceKind::Quote => Tap::Character { id: speaker(&piece.id).to_string() },
+            // A tap on what the person typed, or on the small picture under it, is a tap on the character it is of.
+            PieceKind::Quote | PieceKind::Small => Tap::Character { id: speaker(&piece.id).to_string() },
             _ => Tap::Character { id: note_id },
         };
         if let Some(handler) = &self.on_tap {

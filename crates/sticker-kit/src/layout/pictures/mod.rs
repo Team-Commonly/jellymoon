@@ -1,11 +1,15 @@
 //! The pictures of a drawn note, each laid out from its top left in the column's design units and drawn by the
 //! pencil: a run at work (`track.rs`), finished work and where it is (`sheets.rs`), changed lines to one scale
 //! (`bars.rs`). A picture is a `Picture` piece: its strokes and named parts are its sketch, and every word it
-//! draws is a caption in the theme's handwriting, measured as every text is.
+//! draws is a caption in the theme's handwriting, measured as every text is. A picture drawn small, on one line
+//! under what a person typed, is `small.rs`.
 
 mod bars;
 mod sheets;
+mod small;
 mod track;
+
+pub(super) use small::mark;
 
 use super::{Ctx, PieceKind, Placed, TextRun, line_height, piece, run, told};
 use crate::geom::Rect;

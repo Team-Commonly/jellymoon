@@ -32,7 +32,7 @@ fn card(n: usize) -> Note {
 }
 
 fn said(id: &str, text: &str, answer: &str) -> Note {
-    Note::Said { id: id.into(), text: text.into(), answer: answer.into() }
+    Note::Said { id: id.into(), text: text.into(), answer: answer.into(), small: None }
 }
 
 /// A day longer than its window: a note of the day, then the words typed for `garden` and `count` cards of it.
@@ -235,6 +235,32 @@ fn a_tap_on_a_drawn_note_s_option_is_a_text_note_s_and_one_on_its_picture_or_its
         Tap::Option { note_id: "work-garden".into(), index, words }
     };
     assert_eq!(*taps.borrow(), [tap(1), tap(PICTURE_PLACE), tap(PICTURE_PLACE)], "the picture's place is no option's");
+}
+
+// The small picture under what a person typed takes the bubble's tap, and no tap of its own.
+#[test]
+fn a_click_on_the_small_picture_under_a_bubble_is_the_tap_on_the_bubble_s_character() {
+    let mut cx = context();
+    let small = Some(Picture::Sheets { made: 1, changed: 0, removed: 0, state: Kept::In });
+    let typed = |id: &str| Note::Said {
+        id: id.into(),
+        text: "plant the herbs".into(),
+        answer: String::new(),
+        small: small.clone(),
+    };
+    let mut scene = long(0);
+    scene.notes = vec![typed("typed-garden"), typed("typed-nobody")];
+    let (page, cx, taps) = open(&mut cx, scene);
+    let (bubble, mark) = (PieceKind::Quote, PieceKind::Small);
+    for at in [shown(&page, cx, mark, "typed-garden", 0), shown(&page, cx, bubble, "typed-garden", 0)] {
+        click(cx, at.center());
+    }
+    let garden = Tap::Character { id: "garden".into() };
+    assert_eq!(*taps.borrow(), [garden.clone(), garden], "the mark, then the bubble: the same tap");
+    // Under a bubble of no character it takes none, as that bubble takes none.
+    let nobody = shown(&page, cx, mark, "typed-nobody", 0);
+    click(cx, nobody.center());
+    assert_eq!(taps.borrow().len(), 2, "a mark of no character's bubble took a tap");
 }
 
 #[test]

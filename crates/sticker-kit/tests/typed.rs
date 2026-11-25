@@ -151,7 +151,8 @@ fn the_quote_and_the_field_stay_when_the_body_is_cut_and_the_options_go() {
 fn bubble(answer: &str, theme: &Theme, viewport: Viewport) -> Placed {
     let scene = Scene::sample();
     let id = format!("typed-{}", scene.characters[0].id);
-    let said = Note::Said { id, text: "write our opening hours in twelve lines".into(), answer: answer.into() };
+    let (text, answer) = ("write our opening hours in twelve lines".into(), answer.into());
+    let said = Note::Said { id, text, answer, small: None };
     let placed = layout(&Scene { notes: vec![said], ..scene }, theme, viewport, &FixedAdvance(0.56));
     placed.into_iter().filter(|piece| piece.piece == PieceKind::Quote).collect::<Vec<_>>().remove(0)
 }

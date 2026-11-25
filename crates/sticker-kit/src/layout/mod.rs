@@ -70,6 +70,9 @@ pub enum PieceKind {
     Picture,
     /// The `?` at the top right of a picture whose note has words: `id` is the note's. A tap on it is the picture's.
     Ask,
+    /// A picture drawn small under what a person typed ([`crate::Note::Said`]'s `small`): `id` is that note's.
+    /// Its strokes are its `sketch` and its text the captions, on one line. A tap on it is the bubble's.
+    Small,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -212,7 +215,7 @@ impl PieceKind {
             PieceKind::Bubble | PieceKind::Badge | PieceKind::Says => 13,
             PieceKind::Note => 20,
             PieceKind::Option | PieceKind::Mark | PieceKind::Quote | PieceKind::Field | PieceKind::Offer => 21,
-            PieceKind::Picture | PieceKind::Ask => 21,
+            PieceKind::Picture | PieceKind::Ask | PieceKind::Small => 21,
             PieceKind::Tape => 22,
         }
     }

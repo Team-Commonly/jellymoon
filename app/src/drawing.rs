@@ -27,6 +27,7 @@ pub use crate::live::tracked;
 use crate::told::{TOLD, rows_shown};
 use crate::working::{FILE, WORK};
 
+mod ended;
 mod tucked;
 use tucked::Tucked;
 
@@ -112,6 +113,12 @@ pub fn column(scene: &Scene, open: &BTreeSet<String>) -> Scene {
     crate::column::column(&pass(scene, open))
 }
 
+/// The column of `scene` as a window that opens on it first draws it ([`Open::opening`]): no note open, and
+/// every settled made wish but the newest tucked away, each with its mark. For a picture, which has no window.
+pub fn first(scene: &Scene) -> Scene {
+    Open::opening(scene).column(scene)
+}
+
 /// The drawn notes a person opened in one window, by their ids, the made wish they tapped last, and the made
 /// wishes that are tucked away. An id that leaves the page leaves the set. And core's answers that a wish was
 /// made again, each with the wish it speaks of (`again.rs`).
@@ -137,7 +144,8 @@ impl Open {
     /// [`column`] of `scene` with what is open now, the offer of a follow-up under the wish tapped last, and
     /// none of the notes of a wish that is tucked away. A note that is not on `scene`, or is tucked away, is open
     /// no more; a look, which gives the notes it found again, closes nothing. An answer that a wish was made
-    /// again says that wish is being worked on only while it is (`Again::drawn`).
+    /// again says that wish is being worked on only while it is (`Again::drawn`). Under the bubble of a wish
+    /// that is tucked away stands the mark of how it ended (`drawing/ended.rs`), and under no other.
     pub(crate) fn column(&self, scene: &Scene) -> Scene {
         let scene = &self.3.drawn(scene);
         let away = self.2.away(scene);
@@ -145,7 +153,8 @@ impl Open {
         let mut open = self.0.borrow_mut();
         let on: Vec<&str> = drawn_ids(scene).filter(|id| !hidden(id)).collect();
         open.retain(|id| on.contains(&id.as_str()));
-        crate::column::column(&passed(scene, &open, self.1.borrow().as_deref(), &away))
+        let column = crate::column::column(&passed(scene, &open, self.1.borrow().as_deref(), &away));
+        ended::marked(column, scene, &away)
     }
 
     /// Core answered a tap on a choice of the made wish `wish` that a wish was made again and is being worked

@@ -147,6 +147,24 @@ answer and two bare bubbles, and could not tell that the other two had finished.
     its notes drawn once the next wish is made. Its typed words and its little one stay, and the little one
     says how it ended (its star; greyed when it was let go).
 
+    - *The mark* (amended 2026-11-24; `drawing/ended.rs`). A star and a grey tell too little: nothing said
+      what became of a tucked wish, or that a tap brings it back. So a tucked wish has one small pencil mark
+      right under its bubble, at the bubble's end: a sign, a few words on one line, and a chevron that says
+      it opens. A tap on it is the tap on the bubble. It is the kit's small form of a note's picture
+      (`Note::Said`'s `small`): the app hands the kit a picture and never a word, so each word is a caption
+      the card of that picture already has. Three ends have one. The change is in the folder: the wish's
+      `kept-<wish>` note is drawn with its sheets in the folder, and the mark is that very picture, a small
+      folder with its tick, the card's count and "in your folder". The wish was let go: core says so (the
+      little one is greyed) and a note of the wish is on the scene; the mark is a sheet crossed out and
+      "thrown away", in the quiet ink, with no count, as the scene holds none. The run finished and changed
+      nothing: the note of what it says it did begins with the app's own sentence for that; the mark is an
+      empty sheet and "nothing changed". Every fact is read from the scene the app holds: no call to core,
+      nothing written. No sentence of a run and no typed word is read. Where the scene says none of the
+      three (a change kept by a tap, a kept change the folder no longer shows, no note of the wish) there
+      is no mark: never a guess, and the folder is drawn only from a note that draws the folder. Only a
+      tucked wish has it: when the wish comes back the mark goes in the same drawing, and a wish whose
+      work waits is never tucked away, so it never has one.
+
     - *Settled* (`drawing/tucked.rs`, `settled`), read from the scene the app holds and from nothing else:
       core says the wish is done or was let go (its little one is neither at work nor needing the person,
       so no run goes and no question waits); no work of it waits (no `work-<wish>`); no note of it is in

@@ -138,11 +138,16 @@ pub enum Note {
     /// `answer` is what the person answered to go on, when they did: more of their own words, in the same
     /// bubble on lines of their own under `text`, drawn by the same rules. They are set in behind a small hook
     /// the pencil draws, and no word tells the two apart. With an empty one the bubble is `text` alone.
+    /// `small` is a picture drawn small under the bubble, at its right end: a sign, the picture's own captions
+    /// on one line and a chevron (`layout/pictures/small.rs`). A tap on it is the tap on the bubble. With none,
+    /// or with a picture that has no small form, the bubble is placed and drawn as if the word were not there.
     Said {
         id: String,
         text: String,
         #[serde(default, skip_serializing_if = "String::is_empty")]
         answer: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        small: Option<Picture>,
     },
     /// A picture drawn in pencil, which draws itself when the note first comes onto a page. `options` are the
     /// choices under it, tapped as a text note's are. `words` are the note's own sentences: while `open` is

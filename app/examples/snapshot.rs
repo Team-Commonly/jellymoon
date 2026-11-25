@@ -15,6 +15,8 @@
 //! `layout` prints them, over the page's: the notes several made wishes have at once (ADR 0030), which core makes
 //! of a day's runs and a picture has none of. `--since <more words>` draws the entry as it is after Enter on
 //! `words` and before the answer, with `more words` typed meanwhile (`""` for none: `words` are then shown pale).
+//! `--tucked` draws the page as a window that opens on it does: every settled made wish but the newest is tucked
+//! away, with the mark of how it ended (`drawing::first`); `--open` is then not read.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -51,14 +53,16 @@ fn steps(file: &str) -> Result<Vec<(String, Steps)>, String> {
 }
 
 /// What the flags ask for, taken out of the arguments: the notes of work, how many wishes are made wishes, their
-/// steps, whether every drawn note is open, and what was typed since Enter.
-type Asked = (Vec<Note>, usize, Vec<(String, Steps)>, bool, Option<String>);
+/// steps, whether every drawn note is open and whether the settled wishes are tucked away, and what was typed
+/// since Enter.
+type Asked = (Vec<Note>, usize, Vec<(String, Steps)>, (bool, bool), Option<String>);
 
 fn asked(args: &mut Vec<String>) -> Result<Asked, String> {
     let (waiting, told) = (taken(args, "--work"), taken(args, "--told"));
     let made = taken(args, "--made").and_then(|made| made.parse().ok()).unwrap_or(0);
     let doing = taken(args, "--steps").map(|file| steps(&file)).transpose()?.unwrap_or_default();
-    let open = args.iter().position(|arg| arg == "--open").map(|at| args.remove(at)).is_some();
+    let flag = |args: &mut Vec<String>, flag: &str| args.iter().position(|arg| arg == flag).map(|at| args.remove(at));
+    let open = (flag(args, "--open").is_some(), flag(args, "--tucked").is_some());
     let mut notes = waiting.map(|file| work(&file, told.as_deref())).transpose()?.unwrap_or_default();
     if let Some(file) = taken(args, "--notes") {
         let text = std::fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
@@ -69,7 +73,7 @@ fn asked(args: &mut Vec<String>) -> Result<Asked, String> {
 
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    let (notes, made, doing, open, since) = match asked(&mut args) {
+    let (notes, made, doing, (open, tucked), since) = match asked(&mut args) {
         Ok(asked) => asked,
         Err(why) => {
             eprintln!("snapshot: {}", one_line(&why));
@@ -79,8 +83,8 @@ fn main() -> ExitCode {
     let [file, folder, name, more @ ..] = args.as_slice() else {
         eprintln!(
             "usage: snapshot [--work <waiting file> [--told <shown file>]] [--made <n> [--steps <steps file>]] \
-             [--notes <notes file>] [--open] [--since <more words>] <page file> <folder> <name> [width height \
-             [words [option [theme file]]]]"
+             [--notes <notes file>] [--open] [--tucked] [--since <more words>] <page file> <folder> <name> [width \
+             height [words [option [theme file]]]]"
         );
         return ExitCode::from(2);
     };
@@ -123,7 +127,7 @@ fn main() -> ExitCode {
         let out = PathBuf::from(folder).join(format!("{name}-{}.png", file_part(&theme.name)));
         let opened = if open { drawing::every(&shown) } else { Default::default() };
         let typing = entry.clone().map(|entry| Typing { entry, typed: typed.clone(), since: since.clone() });
-        let scene = drawing::column(&shown, &opened);
+        let scene = if tucked { drawing::first(&shown) } else { drawing::column(&shown, &opened) };
         if let Err(error) = snapshot_typing(scene, theme, typing, side(0, 1440.0), side(1, 900.0), &out) {
             eprintln!("snapshot: could not render {}: {error}", out.display());
             return ExitCode::FAILURE;

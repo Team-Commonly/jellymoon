@@ -82,6 +82,7 @@ impl Sketched {
                 Ink::Pencil => palette.pencil,
                 Ink::Added => palette.added,
                 Ink::Taken => palette.taken,
+                Ink::Quiet => palette.quiet,
             };
             let pass = |share: f32| Color { a: (f32::from(ink.a) * share) as u8, ..ink };
             out.push(Shape::Stroke { points: moved(soft), width: stroke.width * SOFT, color: pass(0.2) });

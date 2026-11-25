@@ -34,9 +34,10 @@ pub(super) fn shown<'a>(scene: &'a Scene, away: &'a BTreeSet<String>) -> impl It
     scene.notes.iter().filter(move |note| !hidden.iter().any(|wish| any_of(note, wish)))
 }
 
-/// The made wishes tucked away in one window, by their ids.
+/// The made wishes tucked away in one window, by their ids. And the ones that are owed it: each was at work when a
+/// later wish of the day stood, so no making of a wish found it settled ([`Tucked::away`]).
 #[derive(Clone, Default)]
-pub(crate) struct Tucked(Rc<RefCell<BTreeSet<String>>>);
+pub(crate) struct Tucked(Rc<RefCell<BTreeSet<String>>>, Rc<RefCell<BTreeSet<String>>>);
 
 impl Tucked {
     /// Every made wish of `scene` that is settled is tucked away, but the wish `but`. It is asked when a new made
@@ -44,19 +45,29 @@ impl Tucked {
     /// those moments stays on the page: a person sees the result of what they asked for until they ask again.
     /// With `drawn`, as when a wish is kept, so does a wish that ended since the last look and has no note on
     /// `scene` yet: its result was never drawn. A window that opens has drawn nothing, and asks without it.
+    /// A wish that is at work under a later one is owed it: it is tucked away when its run ends.
     pub(crate) fn tuck(&self, scene: &Scene, but: Option<&str>, drawn: bool) {
         let ids = made(scene).iter().map(|one| &one.id);
         let seen = |id: &&String| !drawn || scene.notes.iter().any(|note| any_of(note, id));
         let away = ids.filter(|id| Some(id.as_str()) != but && settled(scene, id)).filter(seen);
         self.0.borrow_mut().extend(away.cloned());
+        let earlier = made(scene).split_last().map_or(&[][..], |(_, earlier)| earlier);
+        let at_work = earlier.iter().filter(|one| one.state == State::Busy && Some(one.id.as_str()) != but);
+        self.1.borrow_mut().extend(at_work.map(|one| one.id.clone()));
     }
 
     /// The wishes tucked away while `scene` is drawn. One that is on `scene` and settled no more (its work waits
     /// again, core has something to say of it) is tucked away no longer: it is shown again by itself, and stays
-    /// shown when it settles.
+    /// shown when it settles. One that was owed it and is at work no more on `scene` is tucked away from now on,
+    /// as if the later wish had been made after its run ended: so only if it is settled then. One that needs the
+    /// person then (a question, work that waits or does not fit, a run that failed) is owed it no longer.
     pub(crate) fn away(&self, scene: &Scene) -> BTreeSet<String> {
         let on = |id: &String| made(scene).iter().any(|one| one.id == *id);
+        let ended = |id: &String| made(scene).iter().any(|one| one.id == *id && one.state != State::Busy);
         let mut away = self.0.borrow_mut();
+        let mut owed = self.1.borrow_mut();
+        away.extend(owed.iter().filter(|id| ended(id)).cloned());
+        owed.retain(|id| !ended(id));
         away.retain(|id| !on(id) || settled(scene, id));
         away.clone()
     }
@@ -183,6 +194,25 @@ mod tests {
         assert_eq!(tucked.away(&scene), set(&["m2"]), "the first wish's result was never on the page");
         tucked.tuck(&scene, None, false);
         assert_eq!(tucked.away(&scene), set(&["m1", "m2"]), "a window that opens has drawn nothing yet");
+    }
+
+    #[test]
+    fn a_wish_at_work_under_a_later_one_tucks_away_when_its_run_ends_settled_and_the_newest_never_does() {
+        let mut ended = day(Vec::new());
+        ended.notes.retain(|note| id_of(note) != Some("work-m3"));
+        let mut going = ended.clone();
+        going.characters.iter_mut().for_each(|one| one.state = State::Busy);
+        let tucked = Tucked::default();
+        tucked.tuck(&going, None, true);
+        assert_eq!(tucked.away(&going), set(&[]), "a wish at work is on the page");
+        for look in 0..2 {
+            assert_eq!(tucked.away(&ended), set(&["m1", "m2"]), "look {look}: the earlier two, and not the newest");
+        }
+        assert!(tucked.back("m1") && tucked.away(&ended) == set(&["m2"]), "a tap brings one back, and it stays");
+        // One that needs the person when its run ends stays, and stays when the person has settled it.
+        let (tucked, waits) = (Tucked::default(), day(vec![note("work-m1", &["Keep it"])]));
+        tucked.tuck(&going, Some("m2"), true);
+        assert_eq!((tucked.away(&waits), tucked.away(&ended)), (set(&[]), set(&[])), "nor the wish of the answer");
     }
 
     #[test]

@@ -1157,7 +1157,10 @@ max_file_lines = 400
 # The answer on a made wish's row and in its bubble raised it by 140: the row and the bubble's two texts
 # (`src/scene.rs`, 11; `src/column.rs`, 9; `src/again.rs`, 1; `src/working.rs`, 8), and the tests
 # (`src/scene/tests.rs`, 25; `tests/the_answer_stays.rs`, 86).
-"app" = 20253
+# An earlier wish tucks when it settles raised the app by 152 (161 added, 9 removed): the wishes at work under a
+# later one, owed the tuck (`src/drawing/tucked.rs`, 11), the rule's own test (19), and its tests at the made-up
+# window (`tests/finished_wishes_tuck_away.rs`, 122).
+"app" = 20405
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

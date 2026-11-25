@@ -176,6 +176,20 @@ answer and two bare bubbles, and could not tell that the other two had finished.
       ends, its change lands. Tucked away then, the result of what the person asked for would go from the
       page as it came. It stays until they ask for the next thing, which is when they have stopped
       reading it.
+    - *A wish at work under a later one* (amended 2026-11-25). The rule above looked at a wish only when
+      the next was made. Two wishes entered back to back, the second while the first was still at work,
+      ended as two open results: the first settled after the second was made, and nothing looked at it
+      again. The person had already asked for the next thing, so the reason above does not hold for it.
+      Now every made wish but the newest that is at work when a wish is made, or when the window opens, is
+      owed the tuck (`Tucked::tuck`; the wish an answer is under is left out, as above). At the first
+      drawing where its run goes no more it is tucked away if it is settled then, and owed nothing after
+      that either way (`Tucked::away`). So the page is what it would be had each wish been made after the
+      one before it ended, whichever run ends first: one that needs the person when its run ends (a
+      question, work that waits for a tap or does not fit, a run that failed) stays on the page, and
+      stays once the person has answered or kept it, until the next wish is made. The newest wish is
+      never owed it. A wish tucked away so never had its result drawn open; its little one says how it
+      ended, and a tap brings the notes back. A wish stopped by the person while it is owed is tucked
+      away when it is let go.
     - *What brings it back.* A tap on its little one or its bubble (decision 5's tap, so its notes are also
       made again from core): the notes are back as an ended wish first has them, its drawn note closed, and
       stay until the next wish is made. That tap opens no drawn note; the next one does. A tucked wish
@@ -193,6 +207,9 @@ answer and two bare bubbles, and could not tell that the other two had finished.
 - A day of many made wishes made a very long column. Settled wishes now tuck away (decision 11); a day of
   many wishes that are not settled (work that waits, runs that failed) is as long as before, and its bubbles
   alone can fill a window. Nobody has seen either page in a real window.
+- Two results can still be open at once: a wish that ended in the second before the next was made, with no
+  look between, has no note on the scene yet and stays (decision 11, *When*), and so does an earlier wish the
+  person answered or kept after a later one was made.
 - A tucked wish's notes are still made again from core at the moments of decision 6, though nobody sees them.
   A wish made outside the window (`jellymoon wish`) tucks nothing away: only a wish made in the window does.
 - A wish whose notes are made again higher up moves the cards under it. The window holds the column's end while

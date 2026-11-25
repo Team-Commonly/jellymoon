@@ -8,12 +8,12 @@
 
 mod support;
 
-use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::{fs, thread};
 
 use sticker_kit::{Note, Scene};
 use support::day::DAY;
-use support::wished::World;
+use support::wished::{World, wait_until, world};
 use support::worked::landed;
 
 /// A window tall enough that every note of the day is placed.
@@ -87,10 +87,9 @@ fn a_settled_wish_tucks_away_when_the_next_wish_is_made_and_a_tap_or_a_new_windo
     // The next made wish tucks it away again.
     let again = column(again);
     assert_eq!(under(&again, "m1"), [""; 0], "{again:?}");
-    // The second wish settled after the third was made: its result stays on the page, and the first is as it was.
+    // The second wish settled after the third was made: it is tucked away as the first is, under the third.
     let landed = column(landed);
-    assert!(under(&landed, "m2").contains(&"kept-m2".to_string()), "{landed:?}");
-    assert_eq!((choices(&landed, "kept-m2"), under(&landed, "m1")), (UNDO.map(String::from).to_vec(), Vec::new()));
+    assert_eq!((under(&landed, "m2"), under(&landed, "m1")), (Vec::<String>::new(), Vec::new()), "{landed:?}");
 
     // A window opened on that day, once the third wish's run failed and a fourth changed nothing: the notes of
     // the newest wish, and of the wish that needs the person, and of no other.
@@ -103,4 +102,127 @@ fn a_settled_wish_tucks_away_when_the_next_wish_is_made_and_a_tap_or_a_new_windo
     assert_eq!((under(&opened, "m1"), under(&opened, "m2")), (Vec::<String>::new(), Vec::new()), "{opened:?}");
     assert!(under(&opened, "m3").contains(&"wish-m3".to_string()), "{opened:?}");
     assert!(under(&opened, "m4").contains(&"wish-m4".to_string()), "{opened:?}");
+}
+
+/// A day with no made wish yet, where a finished change is kept by itself when `lands`, and its repo.
+fn empty(lands: bool) -> (World, PathBuf) {
+    let w = world();
+    fs::create_dir(w.at("harness")).unwrap();
+    let repo = w.at("work").join("alpha");
+    (if lands { w.lands() } else { w }, repo)
+}
+
+/// A column in a line: each made wish with the notes under its bubble, and each note's choices.
+fn page(line: &str) -> String {
+    let column = column(line);
+    let bubbles = column.notes.iter().filter_map(|note| id(note).strip_prefix("typed-"));
+    let noted = |wish: &str| {
+        let with = |note: String| match &choices(&column, &note)[..] {
+            [] => note,
+            options => format!("{note}[{}]", options.join("/")),
+        };
+        format!("{wish}:{}", under(&column, wish).into_iter().map(with).collect::<Vec<_>>().join(","))
+    };
+    bubbles.map(noted).collect::<Vec<_>>().join(" ")
+}
+
+const TWO: [&str; 2] = ["type:wish@alpha:make a file", "type:wish@alpha:say hello"];
+
+/// The window of a day where two wishes are entered back to back: it waits until the test leaves `held`, and
+/// then makes two looks with the page after each, and `more`.
+fn two_then(w: &World, held: &Path, more: &[&str]) -> support::wished::Window {
+    let hold = format!("hold:{}", held.display());
+    let acts = [TALL, "look", TWO[0], TWO[1], hold.as_str(), "look", "column", "look", "column"];
+    w.taps("logs", &[&acts[..], more].concat())
+}
+
+/// Two wishes entered back to back, and then their runs in `order`, each ending after both wishes were made:
+/// the page after the first run (and after one more look), after the second, and after a tap on the first wish.
+fn back_to_back(order: [(&str, &str); 2]) -> [String; 4] {
+    let (w, repo) = empty(true);
+    let held = ["one", "two"].map(|name| w.at("tmp").join(name));
+    let second = format!("hold:{}", held[1].display());
+    let mut window = two_then(&w, &held[0], &[&second, "look", "column", "poke:m1", "column"]);
+    for (at, ((wish, script), held)) in order.iter().zip(&held).enumerate() {
+        window.printed(3 + 4 * at);
+        assert_eq!(ran(&w, &repo, wish, script), "completed");
+        fs::write(held, "").unwrap();
+    }
+    let lines = window.ended();
+    let [.., first, _, again, _, second, _, tapped] = &lines[..] else { panic!("eleven lines: {lines:#?}") };
+    [first, again, second, tapped].map(|line| page(line))
+}
+
+// An earlier wish tucks when it settles: the page is as if each wish had been made after the one before it ended.
+#[test]
+fn an_earlier_wish_that_ends_after_a_later_wish_was_made_tucks_away_whichever_of_the_two_ends_first() {
+    let in_order = back_to_back([("m1", "edits"), ("m2", "hello")]);
+    let after = "m1: m2:kept-m2[Undo it]";
+    // A tap on the tucked wish brings its notes back; its change has the newer one over it, so core offers no undo.
+    assert_eq!(in_order, ["m1: m2:steps-m2", "m1: m2:steps-m2", after, "m1:kept-m1 m2:kept-m2[Undo it]"]);
+    let newest_first = back_to_back([("m2", "hello"), ("m1", "edits")]);
+    let alone = "m1:steps-m1 m2:kept-m2[Undo it]";
+    assert_eq!(newest_first, [alone, alone, "m1: m2:kept-m2", "m1:kept-m1[Undo it] m2:kept-m2"]);
+}
+
+#[test]
+fn of_three_wishes_entered_back_to_back_only_the_newest_has_its_result_on_the_page() {
+    let (w, repo) = empty(true);
+    let held = w.at("tmp").join("ended");
+    let hold = format!("hold:{}", held.display());
+    let acts = [TALL, "look", TWO[0], TWO[1], "type:wish@alpha:and nothing more", &hold, "look", "column"];
+    let mut window = w.taps("logs", &acts);
+    window.printed(4);
+    for (wish, script) in [("m1", "edits"), ("m2", "hello"), ("m3", "nothing")] {
+        assert_eq!(ran(&w, &repo, wish, script), "completed");
+    }
+    fs::write(held, "").unwrap();
+    assert_eq!(page(window.ended().last().unwrap()), "m1: m2: m3:wish-m3");
+}
+
+// A wish that needs the person when its run ends is not tucked away, though a later wish stands: work that waits
+// for a tap to keep (and it stays once kept), a question, a run that failed.
+#[test]
+fn an_earlier_wish_that_needs_the_person_when_its_run_ends_stays_on_the_page_under_a_later_wish() {
+    let (keep, none): (&[&str], &[&str]) = (&["choose:work-m1:1", "run", "column"], &[]);
+    for (lands, script, note, more) in
+        [(false, "edits", "work-m1", keep), (true, "asks", "wish-m1", none), (true, "is-error", "wish-m1", none)]
+    {
+        let (w, repo) = empty(lands);
+        let held = w.at("tmp").join("ended");
+        let mut window = two_then(&w, &held, more);
+        window.printed(3);
+        ran(&w, &repo, "m1", script);
+        fs::write(held, "").unwrap();
+        let lines = window.ended();
+        for line in [&lines[4], &lines[6]] {
+            assert!(under(&column(line), "m1").contains(&note.to_string()), "{script}: {}", page(line));
+        }
+        let kept = lines.get(9).map(|line| under(&column(line), "m1"));
+        assert!(kept.is_none_or(|kept| kept.contains(&"said-m1".to_string())), "{script}: {lines:#?}");
+    }
+}
+
+// The earlier wish's change does not fit when its run ends, as the later wish's landed in the same place first.
+#[test]
+fn an_earlier_wish_whose_change_does_not_fit_when_its_run_ends_stays_on_the_page_with_make_it_again() {
+    let (w, repo) = empty(true);
+    let held = w.at("tmp").join("ended");
+    let mut window = two_then(&w, &held, &[]);
+    window.printed(3);
+    let before = w.starts();
+    w.play("slow");
+    let (logs, named) = (w.at("logs"), repo.to_str().unwrap());
+    let args = ["run", "--wish", "m1", "--date", DAY, "--repo", named, "--logs", logs.to_str().unwrap()];
+    thread::scope(|scope| {
+        let first = scope.spawn(|| w.jellymoon(&args)["outcome"].as_str().unwrap().to_string());
+        wait_until("the first wish's agent", || w.starts() > before);
+        assert_eq!(ran(&w, &repo, "m2", "follow"), "completed");
+        fs::write(w.at("rec").join("go"), "").unwrap();
+        assert_eq!(first.join().unwrap(), "completed");
+    });
+    fs::write(held, "").unwrap();
+    let lines = window.ended();
+    let unfit = "m1:work-m1[Show me/Make it again/Toss it] m2:kept-m2[Undo it]";
+    assert_eq!([&lines[4], &lines[6]].map(|line| page(line)), [unfit, unfit]);
 }

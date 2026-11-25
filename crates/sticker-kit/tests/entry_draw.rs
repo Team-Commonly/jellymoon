@@ -260,14 +260,21 @@ fn an_entry_that_is_owed_an_answer_takes_every_key_and_only_its_enter_gives_noth
     click(cx, chip.rect.center());
     click(cx, (field.rect.x + 15.0, field.rect.center().1));
     let since = ("ixk你".to_string(), 0, Some(2), true);
-    assert_eq!((state(&page, cx), waiting(cx)), (since, true), "a key was dropped while an answer was owed");
+    assert_eq!((state(&page, cx), waiting(cx)), (since.clone(), true), "a key was dropped while an answer was owed");
     assert_eq!(*made.borrow(), [wish("tea", "kitchen")], "a second Enter gave words while an answer was owed");
 
-    // Kept: the Enter pressed meanwhile is given now, once, with what was typed since and the chip chosen since.
+    // Kept: the Enter pressed meanwhile was on other words and another chip than stand now, so none is given.
     answer(&page, cx, true);
-    assert_eq!(*made.borrow(), [wish("tea", "kitchen"), wish("ixk你", "letters")], "the Enter was lost");
+    assert_eq!(*made.borrow(), [wish("tea", "kitchen")], "an Enter was given on words it was not pressed on");
+    assert_eq!((state(&page, cx), waiting(cx)), (since, false), "the words stay for the person's own Enter");
+    // Entered, and the next words entered before the answer: that Enter is given at the kept answer, once.
+    keys(cx, "enter t w o enter");
+    assert_eq!(made.borrow().len(), 2, "the second Enter gave words while an answer was owed");
+    answer(&page, cx, true);
+    let all = [wish("tea", "kitchen"), wish("ixk你", "letters"), wish("two", "letters")];
+    assert_eq!(*made.borrow(), all, "the Enter was lost");
     assert_eq!((state(&page, cx), waiting(cx), accepts(cx)), ((String::new(), 0, Some(2), true), true, true));
-    keys(cx, "t w o");
+    keys(cx, "s i x");
     // The options move while the answer is owed: the option is kept by its name. Then the words are not kept:
     // they come back in front of what was typed since.
     let moved = Entry { options: ["letters", "kitchen", "garden"].map(String::from).to_vec(), ..entry() };
@@ -275,9 +282,9 @@ fn an_entry_that_is_owed_an_answer_takes_every_key_and_only_its_enter_gives_noth
     cx.run_until_parked();
     assert_eq!((state(&page, cx).2, waiting(cx)), (Some(0), true), "letters is still the chosen option");
     answer(&page, cx, false);
-    assert_eq!((state(&page, cx), waiting(cx)), (("ixk你 two".into(), 10, Some(0), true), false));
+    assert_eq!((state(&page, cx), waiting(cx)), (("two six".into(), 7, Some(0), true), false));
     keys(cx, "enter");
-    assert_eq!(made.borrow().last(), Some(&wish("ixk你 two", "letters")), "the option is given by its name");
+    assert_eq!(made.borrow().last(), Some(&wish("two six", "letters")), "the option is given by its name");
 
     answer(&page, cx, true);
     take_away(&page, cx);

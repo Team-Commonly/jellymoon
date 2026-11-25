@@ -222,7 +222,8 @@ fn listing(work: Option<Listing>, named: bool, shown: Showing, page: WeakEntity<
         cx.update(|cx| {
             let kept = now.as_ref().is_some_and(|now| now.name.is_some());
             if named {
-                answer_entry(&page, None, (kept, shown.takes_enter()), None, cx);
+                // The entry answered here is the one a name is typed in: an Enter remembered in it is no wish's.
+                answer_entry(&page, None, (kept, false), None, cx);
             }
             let (Some(Shown { scene, entry, name }), Some(view)) = (now, page.upgrade()) else { return };
             shown.wait_for(name);

@@ -91,12 +91,12 @@ fn an_enter_pressed_before_core_has_answered_is_not_lost_and_both_wishes_are_mad
     let (x, y) = field.expect("the entry is placed").rect.center();
     cx.simulate_click(point(px(x), px(y)), Modifiers::default());
     cx.write_to_clipboard(ClipboardItem::new_string(FIRST.into()));
-    "cmd-v enter n e x t enter space o n e".split(' ').for_each(|one| key(cx, one));
+    "cmd-v enter n e x t space o n e enter".split(' ').for_each(|one| key(cx, one));
     let held = page.read_with(cx, |page, _| (page.entry().text().to_string(), page.entry().waiting()));
     assert_eq!(held, ("next one".to_string(), true), "the second Enter was given before core had answered");
     assert_eq!(entry(&page, cx), (String::new(), false), "both were kept, and the entry is answered for both");
     let said: Vec<String> = jellymoon_core::made(&world.home, DAY).into_iter().map(|wish| wish.said).collect();
-    assert_eq!(said, [SAID, FIRST, "next one"], "the second wish has the words as they stood at the answer");
+    assert_eq!(said, [SAID, FIRST, "next one"], "the second wish has other words than its Enter was pressed on");
 }
 
 #[test]

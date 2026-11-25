@@ -887,7 +887,9 @@ max_file_lines = 400
 # answer is owed, given at a kept answer or forgotten (`src/entry.rs`, 24; `draw/entry.rs` and `draw/field.rs`,
 # 16, the entry's answers moved beside the fields'), and its tests (`tests/entry_waits.rs`, 66;
 # `tests/entry_draw.rs`, 20; `tests/field_draw.rs`, 4).
-"crates/sticker-kit" = 12951
+# A remembered Enter forgotten when the words or the option change after it: 28 (`src/entry.rs`, 6;
+# `tests/entry_waits.rs`, 15; `tests/entry_draw.rs`, 7).
+"crates/sticker-kit" = 12979
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.
@@ -1144,7 +1146,8 @@ max_file_lines = 400
 # An Enter is not lost raised the app by 132 (147 added, 15 removed): no remembered Enter over a sharper wish
 # that waits (`src/shaping.rs`, 7; `src/showing.rs`, 7; `src/window.rs`, 6), the made-up window's entry and its
 # `press` act (`tests/support/tapper.rs`, 53), and the tests (`tests/shape_first.rs`, 37; `tests/f43/window.rs`, 22).
-"app" = 20112
+# No remembered Enter where a new project's name was entered: 1 (`src/window.rs`).
+"app" = 20113
 
 # The workspace crates each crate may depend on. Core depends on none; the binary only on core.
 [depends]

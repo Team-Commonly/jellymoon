@@ -326,11 +326,14 @@ what core keeps.
   one while the first is read and presses Enter again. Until 2026-11-25 that second Enter did nothing, and the
   words sat in the entry with nothing on the page to say why. Now the kit's entry remembers one such Enter (its
   `README.md`, "One Enter is remembered"), and when core's answer kept the first words the window's
-  `page.answer_entry` gives it to the window's own handler, `entered`, as an Enter pressed at that moment:
-  the words as they stand then, the chip chosen then, read and kept like any wish. Both wishes are kept, in
-  their order, and a run is asked for each. Two cases give nothing, and the words stay typed for the person to
-  enter themselves. The kit's: the first words were refused, so they are back in the entry in front of the
-  later ones. The app's (`Showing::takes_enter`, `shaping::waits`): the answer to the first words is a sharper
+  `page.answer_entry` gives it to the window's own handler, `entered`, as an Enter pressed at that moment,
+  with the words and the chip it was pressed on, read and kept like any wish. Both wishes are kept, in
+  their order, and a run is asked for each. Four cases give nothing, and the words stay typed for the person to
+  enter themselves. The kit's two: the first words were refused, so they are back in the entry in front of the
+  later ones; and the words or the chip changed after that Enter (typed on, a character taken, another chip),
+  so what stands in the entry is not what Enter was pressed on. The app's two: the first words were a new
+  project's name (`listing`): the entry answered is the one a name is typed in, and an Enter given there would
+  name a second project. And (`Showing::takes_enter`, `shaping::waits`): the answer to the first words is a sharper
   wish that waits for the person's choice. An Enter in the entry takes that pair's place, so the first words
   would be gone before the person had seen the question; the window calls `page.forget_enter()` before it
   answers the entry. A page whose window was closed since Enter is given none either. No sentence on the page

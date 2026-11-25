@@ -173,9 +173,10 @@ Page::new(scene, theme)
   - *One Enter is remembered.* An Enter pressed while the answer is owed, with words typed since and no
     composition, is remembered: once, however often it is pressed. Nothing is sent then and the words stay
     editable. When the answer is *kept*, `answer_entry` gives that Enter as one pressed at that moment is, to
-    the same `on_entry` handler: the words as they stand then, the option chosen then, and nothing when they
-    hold no words by then or a composition has the keys. It is given once, and the entry is then owed the
-    answer to those words. When the answer is *not kept* the Enter is forgotten: the owed words are back in
+    the same `on_entry` handler, with the words and the option it was pressed on. A change to the text or to
+    the chosen option after that Enter forgets it (a caret moved does not): nothing is sent that no Enter was
+    pressed on, and the words stay for the person's own Enter. It is given once, and the entry is then owed
+    the answer to those words. When the answer is *not kept* the Enter is forgotten: the owed words are back in
     front of the later ones, and an Enter would send both as one. A handler that does not want it calls
     `page.forget_enter()` before it answers, and the words stay as they are. `answer_entry_closed` forgets it
     too (a handler is called in a window), and so does a note's field: `EntryState::answer` is the plain

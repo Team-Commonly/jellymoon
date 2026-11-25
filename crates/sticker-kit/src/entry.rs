@@ -36,6 +36,7 @@ pub struct EntryState {
     /// The words Enter gave, as they were typed, while no answer has come for them. They are no part of `text`.
     owed: Option<String>,
     /// Enter was pressed while that answer was owed, with words typed since: one Enter, however many times.
+    /// It is of the words and the option as they were then: a change to either forgets it.
     again: bool,
 }
 
@@ -121,7 +122,8 @@ impl EntryState {
     }
 
     /// [`answer`](Self::answer), and then the Enter that was remembered while the answer was owed, when the
-    /// words were kept: what [`enter`](Self::enter) gives now, of the text as it stands now, by all its rules.
+    /// words were kept: what [`enter`](Self::enter) gives now. The text and the option are the ones that Enter
+    /// was pressed on: a change to either since has forgotten it, so nothing is sent that Enter was not pressed on.
     /// Words that were not kept are back in the text, so that Enter is forgotten: it would give both as one.
     pub fn answer_and_enter(&mut self, kept: bool) -> Option<Made> {
         let again = self.again && kept;
@@ -187,6 +189,7 @@ impl EntryState {
         let new: String = new.chars().filter_map(one_line).take(self.most + 1).collect();
         let stays = self.text.chars().count() - self.text[range.clone()].chars().count();
         let new = &new[..prefix(&new, self.most.saturating_sub(stays))];
+        self.again &= self.text[range.clone()] == *new;
         self.text.replace_range(range.clone(), new);
         self.caret = range.start + new.len();
         range.start..self.caret
@@ -204,6 +207,7 @@ impl EntryState {
 
     fn cut(&mut self, range: Range<usize>) {
         if self.marked.is_none() {
+            self.again &= range.is_empty();
             self.text.replace_range(range.clone(), "");
             self.caret = range.start;
         }
@@ -257,6 +261,7 @@ impl EntryState {
 
     pub fn choose(&mut self, option: usize) {
         if option < self.options {
+            self.again &= option == self.chosen;
             self.chosen = option;
         }
     }
@@ -264,7 +269,8 @@ impl EntryState {
     /// What was entered. The words are kept aside for [`answer`](Self::answer) and the text is empty from then
     /// on. Nothing while a composition is marked (that Enter belongs to the input method, to confirm it), nothing
     /// for text with no words in it, and nothing while an answer is owed: what was typed since stays, and that
-    /// Enter is remembered for [`answer_and_enter`](Self::answer_and_enter), once however often it is pressed.
+    /// Enter is remembered for [`answer_and_enter`](Self::answer_and_enter), once however often it is pressed,
+    /// until the text or the chosen option changes.
     pub fn enter(&mut self) -> Option<Made> {
         if self.marked.is_some() || !has_visible(&self.text) {
             return None;

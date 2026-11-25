@@ -55,3 +55,20 @@ not_given_over_a_sharper_wish_…` in the app) pass in that state, as they must;
 - Not walked in a real window, with a real harness. Windows and Linux were not run.
 - A person who pressed Enter twice and whose first words were refused, or answered by a sharper wish, still
   has to press Enter again; the page says nothing of the Enter that was dropped.
+
+## After the review (2026-11-25)
+A review by reading failed the first commit on one finding: the Enter was remembered as a flag only, and the
+answer gave the words as they stood then. A person who pressed Enter on the next wish and typed on (the start
+of a third, or a correction) had a half-typed wish started, and a run with it. A second commit answers it:
+- The kit forgets the remembered Enter when the text or the chosen option changes after it (`put`, `cut`,
+  `choose` in `entry.rs`; a caret moved, or the same option chosen, changes neither). So the Enter given at
+  the answer is always of the words and the option it was pressed on, and words typed after it stay in the
+  entry for the person's own Enter. Seen red first: `a_remembered_enter_is_forgotten_when_the_words_or_the_option_change_after_it`
+  (`tests/entry_waits.rs`), five edits, each given a wish before the fix.
+- The window forgets it when the entry answered is the one a new project's name was typed in (`listing`):
+  the Enter would have named a second project from the next words.
+- Tests changed: `entry_waits.rs` (the given Enter is of the words at the Enter), `entry_draw.rs` (the Enter
+  pressed before a composition and a chip is forgotten; a second pair of Enters holds the given one),
+  `f43/window.rs` (the second Enter is pressed after its last word).
+- Walked in a real window with a real harness at the first commit: two wishes entered back to back, the second
+  while the first was read; both were kept in their order and both runs landed.

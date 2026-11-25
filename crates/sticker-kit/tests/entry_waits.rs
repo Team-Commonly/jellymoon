@@ -141,13 +141,15 @@ fn one_enter_while_an_answer_is_owed_is_remembered_and_given_once_when_the_words
     assert_eq!(state.enter(), None);
     state.replace(None, "tea");
     assert_eq!(state.answer_and_enter(true), None, "an Enter with no words typed since was remembered");
-    // Words, Enter twice, more words and another option: one Enter, given with the words as they stand at the
-    // answer, and it is an Enter like any: its words are owed an answer.
+    // Words, Enter twice: one Enter, given at the answer with the words and the option it was pressed on (a
+    // caret moved since, or the same option tapped, changes neither), and it is an Enter like any: its words are
+    // owed an answer.
     assert_eq!(state.enter(), made("tea", Some(0)));
-    state.replace(None, "feed");
+    state.choose(2);
+    state.replace(None, "feed the cat ");
     assert_eq!((state.enter(), state.enter()), (None, None), "an Enter was given before the answer");
-    assert_eq!(held(&state), ("feed", 4, Some(0), true));
-    state.replace(None, " the cat ");
+    assert_eq!(held(&state), ("feed the cat ", 13, Some(2), true));
+    state.home();
     state.choose(2);
     assert_eq!(state.answer_and_enter(true), made("feed the cat", Some(2)));
     assert_eq!((held(&state), state.owed()), (("", 0, Some(2), true), Some("feed the cat ")));
@@ -183,19 +185,32 @@ fn a_remembered_enter_is_not_given_for_words_not_kept_nor_once_forgotten_nor_for
         assert_eq!(state.answer_and_enter(true), None, "forgotten: {forget}");
         assert_eq!(held(&state), ("x", 1, Some(0), false));
     }
-    // The words went before the answer, or a composition has the keys: the Enter given then gives nothing.
-    for composing in [false, true] {
-        assert_eq!(state.enter(), made("x", Some(0)));
-        state.replace(None, "y");
+}
+
+#[test]
+fn a_remembered_enter_is_forgotten_when_the_words_or_the_option_change_after_it() {
+    // That Enter was not pressed on what is there now: nothing is sent, and the words stay for the person's own.
+    type Edit = fn(&mut EntryState);
+    let edits: [(&str, Edit); 5] = [
+        ("typed on", |state| state.replace(None, " and more")),
+        ("a character taken", EntryState::backspace),
+        ("a character deleted", |state| {
+            state.home();
+            state.delete();
+        }),
+        ("another option", |state| state.choose(1)),
+        ("a composition", |state| state.mark(None, "ni", None)),
+    ];
+    for (what, edit) in edits {
+        let mut state = typed("water");
+        assert_eq!(state.enter(), made("water", Some(0)));
+        state.replace(None, "tea");
         assert_eq!(state.enter(), None);
-        state.backspace();
-        if composing {
-            state.mark(None, "ni", None);
-        } else {
-            state.replace(None, " ");
-        }
-        assert_eq!(state.answer_and_enter(true), None, "composing: {composing}");
-        assert!(!state.waiting());
-        state.replace(None, "x");
+        edit(&mut state);
+        state.unmark();
+        let (text, option) = (state.text().to_string(), state.chosen());
+        assert_eq!(state.answer_and_enter(true), None, "{what}: an Enter was given on what it was not pressed on");
+        assert_eq!((state.text(), state.chosen(), state.waiting()), (text.as_str(), option, false), "{what}");
+        assert_eq!(state.enter(), made(text.trim(), option), "{what}: the person's own Enter");
     }
 }

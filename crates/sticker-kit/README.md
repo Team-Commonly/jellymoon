@@ -540,10 +540,11 @@ far a column scrolls: what of it is below `entry_top`. `Page` keeps a `Scroll`: 
 column, held between its top and its end; a page opens at its end, and one that is at its end stays there when
 the column grows, while one a reader has moved stays where it was. The view paints the column in a layer clipped
 at the band's top and the entry in a second layer over it, so no card is drawn or tapped under the entry.
-`page.shown_at(piece)` says where a piece is in the window now. A page whose scene has a tally opens held at its
-top instead (`Scroll::hold`), and is held where it is when its tally opens or closes; a held view that reaches
-its column's end follows it again, and Enter in the entry takes a held view no wheel moved to the end
-(`Scroll::entered`).
+`page.shown_at(piece)` says where a piece is in the window now. A page whose scene has a tally and nothing a
+person said (`Note::Said`) opens held at its top instead (`Scroll::hold`), and a view is held where it is when its
+tally opens or closes; a held view that reaches its column's end follows it again. Enter in the entry, and any
+scene that holds one more thing a person said than the one on show, takes a held view no wheel moved to the end
+(`Scroll::entered`; `draw/column.rs`, `turn`).
 
 **Text breaks at a space, and never inside a character** (`text::wrap`,
 `text::fit`). A word too long for a line of its own, such as an address or

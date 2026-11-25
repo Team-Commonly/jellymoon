@@ -147,9 +147,10 @@ the kit's `Picture::Tally`), and the page opens at its top. `drawing::Open::day`
 - **The tap.** The kit reports a tap on the tally as `fold` at `PICTURE_PLACE`; `Showing::chose` turns the
   window's own flag (`drawing::Open`) and answers with the scene on show. Core is not asked and nothing is
   written. A new window starts folded; a page read again stays as it was left.
-- **The scroll.** A view whose scene has a tally opens held at its top (`Scroll::hold`), and is held where it
-  is when the tally opens or folds. At its column's end it follows the end as before, and Enter in the entry
-  takes a held view no wheel moved to the end (`Scroll::entered`).
+- **The scroll.** A view whose scene has a tally and no made wish opens held at its top (`Scroll::hold`); one
+  that holds a made wish opens at its end, as before. The view is held where it is when the tally opens or
+  folds. At its column's end it follows the end as before, and a held view no wheel moved goes to the end when
+  the page holds one more made wish than it did, wherever that wish was made (`Scroll::entered`).
 - `layout` and the made-up window's `placed` have no tap and print no tally: every piece of the reading. The
   made-up window's `pieces` prints what the window draws, and `tap:fold` is the tap.
 - The snapshot example draws either with `--folded` and `--unfolded`.

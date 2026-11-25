@@ -105,7 +105,7 @@ fn raised(piece: &Value, by: f64) -> (Value, Vec<f64>) {
     (piece, downs.iter().map(|down| down.as_f64().unwrap() - by).collect())
 }
 
-// The day of the brief's own shape: three wishes of the reading in two projects, one of each state but let go,
+// A day of three wishes of the reading in two projects, one of each state but let go,
 // three things that came true, and an open clash. Folded, the tally counts them and none of them is placed, but
 // the clash, which waits for a tap; opened, each piece is the piece `layout` prints, further down.
 #[test]

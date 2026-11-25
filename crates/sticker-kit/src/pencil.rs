@@ -26,7 +26,6 @@ const OVER: f32 = 2.4;
 const BOW: f32 = 1.5;
 
 /// Which of the theme's pencils a stroke is drawn with. `Quiet` is the palette's `quiet`: a thing that is gone.
-/// Which of the theme's pencils a stroke is drawn with.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Ink {

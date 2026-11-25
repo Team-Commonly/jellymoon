@@ -282,11 +282,14 @@ answer and two bare bubbles, and could not tell that the other two had finished.
       wish's project and how many of its jobs came true. Where a little one of the reading is no wish of
       that page data, nothing is folded and there is no tally: never a count of something not drawn.
     - *The page opens at its top.* A view opened at its column's end and stayed there (`Scroll::default`,
-      ADR 0026). A page that opens on a tally is held instead (`Scroll::hold`): at its top, with the date,
-      the title, the tally and the made wishes under it. When the tally is opened or folded the view is
-      held where it is, so the tally stays under the pointer. A view that is at the end of its column is
-      at its end again when the column grows, so a folded day that fits its window follows a new wish as
-      before; and Enter in the entry takes a held view no wheel has moved to the end.
+      ADR 0026). A page that opens on a tally and no made wish is held instead (`Scroll::hold`): at its
+      top, with the date, the title and the tally. A page that holds a made wish opens at its end as it
+      always did: that wish may wait for a tap there, and the tally above it is short now. When the tally
+      is opened or folded the view is held where it is, so the tally stays under the pointer. A view that
+      is at the end of its column is at its end again when the column grows; and a held view no wheel has
+      moved goes to the end when the page holds one more made wish than before, wherever it was made
+      (the entry, a card's field, `More like this`, `Make it again`, the command), so a new wish is never
+      left under the window's edge.
     - *Rejected.* Folding the made wishes too: they are the person's own, and decision 11 already puts
       away the ones that need nothing. A sentence in place of the picture ("8 wishes in 4 projects"): it
       is the wall again, shorter. A row for each wish: that is the page it folds. Keeping the fold in a
@@ -296,8 +299,8 @@ answer and two bare bubbles, and could not tell that the other two had finished.
 ## Open
 
 - A folded day shows no label, so which wish a `?` in the tally is of is seen only once the day is open. A
-  day whose made wishes and open clashes are longer than the window opens at its top, with the newest wish
-  below the window's edge until the person scrolls or types. Nobody has seen the tally in a real window.
+  day with no made wish whose open clashes are longer than the window opens at its top, with the last of
+  them below the window's edge until the person scrolls.
 - A day of many made wishes made a very long column. Settled wishes now tuck away (decision 11); a day of
   many wishes that are not settled (work that waits, runs that failed) is as long as before, and its bubbles
   alone can fill a window. Nobody has seen either page in a real window.

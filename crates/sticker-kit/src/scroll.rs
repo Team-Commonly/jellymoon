@@ -51,9 +51,9 @@ impl Scroll {
         (self.stuck, self.most, self.moved) = (false, f32::INFINITY, false);
     }
 
-    /// Enter in the entry: a view no wheel has moved since it was held goes to the column's end, where what
-    /// was typed comes to stand, as a page that opened at its end is there already. A view the person moved is
-    /// left to the rules above.
+    /// Enter in the entry, or a scene that holds one more thing a person said: a view no wheel has moved since
+    /// it was held goes to the column's end, where what was said comes to stand, as a page that opened at its
+    /// end is there already. A view the person moved is left to the rules above.
     pub fn entered(&mut self) {
         self.stuck = self.stuck || !self.moved;
     }

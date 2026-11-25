@@ -22,22 +22,53 @@ fn tally(scene: &Scene) -> Option<bool> {
     })
 }
 
+/// How many things a person said `scene` holds.
+fn said(scene: &Scene) -> usize {
+    scene.notes.iter().filter(|note| matches!(note, Note::Said { .. })).count()
+}
+
 /// The scroll of a page that opens on `scene`: at the column's end, or at its top when the scene has a tally,
-/// which stands there.
+/// which stands there, and nothing a person said, which stands at the end and may wait for them.
 pub(super) fn opening(scene: &Scene) -> Scroll {
     let mut scroll = Scroll::default();
-    if tally(scene).is_some() {
+    if tally(scene).is_some() && said(scene) == 0 {
         scroll.hold();
     }
     scroll
 }
 
+/// What the view does when `scene` takes the place of `shown`.
+#[derive(Debug, PartialEq)]
+pub(super) enum Turn {
+    /// The rules of the scroll as they are.
+    Stay,
+    /// The view stays where it is (`Scroll::hold`): the tally was opened or closed under the pointer, or it
+    /// came to a page that holds nothing a person said.
+    Hold,
+    /// A view no wheel moved goes to the column's end (`Scroll::entered`): the scene holds one more thing a
+    /// person said, wherever it was said (the entry, a note's field, an option, another program).
+    Follow,
+}
+
+pub(super) fn turn(shown: &Scene, scene: &Scene) -> Turn {
+    let (was, is) = (tally(shown), tally(scene));
+    if said(scene) > said(shown) {
+        Turn::Follow
+    } else if is.is_some() && (was.is_some() && was != is || was.is_none() && said(scene) == 0) {
+        Turn::Hold
+    } else {
+        Turn::Stay
+    }
+}
+
 impl Page {
-    /// `scene` is about to be shown in place of the one on show: when its tally was opened or closed, or it has
-    /// one and the one on show has none, the view stays where it is (`Scroll::hold`).
+    /// `scene` is about to be shown in place of the one on show: the view is held, follows the end or is left
+    /// to the scroll's rules ([`turn`]).
     pub(super) fn hold_for(&mut self, scene: &Scene) {
-        if tally(scene).is_some() && tally(scene) != tally(&self.scene) {
-            self.scroll.hold();
+        match turn(&self.scene, scene) {
+            Turn::Hold => self.scroll.hold(),
+            Turn::Follow => self.scroll.entered(),
+            Turn::Stay => {}
         }
     }
 
@@ -126,4 +157,65 @@ pub(super) fn text_element(brush: &Brush, piece: &Placed, n: usize, run: &TextRu
         element = element.line_through();
     }
     element.child(run.text.clone()).into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Turn, opening, turn};
+    use crate::scene::{Note, Picture, Scene};
+    use crate::scroll::Scroll;
+
+    fn tally(open: bool) -> Note {
+        let picture =
+            Picture::Tally { title: "t".into(), rows: Vec::new(), more: String::new(), under: String::new(), open };
+        Note::Drawn { id: "day".into(), picture, words: Vec::new(), open: false, options: Vec::new(), field: None }
+    }
+
+    fn said(id: &str) -> Note {
+        Note::Said { id: id.into(), text: "a wish".into(), answer: String::new(), small: None }
+    }
+
+    fn scene(notes: Vec<Note>) -> Scene {
+        Scene { notes, ..Scene::default() }
+    }
+
+    fn opens_at(scene: &Scene) -> f32 {
+        let mut scroll = opening(scene);
+        scroll.fit(300.0);
+        scroll.at()
+    }
+
+    #[test]
+    fn a_page_opens_at_its_top_on_a_tally_alone_and_at_its_end_when_a_person_said_something() {
+        assert_eq!(opens_at(&scene(vec![tally(false)])), 0.0, "the tally stands at the top");
+        assert_eq!(opens_at(&scene(vec![said("m-1"), tally(false)])), 300.0, "what they said may wait at the end");
+        assert_eq!(opens_at(&scene(vec![said("m-1")])), 300.0, "as a page with no tally always did");
+    }
+
+    #[test]
+    fn one_more_thing_said_is_followed_wherever_it_was_said_and_a_turned_tally_holds_the_view() {
+        let day = scene(vec![said("m-1"), tally(false)]);
+        let more = scene(vec![said("m-1"), said("m-2"), tally(false)]);
+        assert_eq!(turn(&day, &more), Turn::Follow);
+        assert_eq!(turn(&more, &day), Turn::Stay, "one fewer is not followed");
+        assert_eq!(
+            turn(&day, &scene(vec![said("m-1"), tally(true)])),
+            Turn::Hold,
+            "the tally opened under the pointer"
+        );
+        assert_eq!(turn(&scene(Vec::new()), &scene(vec![tally(false)])), Turn::Hold, "a reading came to an empty page");
+        assert_eq!(
+            turn(&scene(vec![said("m-1")]), &day),
+            Turn::Stay,
+            "a reading that comes over a made wish moves nothing"
+        );
+        assert_eq!(turn(&day, &day), Turn::Stay);
+        // Followed means: a held view no wheel moved is at the end at the next layout.
+        let mut scroll = Scroll::default();
+        scroll.hold();
+        scroll.fit(300.0);
+        scroll.entered();
+        scroll.fit(420.0);
+        assert_eq!(scroll.at(), 420.0);
+    }
 }

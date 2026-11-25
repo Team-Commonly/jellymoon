@@ -918,7 +918,10 @@ max_file_lines = 400
 # padding, 38 (`src/layout/pictures/tally.rs`), the two inks and a wide stroke, 32 (`src/pencil.rs`, 14;
 # `src/draw/pencil.rs`, 18, of which 9 are a test), the line left out, 14 (`src/layout/column.rs`), and the tests, 61
 # (`tests/tally.rs`).
-"crates/sticker-kit" = 14472
+# A new wish followed wherever it is made, and a page with a made wish opening at its end, raised the next by 91:
+# what a scene that takes another's place asks of the view (`src/draw/column.rs`, 92, of which 55 are tests), less
+# a doubled line (`src/pencil.rs`).
+"crates/sticker-kit" = 14563
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.

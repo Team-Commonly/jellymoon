@@ -214,3 +214,34 @@ fn a_remembered_enter_is_forgotten_when_the_words_or_the_option_change_after_it(
         assert_eq!(state.enter(), made(text.trim(), option), "{what}: the person's own Enter");
     }
 }
+
+#[test]
+fn a_remembered_enter_stays_with_its_option_by_name_and_is_forgotten_when_the_entry_under_it_is_another() {
+    let entry = |id: &str, options: &[&str], most| {
+        let options = options.iter().map(|name| name.to_string()).collect();
+        Entry { id: id.into(), options, most, ..Entry::default() }
+    };
+    let was = entry("wish", &["alpha", "beta", "gamma"], 80);
+    // The same entry, and its option moved: given, by the name. The name gone, fewer options, another entry, a
+    // cap that cuts the words, no entry before: forgotten, and what is left of the words stays.
+    let cases = [
+        (Some(&was), was.clone(), made("tea", Some(1))),
+        (Some(&was), entry("wish", &["gamma", "alpha", "beta"], 80), made("tea", Some(2))),
+        (Some(&was), entry("wish", &["alpha", "gamma", "delta"], 80), None),
+        (Some(&was), entry("wish", &["alpha"], 80), None),
+        (Some(&was), entry("name", &["alpha", "beta", "gamma"], 80), None),
+        (Some(&was), entry("wish", &["alpha", "beta", "gamma"], 2), None),
+        (None, was.clone(), None),
+    ];
+    for (was, now, given) in cases {
+        let mut state = typed("water");
+        state.choose(1);
+        assert_eq!(state.enter(), made("water", Some(1)));
+        state.replace(None, "tea");
+        assert_eq!(state.enter(), None);
+        state.moved(was, &now);
+        let sent = state.answer_and_enter(true);
+        assert_eq!(sent, given, "{now:?} after {was:?}");
+        assert_eq!(state.text().is_empty(), sent.is_some(), "{now:?}: words were lost, or sent and kept");
+    }
+}

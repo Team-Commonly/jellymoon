@@ -330,8 +330,9 @@ what core keeps.
   with the words and the chip it was pressed on, read and kept like any wish. Both wishes are kept, in
   their order, and a run is asked for each. Four cases give nothing, and the words stay typed for the person to
   enter themselves. The kit's two: the first words were refused, so they are back in the entry in front of the
-  later ones; and the words or the chip changed after that Enter (typed on, a character taken, another chip),
-  so what stands in the entry is not what Enter was pressed on. The app's two: the first words were a new
+  later ones; and the words or the chip changed after that Enter (typed on, a character taken, another chip;
+  or the page's entry changed under it: another entry, the chip's project no longer offered, the entry taken
+  away), so what stands in the entry is not what Enter was pressed on. The app's two: the first words were a new
   project's name (`listing`): the entry answered is the one a name is typed in, and an Enter given there would
   name a second project. And (`Showing::takes_enter`, `shaping::waits`): the answer to the first words is a sharper
   wish that waits for the person's choice. An Enter in the entry takes that pair's place, so the first words

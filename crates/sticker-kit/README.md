@@ -175,7 +175,9 @@ Page::new(scene, theme)
     editable. When the answer is *kept*, `answer_entry` gives that Enter as one pressed at that moment is, to
     the same `on_entry` handler, with the words and the option it was pressed on. A change to the text or to
     the chosen option after that Enter forgets it (a caret moved does not): nothing is sent that no Enter was
-    pressed on, and the words stay for the person's own Enter. It is given once, and the entry is then owed
+    pressed on, and the words stay for the person's own Enter. So does a change of the entry under it
+    (`set_entry`, `EntryState::moved`): another entry in its place, its option no longer offered, a cap that
+    cuts the words, or the entry taken away. An option that only moved keeps it, by its name. It is given once, and the entry is then owed
     the answer to those words. When the answer is *not kept* the Enter is forgotten: the owed words are back in
     front of the later ones, and an Enter would send both as one. A handler that does not want it calls
     `page.forget_enter()` before it answers, and the words stay as they are. `answer_entry_closed` forgets it

@@ -72,3 +72,16 @@ of a third, or a correction) had a half-typed wish started, and a run with it. A
   `f43/window.rs` (the second Enter is pressed after its last word).
 - Walked in a real window with a real harness at the first commit: two wishes entered back to back, the second
   while the first was read; both were kept in their order and both runs landed.
+
+## After the second review (2026-11-25)
+The second review failed the second commit: the entry can change under a remembered Enter without a key
+(`Page::set_entry`, from a reading step or a look). The option's place could then name another project, a
+smaller cap could cut the words, or the entry could be the one a name is typed in. A third commit:
+- `EntryState::moved(was, now)` is what `set_entry` calls: the option is kept by its name and the words held
+  to the bounds as before, and the remembered Enter stays only when it is still of the same entry (by id),
+  the same option by its name and the same words. `fit` and `keep_option` forget it themselves when they
+  change the option or cut the text. An entry taken away while it holds words forgets it too, so a given
+  Enter never reaches an entry the page has dropped.
+- Seen red first, with the three guards out: `a_remembered_enter_stays_with_its_option_by_name_and_is_forgotten_when_the_entry_under_it_is_another`
+  (`tests/entry_waits.rs`), seven cases. The page's own case (an entry taken away) is in `tests/entry_draw.rs`.
+

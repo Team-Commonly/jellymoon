@@ -889,7 +889,9 @@ max_file_lines = 400
 # `tests/entry_draw.rs`, 20; `tests/field_draw.rs`, 4).
 # A remembered Enter forgotten when the words or the option change after it: 28 (`src/entry.rs`, 6;
 # `tests/entry_waits.rs`, 15; `tests/entry_draw.rs`, 7).
-"crates/sticker-kit" = 12979
+# The same when the entry under it changes (another entry, its option gone, a cap that cuts the words, the
+# entry taken away): 43 (`src/entry.rs`, 13; `draw/entry.rs`, -2; `tests/entry_waits.rs`, 31; `tests/entry_draw.rs`, 1).
+"crates/sticker-kit" = 13022
 # F29 raised the app by 9: the arm for core's new errors where it puts an error into words. Its note for a harness
 # that was not found names the places looked in: 1 line.
 # The app's test of a `--skip` name that is refused: 6 lines.

@@ -63,8 +63,9 @@ impl EntryState {
     pub fn fit(&mut self, entry: &Entry) {
         let bounds = Self::of(entry);
         (self.options, self.most) = (bounds.options, bounds.most);
-        self.chosen = self.chosen.min(self.options.saturating_sub(1));
-        let kept = prefix(&self.text, self.most);
+        let (chosen, kept) = (self.chosen.min(self.options.saturating_sub(1)), prefix(&self.text, self.most));
+        self.again &= chosen == self.chosen && kept == self.text.len();
+        self.chosen = chosen;
         if kept < self.text.len() {
             self.text.truncate(kept);
             self.marked = None;
@@ -74,9 +75,21 @@ impl EntryState {
 
     /// Keeps the chosen option by its name when the options change: `was` are the names before, `now` the names
     /// to come. A name that is still offered is chosen where it now stands; one that is gone leaves the place.
+    /// An Enter remembered was pressed on that name: it is forgotten with a name that is gone, or one that is new.
     pub fn keep_option(&mut self, was: &[String], now: &[String]) {
-        let at = was.get(self.chosen).and_then(|name| now.iter().take(MAX_ENTRY_OPTIONS).position(|one| one == name));
+        let name = was.get(self.chosen);
+        let at = name.and_then(|name| now.iter().take(MAX_ENTRY_OPTIONS).position(|one| one == name));
+        self.again &= at.is_some() || (name.is_none() && now.is_empty());
         self.chosen = at.unwrap_or(self.chosen);
+    }
+
+    /// The entry `now` takes the place of `was` on its page (none before the first): the chosen option is kept
+    /// by its name and what is typed is held to the new bounds. An Enter remembered stays only while it is still
+    /// of the same entry, the same option by its name and the same words.
+    pub fn moved(&mut self, was: Option<&Entry>, now: &Entry) {
+        self.again &= was.is_some_and(|was| was.id == now.id);
+        self.keep_option(was.map(|was| was.options.as_slice()).unwrap_or_default(), &now.options);
+        self.fit(now);
     }
 
     /// Whether the entry holds words of the person's, a composition among them: text with a character a person

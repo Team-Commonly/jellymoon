@@ -154,12 +154,10 @@ impl Page {
     /// has them to give back. An entry given meanwhile takes its place, with the words.
     pub fn set_entry(&mut self, entry: Option<Entry>, cx: &mut Context<Self>) {
         match &entry {
-            Some(entry) => {
-                let was = self.entry.what.as_ref().map(|was| was.options.as_slice()).unwrap_or_default();
-                self.entry.state.keep_option(was, &entry.options);
-                self.entry.state.fit(entry);
-            }
+            Some(entry) => self.entry.state.moved(self.entry.what.as_ref(), entry),
             None if self.entry.state.holds() => {
+                // An Enter remembered is not given to an entry the page no longer offers.
+                self.entry.state.forget_enter();
                 self.entry.leaving = true;
                 return;
             }

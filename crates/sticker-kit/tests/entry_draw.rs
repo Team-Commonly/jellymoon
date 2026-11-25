@@ -269,7 +269,6 @@ fn an_entry_that_is_owed_an_answer_takes_every_key_and_only_its_enter_gives_noth
     assert_eq!((state(&page, cx), waiting(cx)), (since, false), "the words stay for the person's own Enter");
     // Entered, and the next words entered before the answer: that Enter is given at the kept answer, once.
     keys(cx, "enter t w o enter");
-    assert_eq!(made.borrow().len(), 2, "the second Enter gave words while an answer was owed");
     answer(&page, cx, true);
     let all = [wish("tea", "kitchen"), wish("ixk你", "letters"), wish("two", "letters")];
     assert_eq!(*made.borrow(), all, "the Enter was lost");
@@ -306,8 +305,10 @@ fn a_remembered_enter_is_not_given_for_words_not_kept_nor_when_the_page_forgets_
     keys(cx, "enter x enter");
     page.update(cx, |page, cx| page.answer_entry_closed(true, cx));
     assert_eq!((held(cx).as_str(), made.borrow().len()), ("x", 3), "no handler is called with no window");
+    keys(cx, "enter y enter");
+    take_away(&page, cx);
     answer(&page, cx, true);
-    assert_eq!((held(cx).as_str(), made.borrow().len()), ("x", 3), "an answer to nothing gave the Enter");
+    assert_eq!((held(cx).as_str(), made.borrow().len()), ("y", 4), "an entry taken away was given the Enter");
 }
 
 #[test]

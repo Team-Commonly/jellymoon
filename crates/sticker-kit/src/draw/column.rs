@@ -149,8 +149,15 @@ impl Page {
     /// Whether a press on `piece` leaves the keys where they are: any part of the card of a tally that stands in
     /// its place, a line that opens what is under it, and while it is open any part of the note under it but an
     /// option. The field beside them is still being typed in, and what the line opened is there to be read: a
-    /// press on it while reading is no wish to type somewhere else.
+    /// press on it while reading is no wish to type somewhere else. And any part but an option of a note whose
+    /// field asks for the keys (`Field::wants_keys`): a press on the question a person is reading is none either.
     pub(super) fn keeps_keys(&self, piece: &Placed) -> bool {
+        let asks = |note: &Note| match note {
+            Note::Text { id, field: Some(field), .. } | Note::Drawn { id, field: Some(field), .. } => {
+                field.wants_keys && *id == piece.id
+            }
+            _ => false,
+        };
         let opened = |pair: &[Note]| match pair {
             [Note::Drawn { picture: Picture::Tally { open: true, in_place: true, .. }, .. }, under] => {
                 named(under) == Some(piece.id.as_str())
@@ -158,7 +165,8 @@ impl Page {
             _ => false,
         };
         lines(&self.scene).any(|(id, _)| id == piece.id)
-            || piece.piece != PieceKind::Option && self.scene.notes.windows(2).any(opened)
+            || piece.piece != PieceKind::Option
+                && (self.scene.notes.windows(2).any(opened) || self.scene.notes.iter().any(asks))
     }
 
     pub(super) fn tap_target(&self, index: usize, piece: &Placed, pose: Pose, cx: &mut Context<Self>) -> AnyElement {

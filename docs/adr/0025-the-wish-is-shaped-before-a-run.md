@@ -183,8 +183,13 @@ the heart of the decision.
      the entry the keys, the rest of the answer was typed into the entry, and Enter there was a new wish in
      the pair's place: the answer half typed was gone. Now the view is held when the line turns, as it is for
      the day's tally, and a press anywhere on the line's card, or on the note it opened, moves no key (an
-     option of that note is still an option). A press on the question's own card off its field gives the
-     entry the keys as it always did.
+     option of that note is still an option).
+   - *Nor does a press on the question itself.* Until 2026-11-25 a press on the question's own card, off its
+     field, gave the entry the keys, as every press off a field did: a person who clicked on the question
+     they were reading and typed on wrote into the entry, and Enter there was a new wish in the pair's place.
+     Now a press on any part but an option of a note whose field asks for the keys moves none. A press off
+     the notes (the paper, the page's title, a character) gives the entry the keys as before, and so does a
+     tap on `Skip the question` or `Use my own words`, which end the question.
    Rejected: leaving the rows out with no way to read them (a run would be given words the person could
    never see before it started); folding the question's note, or its two ways round (the one thing asked of
    the person, and the way to refuse the model's words, would be a tap away); folding the sharper wish that
